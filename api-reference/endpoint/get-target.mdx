@@ -1,0 +1,419 @@
+---
+title: 'Read target status'
+openapi: 'GET /api/campaigns/{campaignSlug}/targets/{token}'
+---
+
+Read the current state of a campaign target. This is the endpoint you poll after an auto-enrich upsert to watch the synthesis lifecycle and confirm the row is ready to serve a personalized widget session.
+
+For partner-intel rows, you generally don't need to call this — the upsert response already tells you everything. For auto-enrich rows, this is essential.
+
+<Note>
+  This endpoint is read-only and idempotent. Safe to poll repeatedly while a
+  target is `pending` or `running`. Recommended interval: **5-10 seconds**.
+</Note>
+
+## When to call this endpoint
+
+<Steps>
+  <Step title="Right after an auto-enrich upsert">
+    The upsert response returns `enrichmentStatus: "pending"`. Poll this
+    endpoint until status is `done` (or `failed`).
+  </Step>
+  <Step title="Before redirecting a visitor">
+    Even if you cached the upsert response, double-check `widgetReady` before
+    sending a visitor to the widget. A campaign that's been archived in the
+    dashboard since you upserted will have `widgetReady: false`.
+  </Step>
+  <Step title="When debugging a stuck row">
+    Inspect `enrichmentStartedAt` to detect rows that've been `running` for
+    longer than expected, or `enrichmentError` for `failed` rows.
+  </Step>
+</Steps>
+
+## Examples
+
+<CodeGroup>
+```bash curl
+curl "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets/acme-logistics" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY"
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `${CONVINCED_API_BASE}/api/campaigns/q2-logistics-outreach/targets/acme-logistics`,
+  {
+    headers: { Authorization: `Bearer ${CONVINCED_API_KEY}` },
+  },
+)
+
+if (!response.ok) {
+  throw new Error(`Read failed: ${response.status} ${await response.text()}`)
+}
+
+const { target, widgetQuery } = await response.json()
+console.log(`Status: ${target.enrichmentStatus}, ready: ${target.widgetReady}`)
+```
+
+```python Python
+import os
+import requests
+
+base = os.environ["CONVINCED_API_BASE"]
+key = os.environ["CONVINCED_API_KEY"]
+
+response = requests.get(
+    f"{base}/api/campaigns/q2-logistics-outreach/targets/acme-logistics",
+    headers={"Authorization": f"Bearer {key}"},
+    timeout=10,
+)
+response.raise_for_status()
+body = response.json()
+print(body["target"]["enrichmentStatus"], body["target"]["widgetReady"])
+```
+</CodeGroup>
+
+## The polling pattern
+
+For auto-enrich rows, the canonical pattern is: **poll every 5-10 seconds, give up after 5 minutes, treat `failed` as a retry signal.**
+
+<CodeGroup>
+```typescript TypeScript
+async function waitForWidgetReady(
+  campaignSlug: string,
+  token: string,
+  { intervalMs = 5000, timeoutMs = 5 * 60 * 1000 } = {},
+): Promise<{ widgetQuery: string; target: any }> {
+  const deadline = Date.now() + timeoutMs
+
+  while (Date.now() < deadline) {
+    const response = await fetch(
+      `${CONVINCED_API_BASE}/api/campaigns/${campaignSlug}/targets/${token}`,
+      { headers: { Authorization: `Bearer ${CONVINCED_API_KEY}` } },
+    )
+
+    if (!response.ok) {
+      throw new Error(`Poll failed: ${response.status}`)
+    }
+
+    const body = await response.json()
+    const { target } = body
+
+    if (target.widgetReady) {
+      return { widgetQuery: body.widgetQuery, target }
+    }
+
+    if (target.enrichmentStatus === 'failed') {
+      throw new Error(
+        `Enrichment failed for ${token}: ${target.enrichmentError ?? 'unknown error'}`,
+      )
+    }
+
+    // pending or running — wait and try again
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+
+  throw new Error(`Timed out waiting for ${token} to be widget-ready`)
+}
+
+// Usage:
+const { widgetQuery } = await waitForWidgetReady(
+  'q2-logistics-outreach',
+  'acme-logistics',
+)
+const landingUrl = `https://yourcompany.com/demo${widgetQuery}`
+```
+
+```python Python
+import os
+import time
+import requests
+
+def wait_for_widget_ready(
+    campaign_slug: str,
+    token: str,
+    interval: float = 5.0,
+    timeout: float = 5 * 60,
+) -> dict:
+    base = os.environ["CONVINCED_API_BASE"]
+    key = os.environ["CONVINCED_API_KEY"]
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        response = requests.get(
+            f"{base}/api/campaigns/{campaign_slug}/targets/{token}",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        body = response.json()
+        target = body["target"]
+
+        if target["widgetReady"]:
+            return body
+
+        if target["enrichmentStatus"] == "failed":
+            raise RuntimeError(
+                f"Enrichment failed for {token}: "
+                f"{target.get('enrichmentError') or 'unknown error'}"
+            )
+
+        time.sleep(interval)
+
+    raise TimeoutError(f"Timed out waiting for {token} to be widget-ready")
+
+
+body = wait_for_widget_ready("q2-logistics-outreach", "acme-logistics")
+landing_url = f"https://yourcompany.com/demo{body['widgetQuery']}"
+```
+
+```bash Shell (loop)
+#!/usr/bin/env bash
+SLUG="q2-logistics-outreach"
+TOKEN="acme-logistics"
+DEADLINE=$(( SECONDS + 300 ))  # 5 minutes
+
+while [ $SECONDS -lt $DEADLINE ]; do
+  RESPONSE=$(curl -s "$CONVINCED_API_BASE/api/campaigns/$SLUG/targets/$TOKEN" \
+    -H "Authorization: Bearer $CONVINCED_API_KEY")
+  STATUS=$(echo "$RESPONSE" | jq -r '.target.enrichmentStatus')
+  READY=$(echo "$RESPONSE" | jq -r '.target.widgetReady')
+
+  echo "status=$STATUS ready=$READY"
+
+  if [ "$READY" = "true" ]; then
+    echo "Widget ready!"
+    echo "$RESPONSE" | jq -r '.widgetQuery'
+    exit 0
+  fi
+
+  if [ "$STATUS" = "failed" ]; then
+    echo "Enrichment failed:"
+    echo "$RESPONSE" | jq -r '.target.enrichmentError'
+    exit 1
+  fi
+
+  sleep 5
+done
+
+echo "Timed out"
+exit 1
+```
+</CodeGroup>
+
+<Tip>
+  **Use `widgetReady`, not raw `enrichmentStatus`,** as your gate. `widgetReady`
+  is a derived boolean that already accounts for campaign archival, intel
+  presence, and the success/skipped statuses. It is the single check you need.
+</Tip>
+
+## Response
+
+<AccordionGroup>
+  <Accordion title="Auto-enrich row, mid-flight (200 OK)">
+    ```json
+    {
+      "target": {
+        "id": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+        "campaignId": "8d3f9c2e-7a4b-4f1e-bb4d-2c5a9e7f1d3b",
+        "campaignName": "Q2 Logistics Outreach",
+        "campaignSlug": "q2-logistics-outreach",
+        "campaignStatus": "active",
+        "companyName": "Acme Logistics",
+        "token": "acme-logistics",
+        "enrichedAt": null,
+        "enrichmentStatus": "running",
+        "enrichmentError": null,
+        "enrichmentStartedAt": "2026-04-15T09:14:05.221Z",
+        "hasIntel": false,
+        "widgetReady": false,
+        "updatedAt": "2026-04-15T09:14:05.221Z"
+      },
+      "targetId": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+      "widgetToken": "acme-logistics",
+      "widgetParam": "c",
+      "widgetQuery": "?c=acme-logistics"
+    }
+    ```
+  </Accordion>
+  <Accordion title="Row ready (200 OK)">
+    ```json
+    {
+      "target": {
+        "id": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+        "campaignId": "8d3f9c2e-7a4b-4f1e-bb4d-2c5a9e7f1d3b",
+        "campaignName": "Q2 Logistics Outreach",
+        "campaignSlug": "q2-logistics-outreach",
+        "campaignStatus": "active",
+        "companyName": "Acme Logistics",
+        "token": "acme-logistics",
+        "enrichedAt": "2026-04-15T09:15:18.776Z",
+        "enrichmentStatus": "done",
+        "enrichmentError": null,
+        "enrichmentStartedAt": "2026-04-15T09:14:05.221Z",
+        "hasIntel": true,
+        "widgetReady": true,
+        "updatedAt": "2026-04-15T09:15:18.776Z"
+      },
+      "targetId": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+      "widgetToken": "acme-logistics",
+      "widgetParam": "c",
+      "widgetQuery": "?c=acme-logistics"
+    }
+    ```
+
+    `enrichmentStatus: "done"` and `widgetReady: true` — safe to redirect the visitor.
+  </Accordion>
+  <Accordion title="Partner-intel row (200 OK)">
+    ```json
+    {
+      "target": {
+        "id": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+        "campaignId": "8d3f9c2e-7a4b-4f1e-bb4d-2c5a9e7f1d3b",
+        "campaignName": "Q2 Logistics Outreach",
+        "campaignSlug": "q2-logistics-outreach",
+        "campaignStatus": "active",
+        "companyName": "Acme Logistics",
+        "token": "acme-logistics",
+        "enrichedAt": "2026-04-15T09:14:02.118Z",
+        "enrichmentStatus": "skipped",
+        "enrichmentError": null,
+        "enrichmentStartedAt": null,
+        "hasIntel": true,
+        "widgetReady": true,
+        "updatedAt": "2026-04-15T09:14:02.118Z"
+      },
+      "targetId": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+      "widgetToken": "acme-logistics",
+      "widgetParam": "c",
+      "widgetQuery": "?c=acme-logistics"
+    }
+    ```
+
+    `enrichmentStatus: "skipped"` because no synthesis was needed. Note `enrichmentStartedAt: null`.
+  </Accordion>
+  <Accordion title="Failed row (200 OK)">
+    ```json
+    {
+      "target": {
+        "id": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+        "campaignId": "8d3f9c2e-7a4b-4f1e-bb4d-2c5a9e7f1d3b",
+        "campaignName": "Q2 Logistics Outreach",
+        "campaignSlug": "q2-logistics-outreach",
+        "campaignStatus": "active",
+        "companyName": "Acme Logistics",
+        "token": "acme-logistics",
+        "enrichedAt": null,
+        "enrichmentStatus": "failed",
+        "enrichmentError": "All link crawls returned 403; rawResearch was empty.",
+        "enrichmentStartedAt": "2026-04-15T09:14:05.221Z",
+        "hasIntel": false,
+        "widgetReady": false,
+        "updatedAt": "2026-04-15T09:14:39.018Z"
+      },
+      "targetId": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+      "widgetToken": "acme-logistics",
+      "widgetParam": "c",
+      "widgetQuery": "?c=acme-logistics"
+    }
+    ```
+
+    The `enrichmentError` field is truncated to 500 chars. Inspect it, fix the input (more `rawResearch`, accessible `links`), and re-upsert the target to retry.
+  </Accordion>
+  <Accordion title="Archived campaign (200 OK)">
+    ```json
+    {
+      "target": {
+        "id": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+        "campaignId": "8d3f9c2e-7a4b-4f1e-bb4d-2c5a9e7f1d3b",
+        "campaignName": "Q2 Logistics Outreach",
+        "campaignSlug": "q2-logistics-outreach",
+        "campaignStatus": "archived",
+        "companyName": "Acme Logistics",
+        "token": "acme-logistics",
+        "enrichedAt": "2026-04-15T09:15:18.776Z",
+        "enrichmentStatus": "done",
+        "enrichmentError": null,
+        "enrichmentStartedAt": "2026-04-15T09:14:05.221Z",
+        "hasIntel": true,
+        "widgetReady": false,
+        "updatedAt": "2026-05-02T11:00:00.000Z"
+      },
+      "targetId": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+      "widgetToken": "acme-logistics",
+      "widgetParam": "c",
+      "widgetQuery": "?c=acme-logistics"
+    }
+    ```
+
+    `enrichmentStatus` is `done` (intel was successfully synthesized) but `widgetReady` is `false` because the campaign has been archived. The widget will not load personalized context for this token until the campaign is reactivated.
+  </Accordion>
+</AccordionGroup>
+
+## Key fields
+
+<ResponseField name="target.enrichmentStatus" type="string">
+  Lifecycle state — `pending` | `running` | `done` | `failed` | `skipped`. See
+  the [enrichment lifecycle](/api-reference/introduction#the-enrichment-lifecycle).
+</ResponseField>
+
+<ResponseField name="target.widgetReady" type="boolean">
+  Derived field. `true` exactly when:
+
+  - `campaignStatus === "active"`, **and**
+  - `hasIntel === true`, **and**
+  - `enrichmentStatus` is `"done"` or `"skipped"`.
+
+  Use this as your single gate before redirecting visitors.
+</ResponseField>
+
+<ResponseField name="target.hasIntel" type="boolean">
+  `true` when the structured `intel` object is present on the row. For
+  partner-intel rows, this is `true` immediately. For auto-enrich rows, it
+  flips to `true` when synthesis completes.
+</ResponseField>
+
+<ResponseField name="target.enrichmentError" type="string | null">
+  Populated only when `enrichmentStatus === "failed"`. Truncated to 500 chars.
+  Surface this to your operator — the most common failure modes are inaccessible
+  links and empty `rawResearch`.
+</ResponseField>
+
+<ResponseField name="target.enrichmentStartedAt" type="string | null">
+  ISO-8601 timestamp of when synthesis began. `null` for partner-intel rows
+  (which never run synthesis). Useful for detecting stuck jobs — anything more
+  than a few minutes old that's still `running` warrants investigation.
+</ResponseField>
+
+<ResponseField name="target.campaignStatus" type="string">
+  `"active"` or `"archived"`. Archived campaigns force `widgetReady: false`
+  even if intel is fully synthesized.
+</ResponseField>
+
+## Common errors
+
+<AccordionGroup>
+  <Accordion title="404 Not Found">
+    ```json
+    { "error": "Target not found in this campaign." }
+    ```
+
+    Either the campaign slug doesn't exist for your org, or the token doesn't
+    belong to that campaign. Double-check both. Remember: tokens are
+    org-scoped, but the GET endpoint requires the correct campaign slug.
+  </Accordion>
+  <Accordion title="401 Unauthorized">
+    ```json
+    { "error": "API key missing or invalid." }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next step
+
+Once `widgetReady` is `true`, send the visitor to the widget. The simplest path is the hosted widget URL:
+
+```
+https://app.getconvinced.ai/widget/v2/<org-slug>?c=<widgetToken>
+```
+
+Or embed on your own page using the loader script — see the [partner-intel guide](/guides/campaigns/partner-intel) and [auto-enrich guide](/guides/campaigns/auto-enrich) for end-to-end embedding examples.

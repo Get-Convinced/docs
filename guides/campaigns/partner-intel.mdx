@@ -1,0 +1,442 @@
+---
+title: 'Partner-intel mode'
+description: 'Push a fully-formed Intel object and have the widget ready synchronously.'
+icon: 'lock'
+---
+
+Partner-intel mode is the synchronous path: you supply a fully-formed [`intel`](/guides/campaigns/intel-schema) object, Convinced stores it as-is, and the row is widget-ready as soon as the response returns. No LLM, no waiting, no surprises.
+
+This is the right mode when **you are the source of truth**. Your CRM, your research team, your data warehouse — you've already structured the account intel and you don't need the synthesis layer.
+
+<Note>
+The trade-off: you're responsible for field quality. Convinced does not invent or fix fields. A weak `painPoints` array means a weak agent.
+</Note>
+
+## When to use partner-intel mode
+
+<CardGroup cols={2}>
+  <Card title="CRM-driven outreach" icon="database">
+    Salesforce/HubSpot/Apollo data is already structured. Map fields once, push at scale.
+  </Card>
+  <Card title="Real-time hand-off" icon="bolt">
+    A chatbot, webhook, or live agent needs the widget URL on the same response. No polling.
+  </Card>
+  <Card title="High-trust sources" icon="shield-check">
+    Internal SDR brief or custom research where you've manually verified every field.
+  </Card>
+  <Card title="Compliance-sensitive" icon="lock">
+    Regulated industries where the LLM cannot introduce facts you didn't approve.
+  </Card>
+</CardGroup>
+
+## The flow
+
+<Steps>
+  <Step title="Create the campaign">
+    Once per outreach motion. Reuse the same campaign across many targets.
+  </Step>
+  <Step title="POST one target with `enrich: false` + a full `intel` object">
+    The API validates the intel synchronously and returns the widget token.
+  </Step>
+  <Step title="(Optional) Read the warnings">
+    If you sent `relevantCaseStudies`, names that don't match referenceable customers come back in `warnings.droppedCaseStudies`.
+  </Step>
+  <Step title="Send the visitor to the widget">
+    Use the returned `widgetToken` in any of the four routing options. See [Widget embedding](/guides/campaigns/widget-embedding).
+  </Step>
+</Steps>
+
+## Set up credentials
+
+Every request authenticates with a partner API key issued from the Convinced dashboard. Keys are organization-bound — the org context is implicit, you never pass it explicitly.
+
+```bash
+export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+export CONVINCED_API_KEY="<partner-api-key>"
+```
+
+<Warning>
+API keys are organization-bound. Never share a key across organizations, and never put a customer-facing widget key or internal MCP service token in these instructions.
+</Warning>
+
+## Step 1 — Create or update the campaign
+
+Campaign slugs are stable. Calling this with the same slug again updates `name` / `description` but never changes the slug or recreates the row.
+
+<CodeGroup>
+```bash curl
+curl -X POST "$CONVINCED_API_BASE/api/campaigns" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Q2 Logistics Outreach",
+    "slug": "q2-logistics-outreach",
+    "description": "Outbound campaign for logistics accounts"
+  }'
+```
+
+```typescript JavaScript
+const res = await fetch(`${process.env.CONVINCED_API_BASE}/api/campaigns`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.CONVINCED_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    name: 'Q2 Logistics Outreach',
+    slug: 'q2-logistics-outreach',
+    description: 'Outbound campaign for logistics accounts',
+  }),
+})
+const { campaign } = await res.json()
+```
+
+```python Python
+import os, requests
+
+res = requests.post(
+    f"{os.environ['CONVINCED_API_BASE']}/api/campaigns",
+    headers={
+        'Authorization': f"Bearer {os.environ['CONVINCED_API_KEY']}",
+        'Content-Type': 'application/json',
+    },
+    json={
+        'name': 'Q2 Logistics Outreach',
+        'slug': 'q2-logistics-outreach',
+        'description': 'Outbound campaign for logistics accounts',
+    },
+)
+campaign = res.json()['campaign']
+```
+</CodeGroup>
+
+The response contains the campaign's `id`, `slug`, and `status`. Only `status: "active"` campaigns resolve at the widget — archived campaigns return generic sessions.
+
+## Step 2 — Push the target with structured intel
+
+This is the load-bearing call. Send `companyName`, an explicit `token` (or let one derive from the company name), `enrich: false`, and the full `intel` object.
+
+<CodeGroup>
+```bash curl
+curl -X POST "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "companyName": "Acme Logistics",
+    "token": "acme-logistics",
+    "enrich": false,
+    "intel": {
+      "companySummary": "Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy chains across India.",
+      "industry": "Logistics",
+      "size": "200-500 employees",
+      "champion": {
+        "name": "Priya Rao",
+        "role": "VP Operations",
+        "context": "Owns dispatch SLA and fleet utilization KPIs; pushed for the eval after Q1 SLA misses."
+      },
+      "painPoints": [
+        "Dispatch decisions are manual and slow during peak windows.",
+        "Driver utilization plateaued at 62%.",
+        "No single source of truth across TMS, OMS, and routing."
+      ],
+      "currentStack": ["SAP TMS", "Locus routing", "Salesforce"],
+      "recentSignals": [
+        "New CFO hired Q1 2026",
+        "Expanding into Tier-2 cities per Oct earnings call"
+      ],
+      "competitorUsage": "Evaluating FarEye for last-mile visibility.",
+      "relevantCaseStudies": ["Enmovil"]
+    },
+    "additionalContext": "Lead with ROI on dispatch speed; this account misses peak-window SLAs."
+  }'
+```
+
+```typescript JavaScript
+const res = await fetch(
+  `${process.env.CONVINCED_API_BASE}/api/campaigns/q2-logistics-outreach/targets`,
+  {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.CONVINCED_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      companyName: 'Acme Logistics',
+      token: 'acme-logistics',
+      enrich: false,
+      intel: {
+        companySummary:
+          'Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy chains across India.',
+        industry: 'Logistics',
+        size: '200-500 employees',
+        champion: {
+          name: 'Priya Rao',
+          role: 'VP Operations',
+          context: 'Owns dispatch SLA and fleet utilization KPIs; pushed for the eval after Q1 SLA misses.',
+        },
+        painPoints: [
+          'Dispatch decisions are manual and slow during peak windows.',
+          'Driver utilization plateaued at 62%.',
+          'No single source of truth across TMS, OMS, and routing.',
+        ],
+        currentStack: ['SAP TMS', 'Locus routing', 'Salesforce'],
+        recentSignals: [
+          'New CFO hired Q1 2026',
+          'Expanding into Tier-2 cities per Oct earnings call',
+        ],
+        competitorUsage: 'Evaluating FarEye for last-mile visibility.',
+        relevantCaseStudies: ['Enmovil'],
+      },
+      additionalContext: 'Lead with ROI on dispatch speed; this account misses peak-window SLAs.',
+    }),
+  }
+)
+const data = await res.json()
+console.log(data.widgetQuery)             // ?c=acme-logistics
+console.log(data.target.enrichmentStatus) // "skipped"
+console.log(data.warnings)                // undefined unless case studies were dropped
+```
+
+```python Python
+import os, requests
+
+res = requests.post(
+    f"{os.environ['CONVINCED_API_BASE']}/api/campaigns/q2-logistics-outreach/targets",
+    headers={
+        'Authorization': f"Bearer {os.environ['CONVINCED_API_KEY']}",
+        'Content-Type': 'application/json',
+    },
+    json={
+        'companyName': 'Acme Logistics',
+        'token': 'acme-logistics',
+        'enrich': False,
+        'intel': {
+            'companySummary': 'Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy chains across India.',
+            'industry': 'Logistics',
+            'size': '200-500 employees',
+            'champion': {
+                'name': 'Priya Rao',
+                'role': 'VP Operations',
+                'context': 'Owns dispatch SLA and fleet utilization KPIs; pushed for the eval after Q1 SLA misses.',
+            },
+            'painPoints': [
+                'Dispatch decisions are manual and slow during peak windows.',
+                'Driver utilization plateaued at 62%.',
+                'No single source of truth across TMS, OMS, and routing.',
+            ],
+            'currentStack': ['SAP TMS', 'Locus routing', 'Salesforce'],
+            'recentSignals': [
+                'New CFO hired Q1 2026',
+                'Expanding into Tier-2 cities per Oct earnings call',
+            ],
+            'competitorUsage': 'Evaluating FarEye for last-mile visibility.',
+            'relevantCaseStudies': ['Enmovil'],
+        },
+        'additionalContext': 'Lead with ROI on dispatch speed; this account misses peak-window SLAs.',
+    },
+)
+data = res.json()
+print(data['widgetQuery'])                    # ?c=acme-logistics
+print(data['target']['enrichmentStatus'])     # "skipped"
+print(data.get('warnings'))                   # None unless case studies were dropped
+```
+</CodeGroup>
+
+### What you get back
+
+```json
+{
+  "target": {
+    "id": "1f0a8c3a-...",
+    "campaignId": "8b1d2e6f-...",
+    "companyName": "Acme Logistics",
+    "token": "acme-logistics",
+    "enrichedAt": "2026-05-04T10:14:22.000Z",
+    "enrichmentStatus": "skipped",
+    "createdAt": "2026-05-04T10:14:22.000Z",
+    "updatedAt": "2026-05-04T10:14:22.000Z"
+  },
+  "targetId": "1f0a8c3a-...",
+  "widgetToken": "acme-logistics",
+  "widgetParam": "c",
+  "widgetQuery": "?c=acme-logistics"
+}
+```
+
+The row is **widget-ready immediately**. `enrichmentStatus` is `"skipped"` (the auto-enrich pipeline is bypassed entirely), `enrichedAt` is the insertion timestamp, and the next visitor to land on `?c=acme-logistics` enters campaign mode.
+
+<Note>
+You don't need to call `GET /api/campaigns/{slug}/targets/{token}` after a partner-intel upsert — the upsert response already contains everything you need to send a visitor to the widget. Use the GET endpoint only for status checks (e.g. confirming a row is still active before re-using a token).
+</Note>
+
+## Case-study validation
+
+`relevantCaseStudies` is the one field that is **not** trusted blindly. Names you supply are matched (case-insensitively) against your org's referenceable case studies — rows where `is_referenceable = true` AND `servable = true` in the dashboard. Unknown names are dropped silently and surfaced under `warnings.droppedCaseStudies`.
+
+### Why this exists
+
+The agent must never cite a "customer" that isn't actually a referenceable proof point. If you accidentally send `["Coca-Cola"]` because someone wrote it in a Google Doc, but Coca-Cola isn't a referenceable customer in your Convinced KB, the name gets dropped before it ever hits the agent. The rest of the request is unaffected.
+
+### What it looks like
+
+```json
+{
+  "target": { "...": "..." },
+  "widgetToken": "acme-logistics",
+  "widgetQuery": "?c=acme-logistics",
+  "warnings": {
+    "droppedCaseStudies": ["Coca-Cola", "BigCorp Inc."],
+    "reason": "Names not found in this org's referenceable case studies"
+  }
+}
+```
+
+If **all** the names you supplied are dropped, the field is removed from the stored intel entirely. If at least one matches, only the matches are kept.
+
+### How to fix dropped names
+
+<Steps>
+  <Step title="Confirm the customer is in your KB">
+    The case study has to exist as a row in your `case_studies` table. If it isn't, create it from the dashboard first.
+  </Step>
+  <Step title="Mark it referenceable AND servable">
+    Both flags must be true. `is_referenceable = false` keeps it in the KB but blocks it from being cited by name.
+  </Step>
+  <Step title="Match the customer name exactly">
+    Match is case-insensitive but otherwise literal. `Acme Inc.` and `Acme` are different rows. Use the dashboard's customer-name field as the canonical spelling.
+  </Step>
+  <Step title="Re-POST the target">
+    The upsert is idempotent on `(organizationId, token)`. Re-POSTing with the corrected list updates the row in place.
+  </Step>
+</Steps>
+
+<Tip>
+You can check which customers are referenceable in your Convinced dashboard under **Knowledge → Customers**. Filter by "Referenceable" to see exactly the list the validator allows.
+</Tip>
+
+## Tips for high-quality intel
+
+### Send as many fields as you can verify
+
+Each optional field unlocks a specific agent behavior. Skipping fields is safe — the agent never invents facts to fill gaps — but it also means the personalization is less specific. The reference table:
+
+| Field | What you lose by omitting it |
+| --- | --- |
+| `industry` | Worse case-study selection, generic vocabulary |
+| `size` | Wrong positioning tier (enterprise pitch to an SMB, etc.) |
+| `champion` | No persona anchor — agent talks to "you" generically |
+| `currentStack` | Agent might suggest tools they already have |
+| `recentSignals` | Opener loses timeliness and specificity |
+| `competitorUsage` | No switch arguments or head-to-head framing |
+| `relevantCaseStudies` | Agent picks proof points by industry match instead of your curation |
+
+### Keep `painPoints` in buyer-language
+
+This is the most important guideline. The pain points drive discovery questions and the on-screen suggestion pills. They should sound like the buyer's actual problem, not your product's marketing.
+
+<CodeGroup>
+```text Good
+"Dispatch decisions are manual and slow during peak windows."
+"Driver utilization plateaued at 62%."
+"No single source of truth across TMS, OMS, and routing."
+```
+
+```text Avoid
+"Needs a routing optimizer."           ← solution language
+"Should buy our dispatch product."     ← sales pitch
+"Has problems."                        ← too vague
+"Their CFO wants to cut costs."        ← not a buyer pain
+```
+</CodeGroup>
+
+### Use `additionalContext` for strategy, not facts
+
+The `additionalContext` field is **not** synthesized into the intel — it's appended verbatim to the agent's runtime prompt. Use it for one-line strategic instructions:
+
+- "Lead with ROI on dispatch speed."
+- "Avoid mentioning pricing in this conversation."
+- "Champion has been burned by integrations before — emphasize ease of setup."
+
+Don't restate facts that already belong in `intel`. Duplication makes prompts noisier without helping the agent.
+
+### Make tokens human-readable
+
+Tokens show up in URLs (`yourcompany.com/demo?c=acme-logistics`) and in your team's analytics. Use the company slug, not a UUID. The API normalizes them to lowercase letters, digits, and hyphens — anything else is rejected.
+
+## Re-running an upsert
+
+`POST /api/campaigns/{slug}/targets` is idempotent on `(organizationId, token)`. Calling it again with the same token:
+
+- **Updates** `companyName`, `intel`, `rawResearch`, `additionalContext`, `links`, and the campaign assignment.
+- **Resets** the enrichment lifecycle: `enrichmentStatus` returns to `"skipped"` (or `"pending"` for auto-enrich), `enrichmentError` is cleared, `crawled_links` is wiped.
+- **Preserves** `id` and `createdAt`.
+
+This is how you fix a bad target — re-POST it with corrections.
+
+<Warning>
+Re-POSTing wipes any in-flight auto-enrich state. If a target is currently `running`, re-POSTing it cancels the visible result and starts over. Don't re-POST to "check status" — use the GET endpoint instead.
+</Warning>
+
+## Errors and edge cases
+
+<AccordionGroup>
+  <Accordion title="400 — companyName is required">
+    `companyName` is the only always-required field. Make sure it's a non-empty string.
+  </Accordion>
+  <Accordion title="400 — intel.companySummary is required">
+    With `enrich: false`, the intel must include a non-empty `companySummary` and at least one `painPoints` entry. Other fields are optional. See [Intel schema](/guides/campaigns/intel-schema) for the full validation rules.
+  </Accordion>
+  <Accordion title="400 — intel.painPoints must be a non-empty array of strings">
+    Empty arrays and arrays of empty strings both fail. Ship at least one pain point.
+  </Accordion>
+  <Accordion title="404 — Campaign not found">
+    The campaign slug in the URL doesn't exist for your org. Create it first with `POST /api/campaigns`.
+  </Accordion>
+  <Accordion title="409 — token conflict">
+    The token you supplied is already in use by another target in this org (in any campaign). Pick a different token, or move the existing target by re-POSTing it under the new campaign slug with the same token.
+  </Accordion>
+  <Accordion title="401 — API key missing or invalid">
+    Bearer token is missing, malformed, or revoked. Check that you're using the partner API key from the dashboard, not an internal service token.
+  </Accordion>
+</AccordionGroup>
+
+## What happens at session start
+
+Once a visitor lands on the widget with `?c=acme-logistics`, the agent's system prompt gets a `RESEARCH INTELLIGENCE` section appended that flattens your intel into labelled prose. Roughly:
+
+```
+## COMPANY PROFILE
+Company: Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy
+chains across India.
+Industry: Logistics
+Size: 200-500 employees
+Champion: Priya Rao (VP Operations) — Owns dispatch SLA and fleet utilization KPIs;
+pushed for the eval after Q1 SLA misses.
+Current stack: SAP TMS, Locus routing, Salesforce
+Uses competitor: Evaluating FarEye for last-mile visibility.
+
+Recent signals:
+- New CFO hired Q1 2026
+- Expanding into Tier-2 cities per Oct earnings call
+```
+
+Plus your `painPoints` are surfaced as on-screen suggestion pills (the first six), and `relevantCaseStudies` are made available to the agent as approved proof points.
+
+For the field-by-field breakdown of how each piece of intel shapes the agent, see the [Intel schema reference](/guides/campaigns/intel-schema).
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Intel schema reference" icon="list" href="/guides/campaigns/intel-schema">
+    Every field, what it does, examples, and anti-patterns.
+  </Card>
+  <Card title="Sending visitors to the widget" icon="link" href="/guides/campaigns/widget-embedding">
+    Loader script, four routing options, UTM passthrough.
+  </Card>
+  <Card title="Auto-enrich mode" icon="sparkles" href="/guides/campaigns/auto-enrich">
+    The async path: rep notes in, structured intel out.
+  </Card>
+  <Card title="API reference: upsert target" icon="terminal" href="/api-reference/endpoint/upsert-target">
+    Full schema, status codes, error responses.
+  </Card>
+</CardGroup>

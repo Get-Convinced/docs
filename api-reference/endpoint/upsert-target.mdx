@@ -1,0 +1,590 @@
+---
+title: 'Upsert campaign target'
+openapi: 'POST /api/campaigns/{campaignSlug}/targets'
+---
+
+Push a target company into a campaign. The response carries a `widgetToken` and a ready-to-use `widgetQuery` string — drop either onto your landing page (or hosted widget URL) and the agent loads with this target's intel as runtime context.
+
+This endpoint accepts two distinct request shapes. **Pick one** based on the data you have.
+
+<Tabs>
+  <Tab title="Partner-intel mode">
+    `enrich: false` + a fully-formed `intel` object.
+
+    - **Synchronous.** Row is widget-ready as soon as the response returns.
+    - **`enrichmentStatus`** comes back as `"skipped"`.
+    - **Use when:** you already have structured account intel from your CRM, your research team, or your own enrichment pipeline.
+  </Tab>
+  <Tab title="Auto-enrich mode">
+    `enrich: true` (or omitted — it's the default) + `rawResearch` + optional `links`.
+
+    - **Asynchronous.** Response returns immediately with `enrichmentStatus: "pending"`. Synthesis runs in the background and typically finishes in 30-90s.
+    - **Poll** `GET /api/campaigns/{campaignSlug}/targets/{token}` until `widgetReady` flips to `true`.
+    - **Use when:** you have rep notes, a CRM blob, or some links — but no structured intel object yet.
+  </Tab>
+</Tabs>
+
+<Warning>
+  **Exactly one of `intel` or `rawResearch` should be present.** Sending both
+  with conflicting values will trip validation. Sending neither (with
+  `enrich: false`) will fail because there's nothing to ground the agent in.
+</Warning>
+
+## Token rules
+
+- Lowercase letters, digits, and hyphens.
+- Maximum 64 characters.
+- Unique **per organization**, not per campaign — the same token cannot exist twice in the same org.
+- If you omit `token`, the API derives one from `companyName`.
+
+<Tip>
+  Use deterministic tokens — slugify the company name, or use your CRM record
+  ID. That way re-running your sync job is idempotent.
+</Tip>
+
+---
+
+## Partner-intel mode
+
+When you already have structured intel, send it as an `intel` object with `enrich: false`. The row is committed immediately and is ready to serve a personalized widget session.
+
+<CodeGroup>
+```bash curl
+curl -X POST "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "companyName": "Acme Logistics",
+    "token": "acme-logistics",
+    "enrich": false,
+    "intel": {
+      "companySummary": "Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy.",
+      "industry": "Logistics",
+      "size": "200-500 employees",
+      "champion": {
+        "name": "Priya Rao",
+        "role": "VP Operations",
+        "context": "Owns dispatch SLA and fleet utilization KPIs."
+      },
+      "painPoints": [
+        "Dispatch decisions are manual and slow during peak windows.",
+        "Driver utilization plateaued at 62%.",
+        "No single source of truth across TMS, OMS, and routing."
+      ],
+      "currentStack": ["SAP TMS", "Locus routing"],
+      "recentSignals": ["New CFO hired Q1", "Expanding into Tier-2 cities"],
+      "competitorUsage": "Evaluating FarEye for last-mile visibility.",
+      "relevantCaseStudies": ["Enmovil"]
+    },
+    "additionalContext": "Lead with ROI on dispatch speed."
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `${CONVINCED_API_BASE}/api/campaigns/q2-logistics-outreach/targets`,
+  {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${CONVINCED_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      companyName: 'Acme Logistics',
+      token: 'acme-logistics',
+      enrich: false,
+      intel: {
+        companySummary:
+          'Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy.',
+        industry: 'Logistics',
+        size: '200-500 employees',
+        champion: {
+          name: 'Priya Rao',
+          role: 'VP Operations',
+          context: 'Owns dispatch SLA and fleet utilization KPIs.',
+        },
+        painPoints: [
+          'Dispatch decisions are manual and slow during peak windows.',
+          'Driver utilization plateaued at 62%.',
+          'No single source of truth across TMS, OMS, and routing.',
+        ],
+        currentStack: ['SAP TMS', 'Locus routing'],
+        recentSignals: ['New CFO hired Q1', 'Expanding into Tier-2 cities'],
+        competitorUsage: 'Evaluating FarEye for last-mile visibility.',
+        relevantCaseStudies: ['Enmovil'],
+      },
+      additionalContext: 'Lead with ROI on dispatch speed.',
+    }),
+  },
+)
+
+const { widgetToken, widgetQuery, target } = await response.json()
+// widgetQuery → "?c=acme-logistics"  — drop directly onto your landing page URL
+console.log(`Target ${target.companyName} ready, status=${target.enrichmentStatus}`)
+```
+
+```python Python
+import os
+import requests
+
+base = os.environ["CONVINCED_API_BASE"]
+key = os.environ["CONVINCED_API_KEY"]
+
+payload = {
+    "companyName": "Acme Logistics",
+    "token": "acme-logistics",
+    "enrich": False,
+    "intel": {
+        "companySummary": "Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy.",
+        "industry": "Logistics",
+        "size": "200-500 employees",
+        "champion": {
+            "name": "Priya Rao",
+            "role": "VP Operations",
+            "context": "Owns dispatch SLA and fleet utilization KPIs.",
+        },
+        "painPoints": [
+            "Dispatch decisions are manual and slow during peak windows.",
+            "Driver utilization plateaued at 62%.",
+            "No single source of truth across TMS, OMS, and routing.",
+        ],
+        "currentStack": ["SAP TMS", "Locus routing"],
+        "recentSignals": ["New CFO hired Q1", "Expanding into Tier-2 cities"],
+        "competitorUsage": "Evaluating FarEye for last-mile visibility.",
+        "relevantCaseStudies": ["Enmovil"],
+    },
+    "additionalContext": "Lead with ROI on dispatch speed.",
+}
+
+response = requests.post(
+    f"{base}/api/campaigns/q2-logistics-outreach/targets",
+    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+    json=payload,
+    timeout=10,
+)
+response.raise_for_status()
+body = response.json()
+print(body["widgetQuery"])  # "?c=acme-logistics"
+```
+</CodeGroup>
+
+### The `intel` object
+
+Every field below is injected into the agent's system prompt at session start. The widget runs in **campaign mode** and grounds the entire conversation — opener, discovery questions, case studies, competitive positioning — in this context.
+
+<Note>
+  **Send only what you can verify.** The agent will not invent facts to fill
+  gaps. A short, accurate intel object beats a long, speculative one.
+</Note>
+
+<ParamField body="companySummary" type="string" required>
+  One or two factual sentences describing what the prospect company actually
+  does. The agent mirrors this back early in the conversation to confirm
+  context.
+
+  *Example:* `"Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy chains across India."`
+</ParamField>
+
+<ParamField body="painPoints" type="string[]" required>
+  Non-empty array of concrete problems the prospect is dealing with, ranked
+  most-to-least relevant. Phrase each one the way the **buyer** would describe
+  it — the pain itself, not your product or solution. Drives discovery
+  questions and on-screen suggestion pills. **Recommend 3-6 entries.**
+
+  *Example:* `["Dispatch decisions are manual and slow during peak windows.", "Driver utilization plateaued at 62%."]`
+</ParamField>
+
+<ParamField body="industry" type="string">
+  Industry or vertical. Used for case-study selection and to calibrate
+  vocabulary.
+
+  *Example:* `"Logistics"`, `"DevTools"`, `"Healthcare RCM"`.
+</ParamField>
+
+<ParamField body="size" type="string">
+  Free-form headcount, revenue band, or stage. Calibrates SMB vs. mid-market
+  vs. enterprise positioning.
+
+  *Example:* `"200-500 employees"`, `"$50M ARR"`, `"Series B"`.
+</ParamField>
+
+<ParamField body="champion" type="object">
+  The primary buyer at the account — the persona the agent imagines it is
+  talking to.
+
+  - `name` *(required)* — e.g. `"Priya Rao"`
+  - `role` *(required)* — e.g. `"VP Operations"`
+  - `context` *(optional)* — one-line background: priorities, tenure, owned KPIs.
+
+  *Example:* `{ "name": "Priya Rao", "role": "VP Operations", "context": "Owns dispatch SLA and fleet utilization KPIs." }`
+</ParamField>
+
+<ParamField body="currentStack" type="string[]">
+  Tools the prospect **already uses** in adjacent or related categories — their
+  broader stack, not direct competitors. The agent uses this to (a) avoid
+  suggesting things they have, (b) talk integrations and "fits-in" stories,
+  and (c) sound informed.
+
+  *Example:* `["SAP TMS", "Locus routing", "Salesforce"]`.
+</ParamField>
+
+<ParamField body="recentSignals" type="string[]">
+  Recent news or triggers the agent can reference to make the opener feel
+  timely. Funding rounds, leadership changes, product launches, layoffs,
+  expansions, earnings commentary.
+
+  *Example:* `["New CFO hired Q1 2026", "Expanding into Tier-2 cities per Oct earnings call"]`.
+</ParamField>
+
+<ParamField body="competitorUsage" type="string">
+  A **specific direct competitor** the prospect uses today or is actively
+  evaluating — i.e. someone who does what you do. Distinct from `currentStack`.
+  The agent uses this to set up switch arguments and head-to-head positioning.
+
+  *Example:* `"Datadog (incumbent since 2022, evaluating switch due to cost)."`
+</ParamField>
+
+<ParamField body="relevantCaseStudies" type="string[]">
+  Customer names you want the agent to bring up as proof points. Names are
+  validated against your org's referenceable case studies (rows where
+  `is_referenceable = true` AND `servable = true` in the dashboard). Match is
+  case-insensitive.
+
+  Unknown names are **dropped silently** and surfaced in
+  `response.warnings.droppedCaseStudies` — see the gotcha below.
+
+  *Example:* `["Enmovil", "Bizom"]`.
+</ParamField>
+
+### The `additionalContext` field
+
+`additionalContext` is **not synthesized** — it's appended verbatim to the agent prompt. Use it for strategic instructions about how to frame this specific account.
+
+```json
+"additionalContext": "Lead with ROI on dispatch speed; this account misses peak-window SLAs."
+```
+
+<Tip>
+  Treat `additionalContext` as a steering knob, not a content dump. Two or three
+  sentences max. Anything longer should go in `rawResearch` (auto-enrich) or in
+  the structured `intel` fields (partner-intel).
+</Tip>
+
+---
+
+## Auto-enrich mode
+
+When you only have rep notes or a CRM blob, send `rawResearch` with `enrich: true` (or omit `enrich` entirely — it's the default). Convinced runs web research, KB matching, and LLM synthesis in the background and writes a structured `intel` object back to the row.
+
+<CodeGroup>
+```bash curl
+curl -X POST "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "companyName": "Acme Logistics",
+    "token": "acme-logistics",
+    "enrich": true,
+    "rawResearch": "## Account notes\n- Mid-market 3PL, last-mile dispatch for grocery + pharmacy.\n- ~300 drivers, expanding into Tier-2.\n- Champion: Priya Rao, VP Ops. Cares about dispatch SLA + fleet utilization.\n- Currently on SAP TMS + Locus, evaluating FarEye for visibility.",
+    "links": [
+      "https://acmelogistics.example.com/about",
+      "https://acmelogistics.example.com/news/series-b"
+    ],
+    "additionalContext": "Lead with ROI on dispatch speed; this account misses peak-window SLAs."
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  `${CONVINCED_API_BASE}/api/campaigns/q2-logistics-outreach/targets`,
+  {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${CONVINCED_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      companyName: 'Acme Logistics',
+      token: 'acme-logistics',
+      enrich: true,
+      rawResearch: [
+        '## Account notes',
+        '- Mid-market 3PL, last-mile dispatch for grocery + pharmacy.',
+        '- ~300 drivers, expanding into Tier-2.',
+        '- Champion: Priya Rao, VP Ops. Cares about dispatch SLA + fleet utilization.',
+        '- Currently on SAP TMS + Locus, evaluating FarEye for visibility.',
+      ].join('\n'),
+      links: [
+        'https://acmelogistics.example.com/about',
+        'https://acmelogistics.example.com/news/series-b',
+      ],
+      additionalContext:
+        'Lead with ROI on dispatch speed; this account misses peak-window SLAs.',
+    }),
+  },
+)
+
+const { target, widgetToken } = await response.json()
+console.log(`Enrichment ${target.enrichmentStatus} — token ${widgetToken}`)
+// Now poll GET until target.enrichmentStatus === "done"
+```
+
+```python Python
+import os
+import requests
+
+base = os.environ["CONVINCED_API_BASE"]
+key = os.environ["CONVINCED_API_KEY"]
+
+payload = {
+    "companyName": "Acme Logistics",
+    "token": "acme-logistics",
+    "enrich": True,
+    "rawResearch": (
+        "## Account notes\n"
+        "- Mid-market 3PL, last-mile dispatch for grocery + pharmacy.\n"
+        "- ~300 drivers, expanding into Tier-2.\n"
+        "- Champion: Priya Rao, VP Ops. Cares about dispatch SLA + fleet utilization.\n"
+        "- Currently on SAP TMS + Locus, evaluating FarEye for visibility."
+    ),
+    "links": [
+        "https://acmelogistics.example.com/about",
+        "https://acmelogistics.example.com/news/series-b",
+    ],
+    "additionalContext": "Lead with ROI on dispatch speed; this account misses peak-window SLAs.",
+}
+
+response = requests.post(
+    f"{base}/api/campaigns/q2-logistics-outreach/targets",
+    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+    json=payload,
+    timeout=10,
+)
+response.raise_for_status()
+body = response.json()
+print(body["target"]["enrichmentStatus"])  # "pending"
+```
+</CodeGroup>
+
+### What the synthesis pipeline does
+
+The auto-enrich pipeline:
+
+1. **Reads** your `rawResearch` as the primary source of truth.
+2. **Crawls** every URL in `links` for additional context (about pages, news, account pages).
+3. **Matches** against your KB to surface relevant facts and case studies.
+4. **Synthesizes** a structured `intel` object using the same schema you'd send in partner-intel mode.
+5. **Persists** it on the target row.
+
+Recommended `rawResearch` size: under 20-30k characters. The pipeline weighs your notes higher than crawled content, so a tight, opinionated note beats a kitchen-sink dump.
+
+<Tip>
+  If you have **both** structured intel **and** raw notes, send the structured
+  `intel` with `enrich: false`. Auto-enrich will not "improve" a hand-written
+  intel object — it only fills gaps when there isn't one.
+</Tip>
+
+---
+
+## Response
+
+The same response shape is returned for both modes — only `enrichmentStatus` differs.
+
+<AccordionGroup>
+  <Accordion title="Partner-intel response (200 OK)">
+    ```json
+    {
+      "target": {
+        "id": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+        "campaignId": "8d3f9c2e-7a4b-4f1e-bb4d-2c5a9e7f1d3b",
+        "companyName": "Acme Logistics",
+        "token": "acme-logistics",
+        "enrichedAt": "2026-04-15T09:14:02.118Z",
+        "enrichmentStatus": "skipped",
+        "createdAt": "2026-04-15T09:14:02.118Z",
+        "updatedAt": "2026-04-15T09:14:02.118Z"
+      },
+      "targetId": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+      "widgetToken": "acme-logistics",
+      "widgetParam": "c",
+      "widgetQuery": "?c=acme-logistics"
+    }
+    ```
+  </Accordion>
+  <Accordion title="Auto-enrich response (200 OK)">
+    ```json
+    {
+      "target": {
+        "id": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+        "campaignId": "8d3f9c2e-7a4b-4f1e-bb4d-2c5a9e7f1d3b",
+        "companyName": "Acme Logistics",
+        "token": "acme-logistics",
+        "enrichedAt": null,
+        "enrichmentStatus": "pending",
+        "createdAt": "2026-04-15T09:14:02.118Z",
+        "updatedAt": "2026-04-15T09:14:02.118Z"
+      },
+      "targetId": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+      "widgetToken": "acme-logistics",
+      "widgetParam": "c",
+      "widgetQuery": "?c=acme-logistics"
+    }
+    ```
+
+    Note `enrichedAt: null` and `enrichmentStatus: "pending"`. Poll the GET endpoint until it flips to `"done"`.
+  </Accordion>
+  <Accordion title="Response with case-study warnings">
+    ```json
+    {
+      "target": {
+        "id": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+        "campaignId": "8d3f9c2e-7a4b-4f1e-bb4d-2c5a9e7f1d3b",
+        "companyName": "Acme Logistics",
+        "token": "acme-logistics",
+        "enrichedAt": "2026-04-15T09:14:02.118Z",
+        "enrichmentStatus": "skipped",
+        "createdAt": "2026-04-15T09:14:02.118Z",
+        "updatedAt": "2026-04-15T09:14:02.118Z"
+      },
+      "targetId": "5b1f8a7c-2e9d-4a6f-9c12-7d8e3f1a4b6c",
+      "widgetToken": "acme-logistics",
+      "widgetParam": "c",
+      "widgetQuery": "?c=acme-logistics",
+      "warnings": {
+        "droppedCaseStudies": ["BigCorp", "Acme Customer"],
+        "reason": "Names did not match any referenceable case studies for this organization."
+      }
+    }
+    ```
+
+    Names you sent in `relevantCaseStudies` that don't match a referenceable customer in your org are dropped silently and surfaced here.
+  </Accordion>
+</AccordionGroup>
+
+### Key response fields
+
+<ResponseField name="widgetQuery" type="string">
+  A ready-to-use query string with the URL-encoded prefix already applied (e.g.
+  `"?c=acme-logistics"`). Concatenate it onto your landing page URL.
+</ResponseField>
+
+<ResponseField name="widgetToken" type="string">
+  The bare token (e.g. `"acme-logistics"`). Use this if you're embedding via
+  `data-c="..."` on the loader script.
+</ResponseField>
+
+<ResponseField name="widgetParam" type="string">
+  Always `"c"`. The query parameter name the widget reads from. Exposed so your
+  integration doesn't need to hard-code it.
+</ResponseField>
+
+<ResponseField name="target.enrichmentStatus" type="string">
+  One of `pending` | `running` | `done` | `failed` | `skipped`. See the
+  [enrichment lifecycle](/api-reference/introduction#the-enrichment-lifecycle)
+  for what each value means.
+</ResponseField>
+
+<ResponseField name="warnings.droppedCaseStudies" type="string[]">
+  Present only when one or more `relevantCaseStudies` names didn't match a
+  referenceable customer in your organization.
+</ResponseField>
+
+---
+
+## Common gotchas
+
+<AccordionGroup>
+  <Accordion title="`relevantCaseStudies` names get silently filtered">
+    Names you supply are matched (case-insensitive) against rows in your
+    organization's case-study table where `is_referenceable = true` AND
+    `servable = true`. Unknown names are dropped, and the dropped list is
+    surfaced in `response.warnings.droppedCaseStudies`.
+
+    **What to do:** check the dashboard's case-study list for the exact names.
+    Or log `response.warnings` and surface it to your operator so you can fix
+    the source data.
+  </Accordion>
+  <Accordion title="Sending both `intel` and `rawResearch`">
+    Don't. Pick one mode. If both are present, the API rejects the request. If
+    you have structured intel, use it (`enrich: false`) — auto-enrich will not
+    improve a hand-written intel object.
+  </Accordion>
+  <Accordion title="`409 Conflict` on token reuse">
+    Tokens are unique **per organization**, not per campaign. Sending the same
+    token to a different campaign returns `409`. Either pick a new token or
+    update the existing target by sending the same token to its original
+    campaign (which is upsert-safe).
+  </Accordion>
+  <Accordion title="`additionalContext` is not synthesized">
+    `additionalContext` is appended verbatim to the agent prompt — it is **not**
+    rewritten or merged into the structured `intel` object. Use it for
+    strategic framing instructions ("lead with ROI", "skip pricing"), not for
+    facts about the company.
+  </Accordion>
+  <Accordion title="`painPoints` should sound like the buyer, not your pitch">
+    Phrase each pain point the way the buyer would say it: "dispatch decisions
+    are manual and slow", **not** "needs Convinced's automated dispatch
+    optimizer". The agent uses these to drive discovery — buyer-voice phrasing
+    yields more natural conversations.
+  </Accordion>
+  <Accordion title="`currentStack` vs `competitorUsage` confusion">
+    `currentStack` is the **broader** stack — adjacent tools they already use
+    (SAP, Salesforce, Locus). The agent leans on these for integration stories.
+
+    `competitorUsage` is a **direct competitor** doing what you do
+    (FarEye, Datadog). The agent uses this to set up switch arguments.
+
+    Mixing them up doesn't break anything, but the agent's framing will be off.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Common errors
+
+<AccordionGroup>
+  <Accordion title="400 Bad Request — missing companyName">
+    ```json
+    { "error": "companyName is required" }
+    ```
+  </Accordion>
+  <Accordion title="400 Bad Request — partner-intel without intel">
+    ```json
+    { "error": "intel is required when enrich is false" }
+    ```
+
+    Either supply an `intel` object or switch to auto-enrich (`enrich: true` + `rawResearch`).
+  </Accordion>
+  <Accordion title="400 Bad Request — empty painPoints">
+    ```json
+    { "error": "intel.painPoints must contain at least one entry" }
+    ```
+
+    `painPoints` is required and must be non-empty in the `intel` object.
+  </Accordion>
+  <Accordion title="404 Not Found — campaign slug">
+    ```json
+    { "error": "Campaign slug not found." }
+    ```
+
+    The slug doesn't exist for your organization. Create the campaign first via [Upsert campaign](/api-reference/endpoint/upsert-campaign).
+  </Accordion>
+  <Accordion title="409 Conflict — token already used">
+    ```json
+    { "error": "Token is already used by another target in this organization." }
+    ```
+
+    Pick a different token, or upsert against the original campaign that owns this token.
+  </Accordion>
+</AccordionGroup>
+
+## Next step
+
+<Card
+  title="Read target status"
+  icon="magnifying-glass"
+  href="/api-reference/endpoint/get-target"
+>
+  Poll the GET endpoint to watch the enrichment lifecycle and confirm the row
+  is widget-ready.
+</Card>

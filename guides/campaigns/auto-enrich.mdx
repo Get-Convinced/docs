@@ -1,0 +1,579 @@
+---
+title: 'Auto-enrich mode'
+description: 'Send rep notes and let Convinced synthesize the Intel object asynchronously.'
+icon: 'sparkles'
+---
+
+Auto-enrich is the asynchronous path: you send free-form `rawResearch` (rep notes, CRM excerpts, plain text or markdown) plus optional `links`, and Convinced runs a 3-stage research pipeline in the background. A few seconds later, the row has a structured `intel` object and the widget is ready to load in campaign mode.
+
+This is the right mode when **structuring the intel yourself isn't worth the effort**. Reps drop notes in Slack. Marketing has microsite URLs. You want the agent personalized without a CRM mapping project.
+
+<Note>
+Auto-enrich uses the same final `intel` shape as partner-intel — the difference is just who fills it in. See [Intel schema](/guides/campaigns/intel-schema) for the field-by-field reference.
+</Note>
+
+## When to use auto-enrich
+
+<CardGroup cols={2}>
+  <Card title="Rep-driven outreach" icon="user">
+    Reps write notes their way. Auto-enrich turns them into structured intel without re-typing.
+  </Card>
+  <Card title="Microsite-grounded demos" icon="link">
+    You've shared a microsite/landing page with the prospect. The agent needs to know what's on that page.
+  </Card>
+  <Card title="Public-signal outbound" icon="newspaper">
+    Funding rounds, hiring spikes, news mentions — kick off enrichment from a single URL or a paragraph of context.
+  </Card>
+  <Card title="Inbound demo requests" icon="inbox">
+    A form gives you a company name and not much else. Auto-enrich fills in the rest from web research.
+  </Card>
+</CardGroup>
+
+## The 3-stage pipeline
+
+When you POST a target with `enrich: true`, the API stores the row with `enrichmentStatus: "pending"` and kicks off a background job. That job runs three stages **in parallel**, then a final synthesis step:
+
+<Frame>
+
+```
+                       enrich: true
+                            │
+                            ▼
+                   ┌────────────────┐
+                   │  pending       │
+                   └────────┬───────┘
+                            │
+                  (worker picks up)
+                            │
+                            ▼
+                   ┌────────────────┐
+                   │  running       │
+                   └────────┬───────┘
+                            │
+            ┌───────────────┼───────────────┐
+            │               │               │
+            ▼               ▼               ▼
+    ┌───────────────┐ ┌───────────┐ ┌──────────────┐
+    │ (a) Web       │ │ (b) KB    │ │ (c) Crawl    │
+    │     search    │ │     ref.  │ │     links    │
+    │ gpt-5-search- │ │     custs │ │ (microsite,  │
+    │ api           │ │           │ │  news pages) │
+    └───────┬───────┘ └─────┬─────┘ └──────┬───────┘
+            │               │              │
+            └───────────────┼──────────────┘
+                            ▼
+                   ┌────────────────┐
+                   │ (d) Synthesis  │
+                   │ gpt-5.5        │
+                   │ → CampaignIntel│
+                   └────────┬───────┘
+                            │
+                            ▼
+                  ┌─────────┴─────────┐
+                  │                   │
+                  ▼                   ▼
+            ┌───────────┐       ┌───────────┐
+            │   done    │       │  failed   │
+            └───────────┘       └───────────┘
+```
+
+</Frame>
+
+### Stage (a) — web search
+
+Convinced sends `companyName` plus your `additionalContext` (treated as scope filters) to OpenAI's `gpt-5-search-api` and gets back a fact-dense profile with URL citations. Looking for: industry, size, headquarters, recent news, technology stack, competitors.
+
+**Failure handling:** non-fatal. If the web search times out or errors, the pipeline continues with empty results. You can spot this in the synthesis output — `industry` and `recentSignals` will be sparse if web search failed.
+
+### Stage (b) — KB lookup
+
+Convinced queries your org's case-study table for rows where `is_referenceable = true AND servable = true`, ordered by `usage_count` and `confidence`. Top 40 are loaded. These become the **only** customer names the synthesis step is allowed to put in `relevantCaseStudies`.
+
+**Failure handling:** non-fatal. If the KB query fails, `relevantCaseStudies` will simply be empty in the result.
+
+### Stage (c) — link crawling
+
+For each URL in your `links` array, Convinced fetches the page, extracts readable text, and passes it forward as a "primary anchor" — see the section below on [link behavior](#how-links-shape-the-conversation) for what this does.
+
+**Failure handling:** non-fatal. Failed crawls are surfaced internally; the rest of the pipeline runs without them.
+
+### Stage (d) — synthesis
+
+GPT-5.5 receives all four inputs (rep notes, additional context, web research, KB customers, crawled link content) and returns a `CampaignIntel` JSON object. The synthesis prompt enforces strict rules:
+
+- **Never invent facts.** If a field isn't supported by the inputs, omit or null it.
+- **`relevantCaseStudies`** must come **only** from the KB lookup list. No invented names.
+- **Pain points** must be concrete and phrased as the prospect's actual problem, not generic.
+- **Rep notes win** when inputs disagree — they have ground-truth context.
+- When **PRIMARY ANCHOR** (crawled microsite) is present, `companySummary`, `painPoints`, and `relevantCaseStudies` should reflect that page first.
+
+**Failure handling:** **fatal**. If synthesis throws (bad JSON, API error, validation error), the row is marked `enrichmentStatus: "failed"` and `enrichmentError` is populated (truncated to 500 chars).
+
+<Warning>
+Enrichment is fire-and-forget today — there are **no automatic retries**. If a target ends up `failed`, you re-POST the target to retry. Treat `failed` as a real error you have to handle, not a transient state that recovers on its own.
+</Warning>
+
+## Latency expectations
+
+| Stage | Typical |
+| --- | --- |
+| Web search | 5-15s |
+| KB lookup | sub-second |
+| Link crawl | 1-3s per link, capped (parallel) |
+| Synthesis | 15-40s |
+| **End-to-end** | **30-90s** |
+
+The first three run in parallel, so the total is roughly `max(web-search, max-crawl) + synthesis`. A target with no links typically lands in 30-60s; one with 3-4 links and slow microsite responses can stretch to 90s.
+
+<Tip>
+The internal API timeout is generous (multiple minutes). Targets stuck in `running` longer than ~3 minutes almost always indicate a real failure — check `enrichmentError` after re-POSTing.
+</Tip>
+
+## The flow
+
+<Steps>
+  <Step title="Create the campaign">
+    Same as partner-intel — once per outreach motion.
+  </Step>
+  <Step title="POST one target with `enrich: true`">
+    Include `rawResearch` (text/markdown) and optionally `links`. The API returns immediately with `enrichmentStatus: "pending"`.
+  </Step>
+  <Step title="Poll the GET endpoint until `widgetReady: true`">
+    Recommended: every 5 seconds for the first minute, then every 15 seconds. Cap your polling at ~3 minutes.
+  </Step>
+  <Step title="Send the visitor to the widget">
+    Once `widgetReady: true`, the URL `?c=<token>` enters campaign mode.
+  </Step>
+</Steps>
+
+## Step 1 — Push the target
+
+<CodeGroup>
+```bash curl
+curl -X POST "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "companyName": "Acme Logistics",
+    "token": "acme-logistics",
+    "enrich": true,
+    "rawResearch": "## Account notes\n- Mid-market 3PL, last-mile dispatch for grocery + pharmacy.\n- ~300 drivers, expanding into Tier-2.\n- Champion: Priya Rao, VP Ops. Cares about dispatch SLA + fleet utilization.\n- Currently on SAP TMS + Locus, evaluating FarEye for visibility.",
+    "links": [
+      "https://acmelogistics.example.com/about",
+      "https://acmelogistics.example.com/news/series-b"
+    ],
+    "additionalContext": "Lead with ROI on dispatch speed; this account misses peak-window SLAs."
+  }'
+```
+
+```typescript JavaScript
+const res = await fetch(
+  `${process.env.CONVINCED_API_BASE}/api/campaigns/q2-logistics-outreach/targets`,
+  {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.CONVINCED_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      companyName: 'Acme Logistics',
+      token: 'acme-logistics',
+      enrich: true,
+      rawResearch: `## Account notes
+- Mid-market 3PL, last-mile dispatch for grocery + pharmacy.
+- ~300 drivers, expanding into Tier-2.
+- Champion: Priya Rao, VP Ops. Cares about dispatch SLA + fleet utilization.
+- Currently on SAP TMS + Locus, evaluating FarEye for visibility.`,
+      links: [
+        'https://acmelogistics.example.com/about',
+        'https://acmelogistics.example.com/news/series-b',
+      ],
+      additionalContext:
+        'Lead with ROI on dispatch speed; this account misses peak-window SLAs.',
+    }),
+  }
+)
+const data = await res.json()
+console.log(data.target.enrichmentStatus) // "pending"
+console.log(data.widgetQuery)             // ?c=acme-logistics
+```
+
+```python Python
+import os, requests
+
+res = requests.post(
+    f"{os.environ['CONVINCED_API_BASE']}/api/campaigns/q2-logistics-outreach/targets",
+    headers={
+        'Authorization': f"Bearer {os.environ['CONVINCED_API_KEY']}",
+        'Content-Type': 'application/json',
+    },
+    json={
+        'companyName': 'Acme Logistics',
+        'token': 'acme-logistics',
+        'enrich': True,
+        'rawResearch': """## Account notes
+- Mid-market 3PL, last-mile dispatch for grocery + pharmacy.
+- ~300 drivers, expanding into Tier-2.
+- Champion: Priya Rao, VP Ops. Cares about dispatch SLA + fleet utilization.
+- Currently on SAP TMS + Locus, evaluating FarEye for visibility.""",
+        'links': [
+            'https://acmelogistics.example.com/about',
+            'https://acmelogistics.example.com/news/series-b',
+        ],
+        'additionalContext': 'Lead with ROI on dispatch speed; this account misses peak-window SLAs.',
+    },
+)
+data = res.json()
+print(data['target']['enrichmentStatus'])  # "pending"
+print(data['widgetQuery'])                  # ?c=acme-logistics
+```
+</CodeGroup>
+
+The response returns immediately (under 1 second). At this point:
+
+- `enrichmentStatus` is `"pending"`.
+- `widgetReady` is **false** (would be returned by the GET endpoint).
+- The widget URL `?c=acme-logistics` exists but a visitor landing now would get a generic session, not campaign mode.
+
+## Step 2 — Poll until ready
+
+Read back target status with `GET /api/campaigns/{slug}/targets/{token}`. The response includes `enrichmentStatus` (lifecycle), `enrichmentError` (if `failed`), and the load-bearing `widgetReady` boolean.
+
+<CodeGroup>
+```bash curl
+# One-shot read
+curl "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets/acme-logistics" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY"
+
+# Polling loop with simple backoff
+TOKEN="acme-logistics"
+SLUG="q2-logistics-outreach"
+for delay in 2 3 5 5 10 10 15 15 20 20 30 30; do
+  status=$(curl -s "$CONVINCED_API_BASE/api/campaigns/$SLUG/targets/$TOKEN" \
+    -H "Authorization: Bearer $CONVINCED_API_KEY" \
+    | jq -r '.target.enrichmentStatus')
+  echo "$(date +%H:%M:%S)  status=$status"
+  case "$status" in
+    done|skipped|failed) break ;;
+  esac
+  sleep $delay
+done
+```
+
+```typescript JavaScript
+async function waitForTarget(slug: string, token: string, opts?: { timeoutMs?: number }) {
+  const timeoutMs = opts?.timeoutMs ?? 180_000
+  const start = Date.now()
+  // Backoff: tighter early (LLM often returns under 30s), looser later
+  const delays = [2_000, 3_000, 5_000, 5_000, 10_000, 10_000, 15_000, 15_000, 20_000, 30_000]
+  let i = 0
+
+  while (Date.now() - start < timeoutMs) {
+    const res = await fetch(
+      `${process.env.CONVINCED_API_BASE}/api/campaigns/${slug}/targets/${token}`,
+      { headers: { Authorization: `Bearer ${process.env.CONVINCED_API_KEY}` } }
+    )
+    if (!res.ok) throw new Error(`GET failed: ${res.status}`)
+    const data = await res.json()
+    const { enrichmentStatus, enrichmentError } = data.target
+
+    if (enrichmentStatus === 'done' || enrichmentStatus === 'skipped') {
+      return { ok: true, target: data.target, widgetQuery: data.widgetQuery }
+    }
+    if (enrichmentStatus === 'failed') {
+      return { ok: false, error: enrichmentError, target: data.target }
+    }
+
+    const delay = delays[Math.min(i, delays.length - 1)]
+    i += 1
+    await new Promise((r) => setTimeout(r, delay))
+  }
+  return { ok: false, error: 'Polling timed out after ' + timeoutMs + 'ms' }
+}
+
+const result = await waitForTarget('q2-logistics-outreach', 'acme-logistics')
+if (result.ok) {
+  console.log('Widget ready:', result.widgetQuery)
+} else {
+  console.error('Enrichment failed:', result.error)
+}
+```
+
+```python Python
+import os, time, requests
+
+def wait_for_target(slug: str, token: str, timeout_s: float = 180.0):
+    start = time.monotonic()
+    delays = [2, 3, 5, 5, 10, 10, 15, 15, 20, 30]
+    i = 0
+
+    while time.monotonic() - start < timeout_s:
+        res = requests.get(
+            f"{os.environ['CONVINCED_API_BASE']}/api/campaigns/{slug}/targets/{token}",
+            headers={'Authorization': f"Bearer {os.environ['CONVINCED_API_KEY']}"},
+        )
+        res.raise_for_status()
+        data = res.json()
+        status = data['target']['enrichmentStatus']
+
+        if status in ('done', 'skipped'):
+            return {'ok': True, 'target': data['target'], 'widget_query': data['widgetQuery']}
+        if status == 'failed':
+            return {'ok': False, 'error': data['target'].get('enrichmentError')}
+
+        time.sleep(delays[min(i, len(delays) - 1)])
+        i += 1
+
+    return {'ok': False, 'error': f'Polling timed out after {timeout_s}s'}
+
+
+result = wait_for_target('q2-logistics-outreach', 'acme-logistics')
+if result['ok']:
+    print('Widget ready:', result['widget_query'])
+else:
+    print('Enrichment failed:', result['error'])
+```
+</CodeGroup>
+
+### Status interpretation
+
+| Status | What it means | What to do |
+| --- | --- | --- |
+| `pending` | Queued, worker hasn't started | Keep polling. Should leave this state within ~5s. |
+| `running` | Synthesis in flight | Keep polling. Typical duration 30-90s from start. |
+| `done` | Intel ready, `widgetReady: true` | Stop polling. Send visitors to the widget. |
+| `failed` | Synthesis errored | Stop polling. Read `enrichmentError`, fix inputs, re-POST. |
+| `skipped` | Partner-intel mode (shouldn't appear here) | Stop polling. Already widget-ready. |
+
+<Tip>
+Always gate on `widgetReady: true` rather than `enrichmentStatus: "done"`. `widgetReady` also checks that the campaign itself is still active and that intel is actually present on the row — three preconditions you need anyway, baked into one boolean.
+</Tip>
+
+## How links shape the conversation
+
+The `links` array isn't a passive metadata field — it's the most powerful single lever you have for steering the agent. When you supply links:
+
+1. Convinced crawls each URL and extracts the readable text.
+2. The crawled content is injected at the **top** of the synthesis prompt under the header **`PRIMARY ANCHOR — content the visitor is currently looking at`**.
+3. The synthesis prompt instructs the LLM to treat the first crawled page as the conversation anchor: "the rep has already shared this with the prospect; the visitor is on it right now."
+4. At session start, the same anchor is re-injected into the agent's runtime prompt under **`MICROSITE CONTENT — the page this visitor is currently looking at`** (truncated to 2000 chars per link for voice latency).
+
+The downstream effect: the agent opens by referencing a specific section the visitor can see. Discovery questions are rooted in what's actually on the page. `companySummary`, `painPoints`, and `relevantCaseStudies` all bias toward the microsite's framing.
+
+<Note>
+Use `links` whenever the conversation is grounded in a specific page the prospect has been pointed at. A microsite is the canonical case. News articles, product pages, and case studies also work. Don't use `links` for arbitrary reference URLs the visitor doesn't know about.
+</Note>
+
+## What to send for best synthesis quality
+
+### `rawResearch`
+
+Plain text or markdown. Markdown is fine — the synthesizer reads either. The recommended sweet spot is **500-3000 characters**:
+
+- Under 500 chars and the synthesis has nothing to anchor on; it falls back to web search and you get a generic profile.
+- Over ~20-30k chars and the synthesis prompt gets noisy. Trim before sending.
+
+What to include, ordered by impact:
+
+1. **What the company does in one or two sentences.** This becomes `companySummary`.
+2. **The buyer/champion** with their role and what they care about. This becomes `champion`.
+3. **3-6 concrete pains** in the buyer's words. This is what discovery will key off.
+4. **Tools they currently use.** Becomes `currentStack`.
+5. **Direct competitors they use or evaluate.** Becomes `competitorUsage`.
+6. **Recent triggers/signals** with rough dates. Becomes `recentSignals`.
+
+<CodeGroup>
+```markdown High-quality rawResearch
+## Acme Logistics — account notes (last updated 2026-04-22)
+
+**What they do:** Mid-market 3PL, last-mile dispatch for grocery + pharmacy
+chains across India. ~300 drivers, mostly tier-1 metros, expanding into tier-2.
+
+**Champion:** Priya Rao, VP Operations. Owns dispatch SLA and fleet utilization
+KPIs. Pushed for the eval after Q1 SLA misses cost a major grocery account.
+
+**Pains (her language from the discovery call):**
+- "Dispatch decisions are still mostly manual during peak windows."
+- "Driver utilization has been stuck at 62% for two quarters."
+- "We have a TMS, an OMS, and a routing tool — none of them agree."
+
+**Current stack:** SAP TMS, Locus routing, Salesforce. Evaluating FarEye for
+visibility (running PoC since March).
+
+**Recent signals:**
+- New CFO hired Q1 2026, mandate to cut COGS 8%.
+- Tier-2 city expansion announced on Oct 2025 earnings call.
+```
+
+```markdown Weak rawResearch
+Logistics company. Big. They have problems with dispatch.
+```
+</CodeGroup>
+
+### `additionalContext`
+
+This field is **not** synthesized into intel — it's appended verbatim to the agent's runtime prompt at session start. Use it for **strategy**, not facts:
+
+- Good: "Lead with ROI on dispatch speed; this account misses peak-window SLAs."
+- Good: "Avoid mentioning pricing; commercial team will handle in person."
+- Avoid: restating facts that already belong in `rawResearch`.
+- Avoid: long passages — 1-2 sentences is the right length.
+
+The synthesizer also uses `additionalContext` as a **scope filter** for the web-search stage. If you write "focus on the EMEA business unit", the web search treats that as a strict constraint and only surfaces EMEA information.
+
+### `links`
+
+URLs the crawler should fetch. Best candidates:
+
+| Use links for... | Why |
+| --- | --- |
+| The microsite/landing page you've shared with the prospect | Becomes the conversation anchor |
+| Recent news pages about the company | Adds dated, citeable signals |
+| The prospect's careers page | Reveals team composition and growth signals |
+| Product/feature pages on the prospect's site | Helps the agent talk integrations |
+
+Avoid:
+
+- Internal Notion/Google Doc links (the crawler can't read them).
+- Generic homepage URLs (low signal compared to a focused page).
+- Login-walled pages.
+
+## Failure modes and recovery
+
+### Web search timeout
+
+**Non-fatal.** Surfaces as sparser `industry` / `recentSignals` / `currentStack` in the final intel. Pipeline continues.
+
+**What to do:** nothing required. If the result feels under-personalized, re-POST with a richer `rawResearch` so the synthesis has more to draw on without web search.
+
+### KB lookup failure
+
+**Non-fatal.** Surfaces as empty `relevantCaseStudies`. Pipeline continues.
+
+**What to do:** check that you have referenceable case studies in your dashboard (Knowledge → Customers, filter by Referenceable). If the lookup is consistently empty, that's the root cause — fix it in the dashboard.
+
+### Link crawl failure
+
+**Non-fatal per link.** Failed crawls are dropped silently; successful ones are still used. If **all** crawls fail, the synthesis runs without a primary anchor.
+
+**What to do:** verify the URLs are public, render real HTML, and don't require JavaScript to display content. Single-page apps that render content client-side often crawl as nearly empty.
+
+### Synthesis failure
+
+**Fatal.** `enrichmentStatus` becomes `"failed"`, `enrichmentError` is populated (max 500 chars), `widgetReady` stays false. **No automatic retry.**
+
+<Warning>
+A `failed` row is permanent until you re-POST the target. The widget will fall back to a generic session for any visitor who lands on `?c=<token>` while the row is `failed`.
+</Warning>
+
+**What to do:**
+
+<Steps>
+  <Step title="Read `enrichmentError`">
+    `GET /api/campaigns/{slug}/targets/{token}` includes the truncated error message. Common causes: the LLM returned malformed JSON, OpenAI rate-limited, or input exceeded the prompt budget.
+  </Step>
+  <Step title="If the error suggests bad input, fix it">
+    Trim a bloated `rawResearch`, fix unreachable URLs, simplify `additionalContext`.
+  </Step>
+  <Step title="Re-POST the target">
+    The upsert is idempotent on `(organizationId, token)`. Re-POSTing wipes the failure state, clears `enrichmentError`, sets status back to `pending`, and re-kicks the worker.
+  </Step>
+  <Step title="Poll again">
+    Same polling pattern as before.
+  </Step>
+</Steps>
+
+### Stuck in `running` longer than expected
+
+If a target sits in `running` for more than ~3 minutes, it's almost always a real failure that the worker hasn't recorded yet. The internal API timeout for the synthesis call is generous (multiple minutes), so don't panic at 60 seconds — but past 3 minutes, re-POST.
+
+`enrichmentStartedAt` on the GET response tells you when the run started, which makes "stuck" easy to detect.
+
+## A worked auto-enrich example
+
+Inputs:
+
+```json
+{
+  "companyName": "Acme Logistics",
+  "token": "acme-logistics",
+  "enrich": true,
+  "rawResearch": "## Account notes\n- Mid-market 3PL, last-mile dispatch for grocery + pharmacy.\n- ~300 drivers, expanding into Tier-2.\n- Champion: Priya Rao, VP Ops. Cares about dispatch SLA + fleet utilization.\n- Currently on SAP TMS + Locus, evaluating FarEye for visibility.",
+  "links": ["https://acmelogistics.example.com/about"],
+  "additionalContext": "Lead with ROI on dispatch speed."
+}
+```
+
+After ~45s, polling returns:
+
+```json
+{
+  "target": {
+    "id": "1f0a8c3a-...",
+    "campaignId": "8b1d2e6f-...",
+    "campaignName": "Q2 Logistics Outreach",
+    "campaignSlug": "q2-logistics-outreach",
+    "campaignStatus": "active",
+    "companyName": "Acme Logistics",
+    "token": "acme-logistics",
+    "enrichedAt": "2026-05-04T10:15:08.000Z",
+    "enrichmentStatus": "done",
+    "enrichmentError": null,
+    "enrichmentStartedAt": "2026-05-04T10:14:23.000Z",
+    "hasIntel": true,
+    "widgetReady": true,
+    "updatedAt": "2026-05-04T10:15:08.000Z"
+  },
+  "targetId": "1f0a8c3a-...",
+  "widgetToken": "acme-logistics",
+  "widgetParam": "c",
+  "widgetQuery": "?c=acme-logistics"
+}
+```
+
+The synthesized `intel` is stored on the row but is not returned in the GET response (intel is for the agent, not for partners to read back). The agent now opens the conversation grounded in Acme Logistics's microsite, mirrors back the company summary, and asks discovery questions about peak-window dispatch SLAs.
+
+## Errors and edge cases
+
+<AccordionGroup>
+  <Accordion title="400 — neither intel nor rawResearch supplied">
+    Auto-enrich needs at least one of `rawResearch` or `additionalContext`. An empty research field with no `intel` object leaves the worker nothing to synthesize from.
+  </Accordion>
+  <Accordion title="enrichmentStatus stuck at pending">
+    The internal worker hasn't picked up the job. This usually points at infrastructure (`KB_MCP_INTERNAL_SERVICE_TOKEN` not set on the KB MCP, or the frontend internal endpoint unreachable). If you see this in production, contact support.
+  </Accordion>
+  <Accordion title="Crawl failures for valid URLs">
+    The crawler reads server-rendered HTML. Single-page apps that fetch content client-side will appear blank. Use a server-rendered version of the page or skip that link.
+  </Accordion>
+  <Accordion title="LLM cited a customer that doesn't exist">
+    Shouldn't happen — the synthesizer is constrained to the KB lookup list. If you see this, it's a bug; report it. As a defensive measure, `relevantCaseStudies` from synthesis go through the same case-study validator as partner-supplied names.
+  </Accordion>
+  <Accordion title="Same target keeps failing on re-POST">
+    The synthesis prompt is over budget, or there's a deterministic bug in the synthesis output for these specific inputs. Trim `rawResearch` and `links` to a minimum to isolate; if it still fails with minimal inputs, contact support with the `enrichmentError` text.
+  </Accordion>
+</AccordionGroup>
+
+## Cost and rate considerations
+
+Auto-enrich uses two billed model calls per target: `gpt-5-search-api` (web search) and `gpt-5.5` (synthesis). Volume planning:
+
+- One target = roughly one web-search call + one synthesis call + ~3 link fetches.
+- Convinced does not currently rate-limit auto-enrich at the API layer, but the underlying OpenAI quota is the real ceiling. If you're firing 1000+ targets in a burst, batch them with delays (e.g. 50/sec) to avoid OpenAI rate-limit errors that surface as `failed` rows.
+- `partner-intel` mode incurs zero LLM cost — use it whenever you have the data structured already.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Intel schema reference" icon="list" href="/guides/campaigns/intel-schema">
+    What each synthesized field controls in the agent.
+  </Card>
+  <Card title="Sending visitors to the widget" icon="link" href="/guides/campaigns/widget-embedding">
+    How to use `widgetReady` as your gate before driving traffic.
+  </Card>
+  <Card title="Partner-intel mode" icon="lock" href="/guides/campaigns/partner-intel">
+    The synchronous alternative when you have structured intel already.
+  </Card>
+  <Card title="API reference: get target" icon="terminal" href="/api-reference/endpoint/get-target">
+    Full schema, status fields, polling response shape.
+  </Card>
+</CardGroup>

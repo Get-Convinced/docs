@@ -1,0 +1,289 @@
+---
+title: 'API keys'
+description: 'Generate, scope, rotate, and revoke partner API keys for the Convinced Campaign API and KB MCP server.'
+icon: 'key'
+---
+
+A Convinced API key is the single credential that authenticates your integration against **both** the [Campaign API](/guides/campaigns/overview) and the [KB MCP server](/guides/mcp/overview). One key, one organization, both surfaces.
+
+This page covers everything you need: where to generate keys, what each expiry preset means, how to send the key on every transport, when to rotate, and how to revoke.
+
+<Note>
+Most partner keys ship with the **`partner` scope** — see [scopes](#scopes-and-the-partner-tier) below. That scope gates them to a curated subset of MCP tools. Other scopes (`internal`, `widget`, `public`) are reserved for Convinced infrastructure and you cannot self-serve them.
+</Note>
+
+## Why partners need a key
+
+| Surface | What the key authenticates | Header |
+| --- | --- | --- |
+| **Campaign API** (`POST /api/campaigns`, `POST /api/campaigns/{slug}/targets`, `GET .../targets/{token}`) | Org-bound writes to campaigns and targets. | `Authorization: Bearer <key>` |
+| **KB MCP — REST** (`POST /api/tool`) | Single-tool reads against your KB. Used by ElevenLabs, Vapi, n8n, custom backends, bash. | `Authorization: Bearer <key>` |
+| **KB MCP — SSE / MCP protocol** (`GET /sse`, `POST /messages`) | Long-lived MCP sessions for Claude Desktop, Cursor, Windsurf, agentic clients. | `Authorization: Bearer <key>` on the SSE handshake |
+
+Every call is logged against the key and the org. There is no anonymous access for the campaign API or for any non-`public` MCP scope.
+
+## Generate a key
+
+Keys are generated from the dashboard. You must be a member of the org you're generating for.
+
+<Steps>
+  <Step title="Open the API keys page">
+    In the dashboard, navigate to **Settings → API Keys** for your org. The direct URL is:
+
+    ```
+    https://app.getconvinced.ai/org/<your-slug>/settings/api-keys
+    ```
+
+    Replace `<your-slug>` with your organization's slug (e.g. `acme-logistics`).
+  </Step>
+  <Step title="Click 'Create API Key'">
+    Give the key a descriptive name. Names are visible to other admins and surface in usage logs alongside every call. Use names that scope intent:
+
+    - `Partner microsite ingestion`
+    - `Vapi voice tool — production`
+    - `Cursor MCP — gautam laptop`
+    - `CI/CD staging seed-data job`
+
+    Avoid generic names like `key 1` — when something goes wrong at 2 AM, the name is what tells you which integration to revoke.
+  </Step>
+  <Step title="Pick an expiry preset">
+    See the [expiry preset reference](#expiry-presets) below. The default is **No expiry**, but most partners should pick a bounded window.
+  </Step>
+  <Step title="Copy the plaintext key">
+    The dashboard shows the **full key exactly once** in a yellow banner. Copy it immediately. After you dismiss the banner, only the prefix and last 6 characters are ever shown again.
+  </Step>
+  <Step title="Store it as a secret">
+    Push the key to your secrets manager (Vault, AWS Secrets Manager, GCP Secret Manager, Doppler, 1Password, GitHub Actions secrets — whatever you use). **Do not** commit it to source control or paste it into a Slack message.
+  </Step>
+</Steps>
+
+<Warning>
+The plaintext key is shown **one time** and is **not** recoverable. Convinced stores only a SHA-256 hash. If you lose the key before storing it, revoke it and create a new one — there is no "show key again" path.
+</Warning>
+
+## Key format
+
+Plaintext keys use a fixed shape so they're easy to spot in logs and revoke from leak scanners:
+
+```
+ck_live_<48 hex characters>
+```
+
+- **Prefix:** `ck_live_` — first 8 characters. Always shown, used as a glanceable label.
+- **Suffix:** the last 6 characters of the random body. Shown after creation as `…abc123` so you can match a key in usage logs to the row in your secrets store.
+- **Body:** 24 random bytes (48 hex chars). This is the part you must keep secret.
+
+The dashboard displays keys as `ck_live_…abc123` everywhere except at creation time. Both the **prefix** and **suffix** are public; only the middle is a secret.
+
+## Expiry presets
+
+When you create a key, pick one of:
+
+| Preset | Wall-clock | Recommended use |
+| --- | --- | --- |
+| **No expiry** | Never expires | Long-running production integrations where revocation is the only off-switch. Pair with quarterly rotation. |
+| **1 day** | +24 hours | One-off scripts. Ad-hoc data pulls. Live demos where you don't want a key surviving your laptop closing. |
+| **3 days** | +72 hours | Short engagements (proof-of-concept builds, contractor access for the duration of a sprint). |
+| **1 week** | +7 days | Staging / preview environments, smoke-test runs in CI, customer trial with a planned wrap-up. |
+| **1 month** | +30 days | Quarterly review cadence — forces deliberate rotation without being onerous. Good default for staging. |
+| **6 months** | +180 days | Production keys with a calendar reminder for rotation. The sweet spot for most partner deployments. |
+| **1 year** | +365 days | Stable, low-touch integrations where rotation overhead is real (e.g. shared partner pipelines). |
+| **Custom** | Any future timestamp | Compliance constraints (SOC 2 windows, contractual rotation clauses), align with an existing org-wide rotation cycle. |
+
+<Tip>
+Default to **6 months** for production keys and **1 week** for CI / staging. Treat **No expiry** as opt-in: it's available for the cases that genuinely need it, but you should be able to articulate why a given key needs to outlive its quarterly rotation reminder.
+</Tip>
+
+## Use the key
+
+The same `Bearer` header works on every Convinced surface. Set it once in your environment:
+
+<CodeGroup>
+```bash Shell
+export CONVINCED_API_KEY="ck_live_…"
+export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+```
+
+```typescript Node
+const CONVINCED_API_KEY = process.env.CONVINCED_API_KEY!
+const CONVINCED_API_BASE = process.env.CONVINCED_API_BASE!
+```
+
+```python Python
+import os
+CONVINCED_API_KEY = os.environ['CONVINCED_API_KEY']
+CONVINCED_API_BASE = os.environ['CONVINCED_API_BASE']
+```
+</CodeGroup>
+
+### Campaign API
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/campaigns" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Q2 Logistics Outreach", "slug": "q2-logistics-outreach" }'
+```
+
+Full reference: [API reference → Upsert campaign](/api-reference/endpoint/upsert-campaign).
+
+### KB MCP — REST
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "tool": "search_knowledge", "args": { "query": "cold chain SLA" }, "scope": "partner" }'
+```
+
+Full walkthrough: [MCP setup → REST endpoint](/guides/mcp/setup#part-a-rest-endpoint).
+
+### KB MCP — SSE / MCP protocol
+
+The SSE handshake reads the same `Authorization` header. From a Claude Desktop / Cursor config:
+
+```json
+{
+  "mcpServers": {
+    "convinced": {
+      "url": "http://convinced-kb-mcp.railway.internal/sse",
+      "headers": {
+        "Authorization": "Bearer ck_live_…"
+      }
+    }
+  }
+}
+```
+
+Full walkthrough: [MCP setup → SSE protocol](/guides/mcp/setup#part-b-mcp-sse-protocol).
+
+<Tip>
+The server also accepts the legacy `x-api-key: <key>` header (no `Bearer` prefix). Prefer `Authorization: Bearer` for new code — it's what the MCP spec expects and what most clients ship by default.
+</Tip>
+
+## Revoke a key
+
+Revocation is **immediate and permanent**. The next call against the key returns `401 API key is disabled`.
+
+<Steps>
+  <Step title="Open Settings → API Keys">
+    Find the key by name or by suffix.
+  </Step>
+  <Step title="Click the trash icon">
+    A confirmation prompt warns that "existing integrations using it will stop working." Confirm.
+  </Step>
+  <Step title="Verify the status flipped to 'Revoked'">
+    The row stays visible (with status `Revoked`) for audit purposes — past usage logs remain attached to it. You can no longer call with the key.
+  </Step>
+</Steps>
+
+<Warning>
+There is **no un-revoke**. If you revoke a production key by mistake, create a new one and roll your integration. Plan rotation as: create new key → roll integration → wait one usage cycle → revoke old key. Never the other way around.
+</Warning>
+
+The MCP server caches valid keys in memory for up to 5 minutes. Revoked keys clear from cache the next time they're checked, and the server re-queries the database on cache miss — so revocation propagates within seconds in practice and within 5 minutes in the worst case.
+
+## Observability
+
+Every authenticated call against the campaign API or the MCP server is logged against the originating key. The dashboard surfaces:
+
+| Field on each key row | What it tells you |
+| --- | --- |
+| **Status** | `Active`, `Expired` (past `expiresAt`), or `Revoked`. |
+| **Total requests** | Lifetime call count. Increments on every authenticated request. |
+| **Last used** | Timestamp of the most recent successful auth. Useful for spotting unused keys to retire. |
+| **Usage logs** | Detailed per-call records — endpoint, status, duration, caller IP, error message if any. Filterable by key, endpoint, and status. |
+
+Use the **API Activity** panel on the same page to filter by key, endpoint (`campaign.create`, `campaign.target.upsert`, `campaign.target.get`, individual MCP tool names), or status. If a partner integration suddenly goes quiet, the activity panel is the first place to look.
+
+<Tip>
+Set a calendar reminder to scan **API Activity** weekly. A key that goes silent for an unexplained week, or starts emitting `error` rows it didn't before, is your earliest signal of a broken integration or a leaked key.
+</Tip>
+
+## Rate limits
+
+Each API key has a **per-key hourly quota** set at creation time. The default is `2000` requests/hour for the `partner` scope. Quotas live on the key itself (`rateLimitPerHour`) — if you need a higher ceiling for a specific integration (e.g. bulk campaign ingestion), contact Convinced and we can lift the cap on that key without affecting your other keys.
+
+When you exceed the quota the server returns:
+
+```json
+HTTP/1.1 429 Too Many Requests
+
+{
+  "error": "Rate limit exceeded for scope \"partner\". Try again in 487s.",
+  "retryAfterSeconds": 487
+}
+```
+
+Honour `retryAfterSeconds` — it's the seconds remaining in the current rolling hour bucket. Linear backoff with that value plus jitter is sufficient.
+
+## Scopes and the `partner` tier
+
+Every key carries a **scope** that controls which MCP tools it can call. Partner-issued keys ship with `scope = "partner"`. The other scopes are infrastructure-only and not self-serve.
+
+| Scope | Who | Where | Tool access |
+| --- | --- | --- | --- |
+| **`partner`** | You | Your backends, agents, MCP clients | Curated read-only catalog (see [Tools reference](/guides/mcp/tools)) |
+| `widget` | The Convinced widget | Convinced-hosted UI | Widget-tuned subset |
+| `internal` | Convinced reps and operators | Internal dashboards, voice agent | Full read + write + analytics |
+| `public` | Anonymous demo surfaces | Convinced.ai marketing | Strict read with caps and rate limits |
+
+The `partner` scope explicitly **does not** include:
+
+- Mutation tools (`update_entity`, `create_entity`, `mark_for_deletion`, `link_entities`)
+- Analytics tools (`get_knowledge_gaps`, `get_popular_queries`, `analyze_segment`, `find_icp`, `get_market_overview`, `get_win_loss_patterns`, `get_knowledge_coverage`)
+- Prospect-level tools (`get_prospect`, `get_prospect_dossier`, `get_meeting_prep`, `get_cold_call_brief`, `prep_outreach`, `analyze_account`, `search_similar_prospects`)
+- Pricing intelligence on competitor responses (stripped at the field level on `get_competitor` / `get_competitor_battlecard` for partner scope)
+
+If your use-case needs any of the above, talk to Convinced — most can be served via the campaign or briefing pipelines without exposing the raw tool.
+
+## Security best practices
+
+<CardGroup cols={2}>
+  <Card title="One key per integration" icon="layer-group">
+    A separate key per service — your microsite, your CI, your Cursor IDE, each gets its own. Revoking one doesn't take down the others.
+  </Card>
+  <Card title="Rotate at least quarterly" icon="rotate">
+    For long-lived production keys, set a 6-month expiry and rotate at the 3-month mark. Your future self will thank you.
+  </Card>
+  <Card title="Never share across orgs" icon="building">
+    Keys are bound to one org. Sharing across orgs **breaks tenant isolation** — every tool call lands in the issuing org's KB regardless of which org you "meant" to query.
+  </Card>
+  <Card title="Short-lived keys for staging" icon="flask">
+    Use 1-week or 1-month expiry on anything that isn't production. Stale staging keys are the most common leak vector.
+  </Card>
+  <Card title="Treat as a secret" icon="lock">
+    Same handling as a database password: secret manager, env vars in CI, never in the repo, never in a chat message, never in a Notion page.
+  </Card>
+  <Card title="Watch the activity panel" icon="chart-line">
+    Anomalies (unfamiliar caller IPs, sudden bursts, errors from a key that was healthy) are usually the earliest signal of a leak.
+  </Card>
+</CardGroup>
+
+## Common errors
+
+| HTTP | Body | What it means |
+| --- | --- | --- |
+| `401` | `No API key provided` | Header missing or malformed. Confirm `Authorization: Bearer ck_live_…`. |
+| `401` | `Invalid API key` | Key doesn't match any row. Often a copy-paste truncation. |
+| `401` | `API key is disabled` | The key was revoked. Mint a new one. |
+| `401` | `API key has expired` | `expiresAt` passed. Mint a new one. |
+| `403` | `Tool "<name>" is not available for scope "partner"` | You called an internal-only tool. See the [tools reference](/guides/mcp/tools). |
+| `429` | `Rate limit exceeded for scope "partner"` | Per-key hourly quota hit. Honour `retryAfterSeconds`. |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="MCP overview" icon="circle-nodes" href="/guides/mcp/overview">
+    What the KB MCP server exposes, the two transports, and how to choose.
+  </Card>
+  <Card title="MCP setup" icon="terminal" href="/guides/mcp/setup">
+    Wire the key into REST, Claude Desktop, Cursor, and the official MCP SDK.
+  </Card>
+  <Card title="Campaign API overview" icon="bullseye-arrow" href="/guides/campaigns/overview">
+    Push target-account intel and get back a widget token.
+  </Card>
+  <Card title="API reference" icon="book" href="/api-reference/introduction">
+    Schemas, status codes, examples for every campaign endpoint.
+  </Card>
+</CardGroup>

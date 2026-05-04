@@ -1,33 +1,226 @@
 ---
-title: 'Introduction'
-description: 'Example section for showcasing API endpoints'
+title: 'API Reference'
+description: 'Programmatic access to Convinced campaigns, targets, and widget tokens.'
 ---
 
+The **Convinced Campaign API** lets you push target-account intel into Convinced and get back a stable widget token. Drop the token onto your landing page (or hosted widget URL) and the conversational agent grounds the entire session — opener, discovery questions, case studies, competitive positioning — in the context you supplied.
+
 <Note>
-  If you're not looking to build API reference documentation, you can delete
-  this section by removing the api-reference folder.
+  Looking for the in-app onboarding instead? The dashboard ships a copy of these
+  instructions tailored to your org slug. This reference is the canonical,
+  language-agnostic version.
 </Note>
 
-## Welcome
+## Base URL
 
-There are two ways to build API documentation: [OpenAPI](https://mintlify.com/docs/api-playground/openapi/setup) and [MDX components](https://mintlify.com/docs/api-playground/mdx/configuration). For the starter kit, we are using the following OpenAPI specification.
+All endpoints live at:
 
-<Card
-  title="Plant Store Endpoints"
-  icon="leaf"
-  href="https://github.com/mintlify/starter/blob/main/api-reference/openapi.json"
->
-  View the OpenAPI specification file
-</Card>
+```
+http://convinced-kb-mcp.railway.internal
+```
+
+This is the **KB MCP API host**, not the dashboard URL. Set it once in your integration:
+
+<CodeGroup>
+```bash Shell
+export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+export CONVINCED_API_KEY="<partner-api-key>"
+```
+
+```typescript TypeScript
+const CONVINCED_API_BASE = 'http://convinced-kb-mcp.railway.internal'
+const CONVINCED_API_KEY = process.env.CONVINCED_API_KEY!
+```
+
+```python Python
+import os
+CONVINCED_API_BASE = "http://convinced-kb-mcp.railway.internal"
+CONVINCED_API_KEY = os.environ["CONVINCED_API_KEY"]
+```
+</CodeGroup>
 
 ## Authentication
 
-All API endpoints are authenticated using Bearer tokens and picked up from the specification file.
+Every request is authenticated with a **Bearer token** issued from the Convinced dashboard. Mint one under **Settings → API Keys**.
+
+```http
+Authorization: Bearer <partner-api-key>
+```
+
+<Warning>
+  **API keys are organization-bound.** A key issued for organization A cannot
+  read or write data for organization B — and you should never share a key
+  across orgs. Treat the key as a server-side secret: do not expose it in
+  client-side code, browser bundles, or public repos. If a key is leaked, rotate
+  it from the dashboard immediately.
+</Warning>
+
+A request with a missing or invalid `Authorization` header returns `401 Unauthorized`:
 
 ```json
-"security": [
-  {
-    "bearerAuth": []
-  }
-]
+{ "error": "API key missing or invalid." }
 ```
+
+## The two modes
+
+The campaign API supports two ways to get target intel into Convinced. Pick the one that matches the data your team already has.
+
+<Tabs>
+  <Tab title="Partner-intel (synchronous)">
+    You already have structured account intel — from your CRM, a research team, or your own enrichment pipeline. Send it as a fully-formed `intel` object with `enrich: false`.
+
+    - **Latency:** synchronous. The row is widget-ready as soon as the request returns.
+    - **`enrichmentStatus`:** `skipped` (no synthesis needed).
+    - **Best for:** SDR teams with structured account profiles, partners with their own research stack.
+
+    See the [Partner-intel guide](/guides/campaigns/partner-intel) for end-to-end examples and the full intel schema.
+  </Tab>
+  <Tab title="Auto-enrich (asynchronous)">
+    You only have rep notes, a few links, or a CRM blob. Send `rawResearch` (plain text or markdown) and optional `links` with `enrich: true`. Convinced runs web research, KB matching, and LLM synthesis in the background and writes a structured `intel` object back to the row.
+
+    - **Latency:** asynchronous. Typical synthesis takes 30-90s.
+    - **`enrichmentStatus`:** progresses `pending` → `running` → `done` (or `failed`).
+    - **Best for:** outbound teams that already write rep-notes, partners without a structured research pipeline.
+
+    See the [Auto-enrich guide](/guides/campaigns/auto-enrich) for the polling pattern, prompt-engineering tips, and failure handling.
+  </Tab>
+</Tabs>
+
+<Tip>
+  You can mix modes within a single campaign — push some targets with full
+  partner intel and let Convinced auto-enrich the rest. Each target's
+  `enrichmentStatus` is independent.
+</Tip>
+
+## The enrichment lifecycle
+
+Every target row exposes an `enrichmentStatus` field on the GET endpoint. This is the single source of truth for "is this row ready to serve a personalized widget session?"
+
+| Status | Meaning | Next step |
+|---|---|---|
+| `pending` | Auto-enrich job is queued. | Poll again in 5-10s. |
+| `running` | Synthesis in flight. | Poll again in 5-10s. |
+| `done` | Intel synthesized and written. Row is widget-ready. | Send the visitor to the widget. |
+| `failed` | Synthesis errored. See `enrichmentError`. | Inspect the error, then retry by upserting the target again. |
+| `skipped` | Partner-intel mode — no synthesis was needed. | Send the visitor to the widget. |
+
+The response also exposes a derived boolean, `widgetReady`, which is `true` exactly when the campaign is active **and** the intel object is present **and** `enrichmentStatus` is `done` or `skipped`. Use `widgetReady` as your gate before redirecting visitors.
+
+<Note>
+  For partner-intel mode, the upsert response itself carries
+  `enrichmentStatus: "skipped"` — you don't need to poll. Polling is only
+  required for auto-enrich.
+</Note>
+
+## End-to-end flow
+
+<Steps>
+  <Step title="Create a campaign">
+    Campaigns group target rows under a stable slug. One campaign per outbound motion (per quarter, per segment, per channel). Slugs are immutable.
+
+    ```bash
+    curl -X POST "$CONVINCED_API_BASE/api/campaigns" \
+      -H "Authorization: Bearer $CONVINCED_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{ "name": "Q2 Logistics Outreach", "slug": "q2-logistics-outreach" }'
+    ```
+
+    See [Upsert campaign](/api-reference/endpoint/upsert-campaign).
+  </Step>
+  <Step title="Push a target">
+    One request per company. Pick partner-intel or auto-enrich based on what you have. The response carries the widget query string ready to drop into a URL.
+
+    See [Upsert campaign target](/api-reference/endpoint/upsert-target).
+  </Step>
+  <Step title="Wait for the row to be ready">
+    For auto-enrich rows, poll the GET endpoint until `widgetReady === true`. For partner-intel rows, this is true on the first response.
+
+    See [Read target status](/api-reference/endpoint/get-target).
+  </Step>
+  <Step title="Send the visitor to the widget">
+    Drop `?c=<token>` onto your landing page or send the visitor to the hosted widget URL. The agent loads with the target's intel as runtime context.
+
+    ```
+    https://app.getconvinced.ai/widget/v2/<org-slug>?c=acme-logistics
+    ```
+  </Step>
+</Steps>
+
+## Endpoints
+
+<Columns cols={3}>
+  <Card
+    title="Upsert campaign"
+    icon="folder-plus"
+    href="/api-reference/endpoint/upsert-campaign"
+  >
+    `POST /api/campaigns` — create or update a campaign by slug.
+  </Card>
+  <Card
+    title="Upsert target"
+    icon="user-plus"
+    href="/api-reference/endpoint/upsert-target"
+  >
+    `POST /api/campaigns/{campaignSlug}/targets` — push a target row in either mode.
+  </Card>
+  <Card
+    title="Read target status"
+    icon="magnifying-glass"
+    href="/api-reference/endpoint/get-target"
+  >
+    `GET /api/campaigns/{campaignSlug}/targets/{token}` — poll the enrichment lifecycle.
+  </Card>
+</Columns>
+
+## Error format
+
+All endpoints return errors with a consistent shape:
+
+```json
+{ "error": "Human-readable error message." }
+```
+
+Common status codes:
+
+| Status | When | Notes |
+|---|---|---|
+| `400 Bad Request` | Validation error — missing required field, invalid `enrich`/`intel` combo, malformed slug or token. | Read the `error` string. The body is human-readable. |
+| `401 Unauthorized` | API key missing, malformed, or revoked. | Check the `Authorization` header. |
+| `404 Not Found` | Campaign slug or target token does not belong to the API key's organization. | Slugs and tokens are scoped per-org; you cannot read across orgs. |
+| `409 Conflict` | Token is already used by another target in this organization. | Pick a different token, or update the existing target by sending the same token to the same campaign. |
+
+<Warning>
+  The API does **not** currently return field-level validation errors. If your
+  request fails with `400`, the `error` string will tell you which field tripped
+  validation — but your client should not try to parse it. Log it and surface
+  it to the operator.
+</Warning>
+
+## Rate limits
+
+Practical rate limits are governed by the underlying KB MCP service. In normal operation:
+
+- **Campaign creates:** unbounded — campaigns are cheap rows.
+- **Target upserts (partner-intel):** burst-friendly. Typical batches of 100-500 rows over a few minutes are fine.
+- **Target upserts (auto-enrich):** queued through the synthesis pipeline. Bursts above a few hundred concurrent jobs may extend the `pending` window.
+- **GET (read target):** safe to poll at 5-10s intervals while a row is `pending`/`running`. Avoid sub-second polling.
+
+If you have a high-volume use case (thousands of auto-enrich rows in a short window), reach out to support before launch.
+
+## Idempotency
+
+- **Campaign upsert** is idempotent on `slug`. Re-sending the same slug updates `name` and `description` in place.
+- **Target upsert** is idempotent on `(campaignSlug, token)`. Re-sending the same token replaces the previous row's intel and resets the enrichment lifecycle if mode changes.
+- Tokens are unique **per organization**, not per campaign — sending the same token to a different campaign returns `409 Conflict`.
+
+<Tip>
+  Use deterministic tokens (slugify the company name, or use your CRM record ID)
+  so you can safely re-run your sync job without creating duplicates.
+</Tip>
+
+## Need help?
+
+<Card title="Convinced support" icon="life-ring" href="https://app.getconvinced.ai">
+  Reach out via the dashboard. Include your org slug, campaign slug, and the
+  target token if you're debugging a specific row.
+</Card>

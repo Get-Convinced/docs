@@ -1,0 +1,514 @@
+---
+title: 'MCP setup'
+description: 'Wire a partner API key into the KB MCP server — REST endpoint, Claude Desktop, Cursor, and the official MCP SDK.'
+icon: 'terminal'
+---
+
+This page covers the two transports the Convinced KB MCP server speaks: a stateless `POST /api/tool` REST endpoint and the standard MCP/SSE protocol. Read [MCP overview](/guides/mcp/overview) first if you haven't picked between them.
+
+Both transports use the same partner API key. Generate one from **Settings → API Keys** in the dashboard before you start — see [API keys](/guides/getting-started/api-keys).
+
+<Note>
+Set these once in your environment so every example below works as-is:
+
+```bash
+export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+export CONVINCED_API_KEY="ck_live_…"
+```
+</Note>
+
+<Tabs>
+  <Tab title="REST `/api/tool`">
+
+# Part A — REST endpoint
+
+The simplest way to call a tool: one HTTP POST, structured JSON body, structured JSON response. No protocol overhead. Ideal for ElevenLabs server tools, Vapi function calls, n8n nodes, custom backends, and shell scripts.
+
+## Endpoint
+
+```
+POST {CONVINCED_API_BASE}/api/tool
+Authorization: Bearer ck_live_…
+Content-Type: application/json
+```
+
+## Request body
+
+```json
+{
+  "tool": "search_knowledge",
+  "args": { "query": "cold chain SLA", "limit": 5 },
+  "scope": "partner"
+}
+```
+
+<ParamField path="tool" type="string" required>
+The tool name to invoke. See [Tools reference](/guides/mcp/tools) for the full partner-callable list.
+</ParamField>
+
+<ParamField path="args" type="object" required>
+Arguments for the tool. Shape varies per tool — every tool's `inputSchema` is documented in the [tools reference](/guides/mcp/tools).
+</ParamField>
+
+<ParamField path="scope" type="string" required>
+Always send `"partner"`. The server validates that your key's scope matches; mismatched values return `400`. Other values (`internal`, `widget`, `public`) are reserved for Convinced infrastructure.
+</ParamField>
+
+<ParamField path="include_slides" type="boolean">
+Optional. When `true`, the server enriches the response with relevant slide suggestions (cards your agent can hand off visually). Defaults to `false` for partner scope. Useful when you're driving a conversational UI that can render images.
+</ParamField>
+
+<ParamField path="org_slug" type="string" deprecated>
+Internal-use field. Convinced's own service token uses this for cross-org routing; **partners should omit it**. If you send it with a value that doesn't match your key's org, the server returns `403`.
+</ParamField>
+
+## Response
+
+The server returns the raw tool output as JSON, scope-filtered. Shape varies per tool — see the per-tool examples in the [tools reference](/guides/mcp/tools).
+
+## Worked example — `search_knowledge`
+
+<CodeGroup>
+```bash curl
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "search_knowledge",
+    "args": { "query": "cold chain SLA", "limit": 5 },
+    "scope": "partner"
+  }'
+```
+
+```typescript Node (fetch)
+const res = await fetch(`${process.env.CONVINCED_API_BASE}/api/tool`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.CONVINCED_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    tool: 'search_knowledge',
+    args: { query: 'cold chain SLA', limit: 5 },
+    scope: 'partner',
+  }),
+})
+if (!res.ok) {
+  const err = await res.json().catch(() => ({}))
+  throw new Error(`MCP error ${res.status}: ${err.error ?? res.statusText}`)
+}
+const data = await res.json()
+console.log(data)
+```
+
+```python Python (requests)
+import os, requests
+
+res = requests.post(
+    f"{os.environ['CONVINCED_API_BASE']}/api/tool",
+    headers={
+        'Authorization': f"Bearer {os.environ['CONVINCED_API_KEY']}",
+        'Content-Type': 'application/json',
+    },
+    json={
+        'tool': 'search_knowledge',
+        'args': {'query': 'cold chain SLA', 'limit': 5},
+        'scope': 'partner',
+    },
+    timeout=30,
+)
+res.raise_for_status()
+print(res.json())
+```
+
+```typescript Anthropic SDK (tool-use loop)
+import Anthropic from '@anthropic-ai/sdk'
+
+const client = new Anthropic()
+
+// Define the MCP tool inline for the Claude API. Claude will pick it
+// when the user's question needs KB context, and we relay the call to
+// the Convinced REST endpoint.
+const convincedTools = [{
+  name: 'search_knowledge',
+  description: 'Search the Convinced knowledge base for products, modules, customers, pain points, and competitive proof.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: 'Search query' },
+      limit: { type: 'number', description: 'Max results' },
+    },
+    required: ['query'],
+  },
+}]
+
+async function callConvinced(tool: string, args: Record<string, unknown>) {
+  const res = await fetch(`${process.env.CONVINCED_API_BASE}/api/tool`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.CONVINCED_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ tool, args, scope: 'partner' }),
+  })
+  return res.json()
+}
+
+let response = await client.messages.create({
+  model: 'claude-opus-4-7',
+  max_tokens: 1024,
+  tools: convincedTools,
+  messages: [{ role: 'user', content: 'What case studies do we have for cold chain logistics?' }],
+})
+
+// Tool-use loop
+while (response.stop_reason === 'tool_use') {
+  const toolUse = response.content.find((b) => b.type === 'tool_use')!
+  const toolResult = await callConvinced(toolUse.name, toolUse.input as Record<string, unknown>)
+  response = await client.messages.create({
+    model: 'claude-opus-4-7',
+    max_tokens: 1024,
+    tools: convincedTools,
+    messages: [
+      { role: 'user', content: 'What case studies do we have for cold chain logistics?' },
+      { role: 'assistant', content: response.content },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: JSON.stringify(toolResult) }],
+      },
+    ],
+  })
+}
+
+console.log(response.content)
+```
+</CodeGroup>
+
+## Error responses
+
+The REST endpoint returns standard HTTP status codes with a JSON body that always includes an `error` field:
+
+| Status | Example body | Cause |
+| --- | --- | --- |
+| `400` | `{ "error": "Unknown tool: <name>" }` | The `tool` field doesn't match any tool. Typo or you're calling an internal-only tool by name. |
+| `400` | `{ "error": "Invalid scope \"<value>\"" }` | `scope` is missing or set to something the server doesn't recognise. Send `"partner"`. |
+| `401` | `{ "error": "No API key provided" }` | `Authorization` header missing. |
+| `401` | `{ "error": "Invalid API key" }` | The key isn't in the database. Check for copy-paste truncation. |
+| `401` | `{ "error": "API key is disabled" }` | The key was revoked. Mint a new one. |
+| `401` | `{ "error": "API key has expired" }` | `expiresAt` is in the past. Mint a new one. |
+| `403` | `{ "error": "Tool \"<name>\" is not available for scope \"partner\"." }` | You hit an internal-only tool. See [tools reference](/guides/mcp/tools). |
+| `403` | `{ "error": "Authenticated API key organization does not match requested org_slug" }` | You sent an `org_slug` that doesn't match your key. Drop the field. |
+| `429` | `{ "error": "Rate limit exceeded …", "retryAfterSeconds": 487 }` | Per-key hourly quota hit. Honour `retryAfterSeconds`. |
+| `404` | `{ "error": "Organization not found for org_slug \"<slug>\"" }` | Bad `org_slug`. Drop the field. |
+| `500` | `{ "error": "Internal error processing tool call" }` | Server-side failure. Retry with backoff; if persistent, contact support. |
+
+<Tip>
+Treat `401` and `403` as **fatal** for the request — fix the auth or the call shape and retry. Treat `429` as **transient** — back off for `retryAfterSeconds` plus jitter and try again. Treat `500` as **transient** with capped retry.
+</Tip>
+
+## Rate limits
+
+Per-key hourly bucket. Default `2000` requests/hour for partner scope; exact value is `rateLimitPerHour` on the key. The `429` response always includes `retryAfterSeconds` — use it.
+
+```python
+import time, random, requests
+
+def call_with_backoff(tool, args, max_retries=4):
+    for attempt in range(max_retries):
+        res = requests.post(
+            f"{API_BASE}/api/tool",
+            headers={'Authorization': f"Bearer {API_KEY}"},
+            json={'tool': tool, 'args': args, 'scope': 'partner'},
+        )
+        if res.status_code != 429:
+            res.raise_for_status()
+            return res.json()
+        retry_after = res.json().get('retryAfterSeconds', 60)
+        time.sleep(retry_after + random.uniform(0, 5))
+    raise RuntimeError('Rate limit exhausted')
+```
+
+  </Tab>
+  <Tab title="MCP / SSE protocol">
+
+# Part B — MCP / SSE protocol
+
+The standard [Model Context Protocol](https://modelcontextprotocol.io). Use this when your client already speaks MCP (Claude Desktop, Cursor, Windsurf) or when you want capability discovery and schema validation for free.
+
+## Endpoints
+
+The server exposes the partner-facing MCP transport at:
+
+```
+GET  {CONVINCED_API_BASE}/sse
+POST {CONVINCED_API_BASE}/messages?sessionId=<sid>
+```
+
+- `GET /sse` — handshake. Opens a long-lived SSE connection; the server returns a `sessionId` on the stream.
+- `POST /messages?sessionId=<sid>` — the channel for `tools/list`, `tools/call`, and other MCP requests inside that session.
+
+Both endpoints accept the same `Authorization: Bearer ck_live_…` header. The server authenticates on the SSE handshake; subsequent `/messages` posts ride the established session.
+
+<Note>
+The server also exposes `/sse/widget` and `/messages/widget` — these are widget-scoped variants used by the Convinced widget itself, **not** intended for partner integrations. Always use `/sse` and `/messages` with a partner key.
+</Note>
+
+## Wire it into Claude Desktop
+
+<Steps>
+  <Step title="Locate your config file">
+    On macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`. On Windows: `%APPDATA%\Claude\claude_desktop_config.json`.
+  </Step>
+  <Step title="Add the Convinced server">
+    Add a `convinced` entry under `mcpServers`:
+
+    ```json
+    {
+      "mcpServers": {
+        "convinced": {
+          "url": "http://convinced-kb-mcp.railway.internal/sse",
+          "headers": {
+            "Authorization": "Bearer ck_live_…"
+          }
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Restart Claude Desktop">
+    Quit and reopen the app. The Convinced server appears in the MCP picker (the plug icon in the input box).
+  </Step>
+  <Step title="Verify with `tools/list`">
+    Ask Claude: *"What Convinced KB tools can you call?"*. It will issue `tools/list` against your server and read back the partner subset.
+  </Step>
+</Steps>
+
+## Wire it into Cursor / Windsurf
+
+Both Cursor and Windsurf use the same MCP config shape as Claude Desktop. The exact path differs (Cursor: `~/.cursor/mcp.json`; Windsurf: `~/.codeium/windsurf/mcp_config.json`), but the JSON is identical:
+
+```json
+{
+  "mcpServers": {
+    "convinced": {
+      "url": "http://convinced-kb-mcp.railway.internal/sse",
+      "headers": {
+        "Authorization": "Bearer ck_live_…"
+      }
+    }
+  }
+}
+```
+
+Reload the editor and the tools show up under the AI panel's tool inspector.
+
+## Wire it into a Node.js client
+
+Use the official [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) for programmatic access:
+
+```typescript
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+
+const transport = new SSEClientTransport(
+  new URL(`${process.env.CONVINCED_API_BASE}/sse`),
+  {
+    requestInit: {
+      headers: {
+        Authorization: `Bearer ${process.env.CONVINCED_API_KEY}`,
+      },
+    },
+  },
+)
+
+const client = new Client(
+  { name: 'my-agent', version: '1.0.0' },
+  { capabilities: {} },
+)
+
+await client.connect(transport)
+
+// Capability discovery — server returns only partner-scoped tools
+const { tools } = await client.listTools()
+console.log(tools.map((t) => t.name))
+
+// Call a tool
+const result = await client.callTool({
+  name: 'search_knowledge',
+  arguments: { query: 'cold chain SLA', limit: 5 },
+})
+console.log(result.content)
+
+await client.close()
+```
+
+The result shape follows the MCP `tools/call` envelope — `result.content` is an array of content blocks (typically one `{ type: 'text', text: '<JSON>' }` block whose text you `JSON.parse`).
+
+## Wire it into a Python client
+
+```python
+import asyncio, os
+from mcp import ClientSession
+from mcp.client.sse import sse_client
+
+API_BASE = os.environ['CONVINCED_API_BASE']
+API_KEY = os.environ['CONVINCED_API_KEY']
+
+async def main():
+    async with sse_client(
+        f"{API_BASE}/sse",
+        headers={'Authorization': f'Bearer {API_KEY}'},
+    ) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            tools = await session.list_tools()
+            print([t.name for t in tools.tools])
+
+            result = await session.call_tool(
+                'search_knowledge',
+                {'query': 'cold chain SLA', 'limit': 5},
+            )
+            print(result.content)
+
+asyncio.run(main())
+```
+
+## Capability discovery
+
+Once the session is established, the client's `tools/list` request returns the partner-scoped subset of tools. The server walks its scope registry and emits a `tools` array where each entry has:
+
+```json
+{
+  "name": "search_knowledge",
+  "description": "Broad keyword search across ALL knowledge entities …",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": { "type": "string" },
+      "limit": { "type": "number" }
+    },
+    "required": ["query"]
+  }
+}
+```
+
+Internal-only tools (`update_entity`, `get_prospect`, analytics tools, etc.) are **not present** in the response — partner clients literally cannot discover them.
+
+<Tip>
+Build your agent against `tools/list` rather than hardcoding tool names. If we add a new partner-callable tool, it shows up automatically. If we deprecate one, your client gets a clean signal.
+</Tip>
+
+## Implementing an MCP client from scratch
+
+If you're not using the SDK, the [Model Context Protocol spec](https://spec.modelcontextprotocol.io/) is the source of truth. The Convinced server implements:
+
+- Protocol version `2024-11-05`.
+- Server capabilities: `tools` (no `prompts`, `resources`, or `roots`).
+- Standard request types: `initialize`, `tools/list`, `tools/call`.
+
+The SSE transport is the [HTTP+SSE transport](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/transports/#http-with-sse) from the spec — handshake on `GET /sse`, subsequent JSON-RPC messages on `POST /messages?sessionId=<sid>`.
+
+## Error responses (MCP)
+
+Errors come back as standard JSON-RPC error objects inside the SSE stream:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "error": {
+    "code": -32602,
+    "message": "Tool \"update_entity\" is not available for scope \"partner\"."
+  }
+}
+```
+
+Authentication failures fail the SSE handshake itself with an HTTP `401`. Tool-level errors (`403`, `429`, validation) come through as JSON-RPC errors on the established session.
+
+  </Tab>
+</Tabs>
+
+## Picking a transport
+
+You can run both transports in parallel against the same key. Most teams pick:
+
+| Scenario | Transport |
+| --- | --- |
+| ElevenLabs / Vapi / Retell server tool | **REST** — these platforms call HTTP endpoints, not MCP servers. |
+| n8n / Make / Zapier node | **REST** — straight HTTP from a no-code action. |
+| Custom voice agent (LiveKit, custom Pipecat) | **REST** — typically called from inside an existing tool-call loop. |
+| Claude Desktop / Cursor / Windsurf for engineers | **MCP/SSE** — drop-in client config, free capability discovery. |
+| LangChain / LangGraph / LlamaIndex agent | **MCP/SSE** if the framework has an MCP adapter, otherwise **REST**. |
+| Bash / curl / quick script | **REST** — one HTTP call, done. |
+
+## Verify the integration
+
+A two-call smoke test that exercises auth, scope, and a real tool:
+
+<CodeGroup>
+```bash curl
+# 1. Confirm auth works (search_knowledge always exists at partner scope)
+curl -s -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"search_knowledge","args":{"query":"hello","limit":1},"scope":"partner"}' \
+  | jq '.count, .results[0].entity_type'
+
+# 2. Confirm scope gating works (this MUST return 403)
+curl -s -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"update_entity","args":{},"scope":"partner"}' \
+  | jq '.error'
+```
+
+```typescript Node
+const res1 = await fetch(`${process.env.CONVINCED_API_BASE}/api/tool`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.CONVINCED_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    tool: 'search_knowledge',
+    args: { query: 'hello', limit: 1 },
+    scope: 'partner',
+  }),
+})
+console.log('auth ok:', res1.status === 200)
+
+const res2 = await fetch(`${process.env.CONVINCED_API_BASE}/api/tool`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.CONVINCED_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    tool: 'update_entity',
+    args: {},
+    scope: 'partner',
+  }),
+})
+console.log('scope gate works:', res2.status === 403)
+```
+</CodeGroup>
+
+If both calls behave as expected, you're done.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Tools reference" icon="screwdriver-wrench" href="/guides/mcp/tools">
+    Per-tool input schemas, response shapes, and worked examples.
+  </Card>
+  <Card title="API keys guide" icon="key" href="/guides/getting-started/api-keys">
+    Generation, expiry presets, rotation, revocation.
+  </Card>
+  <Card title="MCP overview" icon="circle-nodes" href="/guides/mcp/overview">
+    Conceptual orientation — what the server exposes and when to use which transport.
+  </Card>
+  <Card title="Campaign API" icon="bullseye-arrow" href="/guides/campaigns/overview">
+    The other partner surface — push target-account intel and get a widget token.
+  </Card>
+</CardGroup>

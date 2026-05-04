@@ -1,16 +1,18 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "OpenAPI Plant Store",
-    "description": "A sample API that uses a plant store as an example to demonstrate features in the OpenAPI specification",
-    "license": {
-      "name": "MIT"
-    },
-    "version": "1.0.0"
+    "title": "Convinced Campaign API",
+    "description": "Programmatic access to the Convinced campaign system. Create campaigns, push target-company intel, and resolve widget tokens for personalized outreach. The widget loads with `?c=<token>` and grounds the conversation in the intel you supply (or that Convinced synthesizes for you).",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Convinced Support",
+      "url": "https://app.getconvinced.ai"
+    }
   },
   "servers": [
     {
-      "url": "http://sandbox.mintlify.com"
+      "url": "http://convinced-kb-mcp.railway.internal",
+      "description": "Production"
     }
   ],
   "security": [
@@ -19,198 +21,327 @@
     }
   ],
   "paths": {
-    "/plants": {
-      "get": {
-        "description": "Returns all plants from the system that the user has access to",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "The maximum number of results to return",
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Plant response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Plant"
+    "/api/campaigns": {
+      "post": {
+        "summary": "Create or update a campaign",
+        "description": "Campaigns group target-company rows under a stable slug. Calling this endpoint with an existing slug updates the campaign's name or description; the slug itself is immutable.",
+        "operationId": "upsertCampaign",
+        "tags": ["Campaigns"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CampaignUpsertRequest" },
+              "examples": {
+                "create": {
+                  "summary": "Create a new campaign",
+                  "value": {
+                    "name": "Q2 Logistics Outreach",
+                    "slug": "q2-logistics-outreach",
+                    "description": "Outbound campaign for logistics accounts"
                   }
                 }
               }
             }
-          },
-          "400": {
-            "description": "Unexpected error",
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Campaign created or updated.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "object",
+                  "properties": { "campaign": { "$ref": "#/components/schemas/Campaign" } }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/campaigns/{campaignSlug}/targets": {
+      "post": {
+        "summary": "Create or update a campaign target",
+        "description": "Upsert a target company in a campaign. Two modes are supported:\n\n- **Partner-intel mode (`enrich: false`):** supply a fully-formed `intel` object. The row is widget-ready as soon as the request returns, with `enrichmentStatus: \"skipped\"`.\n- **Auto-enrich mode (`enrich: true`):** supply `rawResearch` (plain text or markdown) and optional `links`. Convinced runs the AI research pipeline asynchronously; poll the GET endpoint until `enrichmentStatus` flips from `pending` → `running` → `done` (typically 30-90s).\n\nThe `token` becomes the `?c=<token>` query string on the widget URL. Tokens are unique per organization.",
+        "operationId": "upsertCampaignTarget",
+        "tags": ["Campaign Targets"],
+        "parameters": [
+          {
+            "name": "campaignSlug",
+            "in": "path",
+            "required": true,
+            "description": "The campaign slug created in `POST /api/campaigns`.",
+            "schema": { "type": "string", "example": "q2-logistics-outreach" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TargetUpsertRequest" },
+              "examples": {
+                "partnerIntel": {
+                  "summary": "Partner-intel mode (synchronous)",
+                  "description": "Use when you already have structured account intel from your CRM or research team.",
+                  "value": {
+                    "companyName": "Acme Logistics",
+                    "token": "acme-logistics",
+                    "enrich": false,
+                    "intel": {
+                      "companySummary": "Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy.",
+                      "industry": "Logistics",
+                      "size": "200-500 employees",
+                      "champion": {
+                        "name": "Priya Rao",
+                        "role": "VP Operations",
+                        "context": "Owns dispatch SLA and fleet utilization KPIs."
+                      },
+                      "painPoints": [
+                        "Dispatch decisions are manual and slow during peak windows.",
+                        "Driver utilization plateaued at 62%.",
+                        "No single source of truth across TMS, OMS, and routing."
+                      ],
+                      "currentStack": ["SAP TMS", "Locus routing"],
+                      "recentSignals": ["New CFO hired Q1", "Expanding into Tier-2 cities"],
+                      "competitorUsage": "Evaluating FarEye for last-mile visibility.",
+                      "relevantCaseStudies": ["Enmovil"]
+                    },
+                    "additionalContext": "Lead with ROI on dispatch speed."
+                  }
+                },
+                "autoEnrich": {
+                  "summary": "Auto-enrich mode (asynchronous)",
+                  "description": "Send rep notes + landing-page URLs; Convinced synthesizes the intel object.",
+                  "value": {
+                    "companyName": "Acme Logistics",
+                    "token": "acme-logistics",
+                    "enrich": true,
+                    "rawResearch": "## Account notes\n- Mid-market 3PL, last-mile dispatch for grocery + pharmacy.\n- ~300 drivers, expanding into Tier-2.\n- Champion: Priya Rao, VP Ops. Cares about dispatch SLA + fleet utilization.\n- Currently on SAP TMS + Locus, evaluating FarEye for visibility.",
+                    "links": [
+                      "https://acmelogistics.example.com/about",
+                      "https://acmelogistics.example.com/news/series-b"
+                    ],
+                    "additionalContext": "Lead with ROI on dispatch speed; this account misses peak-window SLAs."
+                  }
                 }
               }
             }
           }
-        }
-      },
-      "post": {
-        "description": "Creates a new plant in the store",
-        "requestBody": {
-          "description": "Plant to add to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
-              }
-            }
-          },
-          "required": true
         },
         "responses": {
           "200": {
-            "description": "plant response",
+            "description": "Target created or updated.",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Plant"
-                }
+                "schema": { "$ref": "#/components/schemas/TargetUpsertResponse" }
               }
             }
           },
-          "400": {
-            "description": "unexpected error",
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "Campaign slug not found.",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "409": {
+            "description": "Token is already used by another target in this organization.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
       }
     },
-    "/plants/{id}": {
-      "delete": {
-        "description": "Deletes a single plant based on the ID supplied",
+    "/api/campaigns/{campaignSlug}/targets/{token}": {
+      "get": {
+        "summary": "Read target status",
+        "description": "Returns the current target state, including enrichment lifecycle status. Poll this endpoint after an auto-enrich upsert until `enrichmentStatus` is `done` (or `failed`, with `enrichmentError` populated).",
+        "operationId": "getCampaignTarget",
+        "tags": ["Campaign Targets"],
         "parameters": [
           {
-            "name": "id",
+            "name": "campaignSlug",
             "in": "path",
-            "description": "ID of plant to delete",
             "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
+            "schema": { "type": "string", "example": "q2-logistics-outreach" }
+          },
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "description": "The target's stable widget token.",
+            "schema": { "type": "string", "example": "acme-logistics" }
           }
         ],
         "responses": {
-          "204": {
-            "description": "Plant deleted",
-            "content": {}
-          },
-          "400": {
-            "description": "unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "webhooks": {
-    "/plant/webhook": {
-      "post": {
-        "description": "Information about a new plant added to the store",
-        "requestBody": {
-          "description": "Plant added to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
-              }
-            }
-          }
-        },
-        "responses": {
           "200": {
-            "description": "Return a 200 status to indicate that the data was received successfully"
+            "description": "Target found.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TargetReadResponse" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "Target not found in this campaign.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           }
         }
       }
     }
   },
   "components": {
-    "schemas": {
-      "Plant": {
-        "required": [
-          "name"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "description": "The name of the plant",
-            "type": "string"
-          },
-          "tag": {
-            "description": "Tag to specify the type",
-            "type": "string"
-          }
-        }
-      },
-      "NewPlant": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Plant"
-          },
-          {
-            "required": [
-              "id"
-            ],
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Identification number of the plant",
-                "type": "integer",
-                "format": "int64"
-              }
-            }
-          }
-        ]
-      },
-      "Error": {
-        "required": [
-          "error",
-          "message"
-        ],
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "message": {
-            "type": "string"
-          }
-        }
-      }
-    },
     "securitySchemes": {
       "bearerAuth": {
         "type": "http",
-        "scheme": "bearer"
+        "scheme": "bearer",
+        "description": "Partner API key issued from the Convinced dashboard. API keys are organization-bound — never share a key across organizations."
+      }
+    },
+    "schemas": {
+      "CampaignUpsertRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "Human-readable campaign name.", "example": "Q2 Logistics Outreach" },
+          "slug": { "type": "string", "description": "Stable campaign identifier. Lowercase letters, digits, and hyphens. If omitted, derived from `name`. Maximum 64 chars.", "example": "q2-logistics-outreach" },
+          "description": { "type": "string", "description": "Optional internal context for operators.", "example": "Outbound campaign for logistics accounts" }
+        }
+      },
+      "Campaign": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string", "example": "Q2 Logistics Outreach" },
+          "slug": { "type": "string", "example": "q2-logistics-outreach" },
+          "description": { "type": "string", "nullable": true },
+          "status": { "type": "string", "enum": ["active", "archived"], "description": "Only campaigns with `status: \"active\"` resolve targets at the widget." },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TargetUpsertRequest": {
+        "type": "object",
+        "required": ["companyName"],
+        "description": "Exactly one of `intel` (with `enrich: false`) or `rawResearch` (with `enrich: true` or omitted) must be present.",
+        "properties": {
+          "companyName": { "type": "string", "description": "Target account or company name. Used in the agent's opening message.", "example": "Acme Logistics" },
+          "token": { "type": "string", "description": "Stable target identifier passed to the widget as `?c=<token>`. Lowercase letters, digits, and hyphens; max 64 chars. If omitted, derived from `companyName`.", "example": "acme-logistics" },
+          "enrich": { "type": "boolean", "default": true, "description": "When `true` (default), Convinced synthesizes the `intel` object from `rawResearch` + `links` asynchronously. When `false`, the partner-supplied `intel` object is used as-is." },
+          "intel": { "$ref": "#/components/schemas/CampaignIntel", "description": "Required when `enrich: false`. See the Intel schema for the exact shape." },
+          "rawResearch": { "type": "string", "description": "Rep notes, CRM excerpts, account research. Plain text or markdown. Used by the auto-enrich pipeline as the primary source of truth. Recommend keeping under 20-30k chars.", "example": "## Account notes\n- Mid-market 3PL, last-mile dispatch.\n- ~300 drivers, expanding into Tier-2.\n- Champion: Priya Rao, VP Ops." },
+          "links": { "type": "array", "items": { "type": "string", "format": "uri" }, "description": "URLs the auto-enrich pipeline will crawl for additional context. Microsite landing pages, news articles, account pages.", "example": ["https://acmelogistics.example.com/about"] },
+          "additionalContext": { "type": "string", "description": "Strategic instructions for how the agent should frame this account. Not synthesized — appended verbatim to the agent prompt.", "example": "Lead with ROI on dispatch speed." }
+        }
+      },
+      "CampaignIntel": {
+        "type": "object",
+        "required": ["companySummary", "painPoints"],
+        "description": "Structured target intel. Every field maps to a specific agent behavior — partners cannot add arbitrary fields.",
+        "properties": {
+          "companySummary": { "type": "string", "description": "One or two factual sentences describing what the prospect company actually does. The agent mirrors this back early in the conversation.", "example": "Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy chains across India." },
+          "painPoints": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "Concrete problems the prospect is dealing with, ranked most-to-least relevant. Phrase as the BUYER would describe the pain — not your product or solution. Drives the discovery flow and on-screen suggestion pills. Recommend 3-6 entries.", "example": ["Dispatch decisions are manual and slow during peak windows.", "Driver utilization plateaued at 62%."] },
+          "industry": { "type": "string", "description": "Industry or vertical. Used for case-study selection and to calibrate vocabulary.", "example": "Logistics" },
+          "size": { "type": "string", "description": "Free-form headcount, revenue band, or stage. Calibrates SMB vs. mid-market vs. enterprise positioning.", "example": "200-500 employees" },
+          "champion": {
+            "type": "object",
+            "required": ["name", "role"],
+            "description": "The primary buyer at the account — the persona the agent imagines it is talking to.",
+            "properties": {
+              "name": { "type": "string", "example": "Priya Rao" },
+              "role": { "type": "string", "example": "VP Operations" },
+              "context": { "type": "string", "description": "One-line background: priorities, tenure, owned KPIs.", "example": "Owns dispatch SLA and fleet utilization KPIs." }
+            }
+          },
+          "currentStack": { "type": "array", "items": { "type": "string" }, "description": "Tools the prospect ALREADY USES in adjacent or related categories — broader stack, not direct competitors. The agent uses this to talk integrations and avoid suggesting things they have.", "example": ["SAP TMS", "Locus routing", "Salesforce"] },
+          "recentSignals": { "type": "array", "items": { "type": "string" }, "description": "Recent news or triggers the agent can reference: funding, leadership, launches, expansions.", "example": ["New CFO hired Q1 2026", "Expanding into Tier-2 cities per Oct earnings call"] },
+          "competitorUsage": { "type": "string", "description": "A SPECIFIC direct competitor the prospect uses today or is evaluating — i.e. someone who does what you do. Sets up switch arguments and head-to-head positioning.", "example": "Datadog (incumbent since 2022, evaluating switch due to cost)." },
+          "relevantCaseStudies": { "type": "array", "items": { "type": "string" }, "description": "Customer names you want the agent to bring up as proof points. Validated against your org's referenceable case studies. Unknown names are dropped silently and surfaced in `response.warnings.droppedCaseStudies`. Match is case-insensitive.", "example": ["Enmovil", "Bizom"] }
+        }
+      },
+      "TargetUpsertResponse": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "campaignId": { "type": "string", "format": "uuid" },
+              "companyName": { "type": "string", "example": "Acme Logistics" },
+              "token": { "type": "string", "example": "acme-logistics" },
+              "enrichedAt": { "type": "string", "format": "date-time", "nullable": true, "description": "Set when synthesis completed (auto-enrich) or at insertion (partner-intel)." },
+              "enrichmentStatus": { "$ref": "#/components/schemas/EnrichmentStatus" },
+              "createdAt": { "type": "string", "format": "date-time" },
+              "updatedAt": { "type": "string", "format": "date-time" }
+            }
+          },
+          "targetId": { "type": "string", "format": "uuid" },
+          "widgetToken": { "type": "string", "description": "The token to pass into the widget.", "example": "acme-logistics" },
+          "widgetParam": { "type": "string", "description": "The query parameter name the widget reads from.", "example": "c" },
+          "widgetQuery": { "type": "string", "description": "Ready-to-use query string (URL-encoded prefix included).", "example": "?c=acme-logistics" },
+          "warnings": {
+            "type": "object",
+            "description": "Present when one or more `relevantCaseStudies` names were dropped because they don't match referenceable customers.",
+            "properties": {
+              "droppedCaseStudies": { "type": "array", "items": { "type": "string" } },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      },
+      "TargetReadResponse": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "campaignId": { "type": "string", "format": "uuid" },
+              "campaignName": { "type": "string" },
+              "campaignSlug": { "type": "string" },
+              "campaignStatus": { "type": "string", "enum": ["active", "archived"] },
+              "companyName": { "type": "string" },
+              "token": { "type": "string" },
+              "enrichedAt": { "type": "string", "format": "date-time", "nullable": true },
+              "enrichmentStatus": { "$ref": "#/components/schemas/EnrichmentStatus" },
+              "enrichmentError": { "type": "string", "nullable": true, "description": "Populated when `enrichmentStatus = \"failed\"`. Truncated to 500 chars." },
+              "enrichmentStartedAt": { "type": "string", "format": "date-time", "nullable": true, "description": "Set when enrichment began. Useful for detecting stuck jobs." },
+              "hasIntel": { "type": "boolean", "description": "True when the `intel` object is present on the row." },
+              "widgetReady": { "type": "boolean", "description": "True when the campaign is active, intel is present, and `enrichmentStatus` is `done` or `skipped`. Send the visitor to the widget once this flips to `true`." },
+              "updatedAt": { "type": "string", "format": "date-time" }
+            }
+          },
+          "targetId": { "type": "string", "format": "uuid" },
+          "widgetToken": { "type": "string" },
+          "widgetParam": { "type": "string" },
+          "widgetQuery": { "type": "string" }
+        }
+      },
+      "EnrichmentStatus": {
+        "type": "string",
+        "enum": ["pending", "running", "done", "failed", "skipped"],
+        "description": "Lifecycle state of the auto-enrich pipeline. `pending` (queued), `running` (synthesis in flight), `done` (intel ready), `failed` (synthesis errored), `skipped` (partner-intel mode, no synthesis needed)."
+      },
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string", "description": "Human-readable error message." } },
+        "required": ["error"]
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Validation error.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "Unauthorized": {
+        "description": "API key missing or invalid.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
       }
     }
   }

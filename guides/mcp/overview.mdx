@@ -1,0 +1,186 @@
+---
+title: 'MCP overview'
+description: 'What the Convinced KB MCP server exposes, the two transports, and how partner agents query the knowledge base.'
+icon: 'circle-nodes'
+---
+
+The **Convinced KB MCP server** lets your agents — voice, chat, IDE, or back-office — query the same knowledge base that powers the Convinced widget. It speaks two transports: a simple REST endpoint for one-shot tool calls, and the standard [Model Context Protocol](https://modelcontextprotocol.io) for stateful clients like Claude Desktop, Cursor, and Windsurf.
+
+This page is the conceptual orientation. Once you've read it, the [setup guide](/guides/mcp/setup) shows you exactly how to wire it in, and the [tools reference](/guides/mcp/tools) walks every tool a partner key can call.
+
+## What is MCP?
+
+[Model Context Protocol](https://modelcontextprotocol.io) is an open standard from Anthropic for letting LLM applications discover and call tools that live in external servers. The protocol defines:
+
+- A **handshake** (`initialize` → `tools/list`) where the client asks the server which tools exist.
+- A **call shape** (`tools/call`) for invoking a tool with structured arguments and getting a structured result.
+- Two transports: **stdio** (local subprocess) and **SSE** (HTTP streaming, what Convinced exposes).
+
+The benefit: any MCP-aware client (Claude Desktop, Cursor, Windsurf, the `@modelcontextprotocol/sdk`) can talk to the Convinced KB without bespoke glue code. The same server simultaneously exposes a plain `POST /api/tool` REST endpoint for clients that don't want the protocol overhead.
+
+## What the server exposes
+
+Once authenticated with a partner API key, your agents can read across the org's full knowledge graph:
+
+<CardGroup cols={2}>
+  <Card title="Products & catalog" icon="cube">
+    Product / module / feature tree, with capability descriptions, fact counts, and integration details.
+  </Card>
+  <Card title="Customer proof" icon="users">
+    Case studies, deployed modules, ROI metrics, testimonials, industry-tagged proof bundles.
+  </Card>
+  <Card title="Pain points" icon="circle-exclamation">
+    Pain points by persona, industry, severity, root cause, and the discovery questions that surface them.
+  </Card>
+  <Card title="Objections" icon="hand">
+    Objection categories with proven response frameworks (pricing, technical, trust, competition, timeline, change management).
+  </Card>
+  <Card title="Competitive" icon="chess-knight">
+    Competitor profiles and battlecards (pricing intelligence stripped at partner scope).
+  </Card>
+  <Card title="Slides" icon="presentation-screen">
+    Topical slides for visual hand-offs in voice / chat experiences.
+  </Card>
+  <Card title="Industry playbooks" icon="book">
+    Composite bundles: pain points + proof + competitor gaps for one industry, single call.
+  </Card>
+  <Card title="Semantic search" icon="magnifying-glass">
+    Natural-language search across every entity type with scope-aware filtering.
+  </Card>
+</CardGroup>
+
+The full per-tool reference lives at [MCP tools](/guides/mcp/tools).
+
+## What the server does not expose at partner scope
+
+By design, partner keys are read-only and limited to a curated catalog. The following capabilities are **internal-only** and not callable with a partner key:
+
+- **Mutations** — `update_entity`, `create_entity`, `mark_for_deletion`, `link_entities`. KB writes go through the dashboard or the campaign API instead.
+- **Account-level intelligence** — `get_prospect`, `get_prospect_dossier`, `get_meeting_prep`, `get_cold_call_brief`, `prep_outreach`, `analyze_account`. These exist but are gated to internal sales tooling.
+- **Analytics** — `get_knowledge_gaps`, `get_popular_queries`, `analyze_segment`, `find_icp`, `get_market_overview`, `get_win_loss_patterns`, `get_knowledge_coverage`.
+- **Pricing intelligence** — `get_competitor` and `get_competitor_battlecard` are callable, but the response is field-filtered to remove pricing tiers and discount data.
+
+If your use-case needs one of those, talk to Convinced — most can be solved via [campaigns](/guides/campaigns/overview) or briefing endpoints without exposing the raw tool.
+
+## Two transports
+
+Both transports hit the same server, the same auth, the same tools. Pick based on the client.
+
+| | **REST `/api/tool`** | **MCP / SSE** |
+| --- | --- | --- |
+| **Best for** | ElevenLabs, Vapi, n8n, Make, custom backends, bash scripts | Claude Desktop, Cursor, Windsurf, MCP-aware agentic apps |
+| **Wire format** | `POST /api/tool` with `{ tool, args, scope }` JSON body | MCP `tools/list` + `tools/call` over SSE |
+| **State** | Stateless — one HTTP call per tool invocation | Stateful — long-lived SSE session, multiple tool calls per session |
+| **Discovery** | None — you pick the tool name from the docs | `tools/list` returns the partner subset programmatically |
+| **Setup** | Set one env var, send a curl | Drop a JSON snippet into your client config |
+| **Latency** | One round-trip per call | One round-trip per call after the initial handshake |
+| **Where defined** | `POST /api/tool` route | `GET /sse` (handshake) + `POST /messages` (calls) |
+
+<Tip>
+If you're building **a tool inside an MCP-aware client**, use SSE — you get capability discovery, schema validation, and protocol-correct error handling for free. If you're building **a tool inside a non-MCP runtime** (a webhook, a voice agent, an n8n node), use REST — there's no protocol to implement and one HTTP call gets you a result.
+</Tip>
+
+## The end-to-end flow
+
+<Frame>
+
+```
+   Your runtime           Convinced KB MCP server          Convinced KB
+   ────────────           ──────────────────────           ───────────
+                                                                │
+   ┌──────────┐                                                 │
+   │  Agent / │           Authorization:                        │
+   │  client  │  ────►   Bearer ck_live_…   ──►  ┌───────────┐  │
+   └──────────┘                                  │ authenticate │
+        │                                        └─────┬─────┘  │
+        │                                              │        │
+        │                                              ▼        │
+        │                                        ┌───────────┐  │
+        │                                        │  resolve  │  │
+        │                                        │   org     │  │
+        │                                        └─────┬─────┘  │
+        │                                              │        │
+        │                                              ▼        │
+        │                                        ┌───────────┐  │
+        │                                        │ scope &   │  │
+        │                                        │ rate-     │  │
+        │                                        │ limit gate│  │
+        │                                        └─────┬─────┘  │
+        │                                              │        │
+        │                                              ▼        │
+        │                                        ┌───────────┐  │
+        │                                        │  tool     │──┘
+        │                                        │  handler  │  ──► SQL / vector
+        │                                        └─────┬─────┘       on KB
+        │                                              │
+        │                                              ▼
+        │                                        ┌───────────┐
+        │                                        │ filter    │
+        │                                        │ result    │
+        │                                        │ for scope │
+        │                                        └─────┬─────┘
+        │                                              │
+        │  ◄─────────────  JSON result  ◄──────────────┘
+        ▼
+   ┌──────────┐
+   │  agent   │
+   │  reasons │
+   │  on data │
+   └──────────┘
+```
+
+</Frame>
+
+The dashed boundary on the right is the only place your KB lives — Convinced never proxies the call to anywhere else, and the response is filtered by scope **before** it leaves the server.
+
+## Auth recap
+
+One header, both transports:
+
+```
+Authorization: Bearer ck_live_…
+```
+
+The server also accepts `x-api-key: <key>` (no `Bearer` prefix) for legacy clients. Either form binds the call to the issuing org and runs through:
+
+1. **Authentication** — SHA-256 hash lookup against `api_keys` (cached in-memory for 5 minutes per process).
+2. **Scope resolution** — partner keys carry `scope = "partner"`; the server uses this to gate which tools you can call.
+3. **Rate limiting** — per-key hourly bucket. Default `2000` requests/hour for partner. Excess returns `429` with `retryAfterSeconds`.
+4. **Org binding** — the call runs against your org's KB only. Trying to query another org returns `403`.
+
+Full credential lifecycle: [API keys guide](/guides/getting-started/api-keys).
+
+## Tool discovery
+
+| Transport | How to discover what you can call |
+| --- | --- |
+| **REST** | The [tools reference](/guides/mcp/tools) lists every partner-callable tool with input schema, response shape, and a worked example. |
+| **MCP / SSE** | Issue `tools/list` after the handshake. The server returns only the tools your scope allows — partner keys see the partner subset, never internal-only tools. |
+
+The MCP `tools/list` response and the docs page are kept in sync. If you ever see a divergence (a tool documented but not returned for your key, or vice versa), file it as a bug — the server's scope registry is the source of truth.
+
+## What about the campaign API?
+
+Different surface, same auth.
+
+- The **campaign API** is for *writing* target-account intel and getting a widget token back. See the [campaign overview](/guides/campaigns/overview) for the full flow.
+- The **MCP server** is for *reading* your KB — products, modules, customers, pain points, etc.
+
+A single key can hit both. Most production integrations do exactly that: `POST /api/campaigns/.../targets` to pre-warm a target, then call MCP tools at session time to ground the agent in deeper KB context.
+
+## Where to next
+
+<CardGroup cols={2}>
+  <Card title="Get an API key" icon="key" href="/guides/getting-started/api-keys">
+    Generate a partner key from the dashboard.
+  </Card>
+  <Card title="MCP setup" icon="terminal" href="/guides/mcp/setup">
+    Step-by-step REST and SSE wiring with curl, Node, Python, and Claude Desktop config.
+  </Card>
+  <Card title="MCP tools reference" icon="screwdriver-wrench" href="/guides/mcp/tools">
+    Every partner-callable tool, with schemas and examples.
+  </Card>
+  <Card title="Campaigns overview" icon="bullseye-arrow" href="/guides/campaigns/overview">
+    The other partner surface — push target-account intel.
+  </Card>
+</CardGroup>

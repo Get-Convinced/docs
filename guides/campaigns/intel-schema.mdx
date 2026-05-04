@@ -1,0 +1,473 @@
+---
+title: 'Intel schema reference'
+description: 'Every field of the CampaignIntel object: type, behavior, examples, anti-patterns.'
+icon: 'list'
+---
+
+The **`intel`** object is the structured record the agent uses to personalize a session. Every field maps to a specific agent behavior — there are no arbitrary fields, and no field is "decorative". This page is the reference for what each field does and how to write it well.
+
+```ts
+interface CampaignIntel {
+  companySummary: string                                       // required
+  painPoints: string[]                                         // required, non-empty
+  industry?: string
+  size?: string
+  champion?: { name: string; role: string; context?: string }
+  currentStack?: string[]
+  recentSignals?: string[]
+  competitorUsage?: string
+  relevantCaseStudies?: string[]                               // filtered against your org's referenceable customers
+}
+```
+
+<Note>
+This same shape applies whether you supply `intel` directly ([partner-intel mode](/guides/campaigns/partner-intel)) or Convinced synthesizes it ([auto-enrich mode](/guides/campaigns/auto-enrich)). The agent doesn't know or care which path produced the record.
+</Note>
+
+## Field-impact map
+
+Fields aren't equally weighted. Group them by impact:
+
+<CardGroup cols={2}>
+  <Card title="Critical" icon="bullseye">
+    `companySummary`, `painPoints` — required. These set the conversation's foundation.
+  </Card>
+  <Card title="Persona" icon="user">
+    `champion`, `industry`, `size` — calibrate vocabulary, tone, and persona anchor.
+  </Card>
+  <Card title="Context" icon="layer-group">
+    `currentStack`, `recentSignals`, `competitorUsage` — let the agent sound informed and timely.
+  </Card>
+  <Card title="Proof" icon="quote-left">
+    `relevantCaseStudies` — pre-curates which customer stories the agent reaches for.
+  </Card>
+</CardGroup>
+
+---
+
+## Critical fields
+
+These two are required. Every other field is optional and the agent will skip it gracefully if absent.
+
+### `companySummary`
+
+<ParamField path="companySummary" type="string" required>
+One or two factual sentences describing what the prospect company actually does.
+</ParamField>
+
+**What it does to the agent.** Injected into the system prompt as `Company: <summary>` under the `## COMPANY PROFILE` block. The agent mirrors it back early in the conversation to confirm context — typically in the opener or right after.
+
+**Example:**
+
+```json
+"companySummary": "Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy chains across India."
+```
+
+**Tips:**
+
+- Keep it factual and short. One sentence is plenty; two is the cap.
+- Lead with what they do, not who they are. "Mid-market 3PL focused on last-mile dispatch" beats "Acme Logistics is a company that...".
+- Include the geography or market segment if it's load-bearing for positioning ("across India", "for SMB SaaS", "in regulated finance").
+
+### `painPoints`
+
+<ParamField path="painPoints" type="string[]" required>
+Non-empty array of concrete problems the prospect is dealing with, ranked most-to-least relevant. Recommended 3-6 entries.
+</ParamField>
+
+**What it does to the agent.** The first six entries are surfaced as **on-screen suggestion pills** at session start, and the full list drives the discovery flow and qualification. The ranking matters — the agent treats the first entry as the most likely conversation starter.
+
+**Example:**
+
+```json
+"painPoints": [
+  "Dispatch decisions are manual and slow during peak windows.",
+  "Driver utilization plateaued at 62%.",
+  "No single source of truth across TMS, OMS, and routing."
+]
+```
+
+**Tips:**
+
+- Phrase each pain in the **buyer's** language, not your product's marketing.
+- Be concrete. Numbers and specific scenarios beat vague abstractions.
+- Rank by relevance to this account. The agent biases toward the top entries.
+
+<Warning>
+The most common authoring mistake is writing painPoints in **solution language**. See [Anti-patterns](#anti-patterns) below.
+</Warning>
+
+---
+
+## Persona fields
+
+These shape **who** the agent thinks it's talking to. They calibrate vocabulary, technical depth, and persona references.
+
+### `industry`
+
+<ParamField path="industry" type="string">
+Industry or vertical the prospect plays in. Used for case-study selection and to calibrate vocabulary.
+</ParamField>
+
+**What it does to the agent.** Injected as `Industry: <industry>` into the system prompt. Used by the case-study selection logic to bias toward customers in the same vertical when `relevantCaseStudies` isn't supplied. Also influences the agent's vocabulary — "FreightOps in Logistics" sounds different from "FreightOps in DevTools".
+
+**Examples:** `"Logistics"`, `"DevTools"`, `"Healthcare RCM"`, `"Mid-market SaaS"`, `"Regulated finance"`.
+
+**Tip.** Be specific enough to be useful. "Software" is too broad; "B2B SaaS for HR" is right-sized.
+
+### `size`
+
+<ParamField path="size" type="string">
+Free-form headcount, revenue band, or stage. Calibrates the agent's positioning (enterprise vs. mid-market vs. SMB language).
+</ParamField>
+
+**What it does to the agent.** Injected as `Size: <size>`. Calibrates pricing sensitivity, deployment complexity, and pitch tier — the agent doesn't run an enterprise pitch at a 10-person startup.
+
+**Examples:** `"200-500 employees"`, `"$50M ARR"`, `"Series B"`, `"~3,000 headcount, $400M revenue"`.
+
+**Tip.** Free-form is intentional. Send what you actually know — headcount, revenue band, funding stage, employee LinkedIn count. Don't fabricate precision.
+
+### `champion`
+
+<ParamField path="champion" type="object">
+The primary buyer or champion at the account — the persona the agent imagines it is talking to.
+
+<Expandable title="properties">
+  <ParamField path="name" type="string" required>
+    Champion's name. Required if `champion` is present.
+  </ParamField>
+  <ParamField path="role" type="string" required>
+    Their title. Required if `champion` is present.
+  </ParamField>
+  <ParamField path="context" type="string">
+    One-line background: priorities, tenure, owned KPIs.
+  </ParamField>
+</Expandable>
+</ParamField>
+
+**What it does to the agent.** Injected as `Champion: <name> (<role>) — <context>`. The agent uses this as the **persona anchor** — instead of talking to "you", it talks to someone with this role and these priorities. Vocabulary, depth of technical detail, and which features get foregrounded all key off it.
+
+**Example:**
+
+```json
+"champion": {
+  "name": "Priya Rao",
+  "role": "VP Operations",
+  "context": "Owns dispatch SLA and fleet utilization KPIs; pushed for the eval after Q1 SLA misses."
+}
+```
+
+**Tips:**
+
+- Both `name` and `role` are required when the object is present. If you don't have both, omit the whole object — the parser drops half-filled champions silently.
+- Use `context` to tell the agent what the champion **owns** (KPIs, budget, projects) rather than personality traits.
+- Sources: LinkedIn for role, your CRM/notes for context. Don't fabricate KPI ownership you can't verify.
+
+---
+
+## Context fields
+
+These let the agent sound informed about the prospect's environment. They're optional but high-leverage — the difference between "we help with X" and "given that you're using Locus and SAP TMS, we typically slot in alongside both".
+
+### `currentStack`
+
+<ParamField path="currentStack" type="string[]">
+Tools the prospect ALREADY USES in adjacent or related categories — broader stack, not direct competitors.
+</ParamField>
+
+**What it does to the agent.** Injected as `Current stack: <comma-separated list>`. The agent uses this to:
+
+1. **Avoid suggesting things they already have.** Don't pitch Salesforce integration to someone whose stack already lists Salesforce.
+2. **Talk about integrations and "fits-in" stories.** "We sit upstream of your TMS and feed it real-time decisions" is a stronger story than a generic feature pitch.
+3. **Sound informed.** The agent can reference specific tools by name in context.
+
+**Example:**
+
+```json
+"currentStack": ["SAP TMS", "Locus routing", "Salesforce", "Snowflake"]
+```
+
+**Tips:**
+
+- Adjacent or related categories — tools in their broader stack.
+- For a head-to-head competitor (someone who does what you do), use `competitorUsage` instead.
+- Don't include your own product, even if they use it. The intel is about **them**, not the relationship.
+
+### `recentSignals`
+
+<ParamField path="recentSignals" type="string[]">
+Recent news or triggers the agent can reference to make the opener feel timely.
+</ParamField>
+
+**What it does to the agent.** Injected as a `Recent signals:` bulleted list. The agent uses these to make the opener specific and timely — "I noticed your CFO hire in Q1" lands harder than "I wanted to chat about your roadmap".
+
+**Examples:**
+
+```json
+"recentSignals": [
+  "New CFO hired Q1 2026",
+  "Expanding into Tier-2 cities per Oct earnings call",
+  "Series B funding closed Oct 2025",
+  "Layoffs in product org reported Nov 2025"
+]
+```
+
+**Tips:**
+
+- Include the rough date when you have it. "Q1 2026" or "per Oct earnings call" is enough.
+- Ground each signal in something verifiable — public news, earnings commentary, hiring announcements.
+- 3-5 entries is the sweet spot. More is fine; fewer can feel sparse.
+
+### `competitorUsage`
+
+<ParamField path="competitorUsage" type="string">
+A SPECIFIC direct competitor the prospect uses today or is actively evaluating — i.e. someone who does what you do.
+</ParamField>
+
+**What it does to the agent.** Injected as `Uses competitor: <text>`. Sets up switch arguments, migration framing, and head-to-head positioning. This is the field that unlocks "if you switch from X" or "compared to X, here's how we differ" framings.
+
+**Example:**
+
+```json
+"competitorUsage": "Datadog (incumbent since 2022, evaluating switch due to cost)."
+```
+
+Or if they're evaluating:
+
+```json
+"competitorUsage": "Evaluating FarEye for last-mile visibility (PoC running since March)."
+```
+
+**Tips:**
+
+- One specific competitor is enough. The field is a string, not an array.
+- Include status: incumbent, evaluating, in PoC, migrating away. The agent positions differently in each case.
+- Distinguish from `currentStack`: this is the competitor in your category, not their broader tooling.
+- If you don't have a specific named competitor, omit the field. Generic "uses competitors" doesn't help the agent.
+
+---
+
+## Proof fields
+
+### `relevantCaseStudies`
+
+<ParamField path="relevantCaseStudies" type="string[]">
+Customer names you want the agent to bring up as proof points. Validated against your org's referenceable case studies — unknown names are dropped silently.
+</ParamField>
+
+**What it does to the agent.** Pre-curates which customer stories the agent reaches for first when the conversation needs proof. The agent has access to your full referenceable customer set anyway, but this list signals "these are the most relevant ones for this account".
+
+**Example:**
+
+```json
+"relevantCaseStudies": ["Enmovil", "Bizom"]
+```
+
+**Validation behavior.** Names are matched case-insensitively against your org's case studies where `is_referenceable = true AND servable = true`. Dropped names come back in the upsert response under `warnings.droppedCaseStudies`:
+
+```json
+{
+  "warnings": {
+    "droppedCaseStudies": ["Coca-Cola", "BigCorp Inc."],
+    "reason": "Names not found in this org's referenceable case studies"
+  }
+}
+```
+
+If **all** names are dropped, the field is removed from the stored intel entirely. If at least one matches, only the matches are kept.
+
+<Tip>
+The validator runs in both partner-intel and auto-enrich modes. In auto-enrich, the synthesizer is already constrained to pick names from your KB, so dropped names from synthesis are very rare — but the validator runs anyway as a safety net.
+</Tip>
+
+For the full case-study fix flow, see [Partner-intel mode → Case-study validation](/guides/campaigns/partner-intel#case-study-validation).
+
+---
+
+## Anti-patterns
+
+The mistakes that quietly degrade agent quality. Each one is something the API will accept silently — there's no validation that catches these.
+
+### Don't write `painPoints` in solution language
+
+Pain points should describe the buyer's actual problem, not the shape of the fix.
+
+<CodeGroup>
+```text Anti-pattern
+"painPoints": [
+  "Needs a routing optimizer.",
+  "Should buy our dispatch product.",
+  "Lacks Convinced AI."
+]
+```
+
+```text Better
+"painPoints": [
+  "Dispatch decisions are manual and slow during peak windows.",
+  "Driver utilization plateaued at 62%.",
+  "No single source of truth across TMS, OMS, and routing."
+]
+```
+</CodeGroup>
+
+The first version pre-empts the discovery flow — the agent has nothing to ask about because the answer is already "buy your thing". The second version gives the agent legitimate problems to explore.
+
+### Don't put your products into `currentStack`
+
+`currentStack` describes the prospect's environment. Your product belongs to your sales motion, not the intel.
+
+<CodeGroup>
+```text Anti-pattern
+"currentStack": ["SAP TMS", "Locus routing", "YourCompany Pro"]
+```
+
+```text Better
+"currentStack": ["SAP TMS", "Locus routing"]
+```
+</CodeGroup>
+
+Listing your own product in `currentStack` confuses the agent — it might thank the prospect for being a customer in the opener.
+
+### Don't put non-direct competitors in `competitorUsage`
+
+`competitorUsage` is for someone who does **what you do**. A general infrastructure vendor isn't a competitor unless you compete with them head-to-head.
+
+<CodeGroup>
+```text Anti-pattern
+// You sell a logistics dispatch system; AWS is not your competitor.
+"competitorUsage": "AWS"
+```
+
+```text Better
+// Move general infrastructure to currentStack. Use competitorUsage for the
+// actual head-to-head competitor.
+"currentStack": ["AWS", "SAP TMS"],
+"competitorUsage": "Evaluating FarEye for last-mile visibility."
+```
+</CodeGroup>
+
+### Don't duplicate facts between `intel` and `additionalContext`
+
+`additionalContext` is for **strategic** instructions, not for restating intel. Duplicate facts make prompts noisier without helping the agent.
+
+<CodeGroup>
+```text Anti-pattern
+"intel": {
+  "companySummary": "Mid-market 3PL...",
+  "painPoints": ["Dispatch SLA misses..."]
+},
+"additionalContext": "They are a mid-market 3PL with dispatch SLA problems. Help them."
+```
+
+```text Better
+"intel": {
+  "companySummary": "Mid-market 3PL...",
+  "painPoints": ["Dispatch SLA misses..."]
+},
+"additionalContext": "Lead with ROI on dispatch speed. Skip pricing — commercial team handles."
+```
+</CodeGroup>
+
+### Don't fabricate fields you can't verify
+
+The agent trusts the intel. If you make up a champion who doesn't exist, the agent will reference them by name and the prospect will know. Send `null`/omit fields you don't have ground truth on.
+
+### Don't ship a half-filled `champion`
+
+Both `name` and `role` are required when the `champion` object is present. The parser silently drops champions missing either field — meaning your `additionalContext` instruction "talk to Priya" will reference a champion the agent doesn't have. If you only know the role, omit the entire object and put the role in `additionalContext` (e.g. "VP Ops is the buyer; name is unknown").
+
+### Don't over-stuff `painPoints`
+
+12 pains is not better than 5. The agent surfaces the first six as suggestion pills; everything below is for discovery. Beyond 8-10 entries, you're adding noise — and the highest-priority pain gets diluted.
+
+### Don't forget `relevantCaseStudies` for known account-fit customers
+
+If you know "Enmovil is the best proof point for this prospect", say so explicitly. The agent's automatic case-study selection is good, but explicit pre-matching beats it almost every time.
+
+---
+
+## Worked example
+
+A high-quality intel object for a mid-market 3PL prospect, with annotations explaining each choice.
+
+```json
+{
+  "companySummary": "Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy chains across India.",
+  "industry": "Logistics",
+  "size": "200-500 employees",
+  "champion": {
+    "name": "Priya Rao",
+    "role": "VP Operations",
+    "context": "Owns dispatch SLA and fleet utilization KPIs; pushed for the eval after Q1 SLA misses."
+  },
+  "painPoints": [
+    "Dispatch decisions are manual and slow during peak windows.",
+    "Driver utilization plateaued at 62%.",
+    "No single source of truth across TMS, OMS, and routing.",
+    "Tier-2 expansion is exposing gaps in route planning for unfamiliar geographies."
+  ],
+  "currentStack": ["SAP TMS", "Locus routing", "Salesforce"],
+  "recentSignals": [
+    "New CFO hired Q1 2026, mandate to cut COGS 8%.",
+    "Expanding into Tier-2 cities per Oct 2025 earnings call.",
+    "Series B closed Oct 2025."
+  ],
+  "competitorUsage": "Evaluating FarEye for last-mile visibility (PoC running since March 2026).",
+  "relevantCaseStudies": ["Enmovil"]
+}
+```
+
+**Why each field looks the way it does:**
+
+| Field | Why this content |
+| --- | --- |
+| `companySummary` | One sentence, factual, includes the geography and verticals because that's load-bearing for positioning. |
+| `industry` | "Logistics" is specific enough — not "Software" or "Operations". |
+| `size` | Headcount range from LinkedIn — verifiable, calibrates this as mid-market not enterprise. |
+| `champion` | All three sub-fields populated. `context` describes what Priya **owns**, not personality. |
+| `painPoints` | Four buyer-language pains, ranked. The first is the most acute (peak-window SLA misses) — what the rep will lead the conversation with. |
+| `currentStack` | Three tools they actually use. SAP TMS and Locus routing are adjacent to the routing/dispatch space; Salesforce is the CRM context. No competitors here. |
+| `recentSignals` | Three dated, verifiable signals — CFO mandate, expansion, funding. The CFO signal in particular sets up cost-driven framing. |
+| `competitorUsage` | The specific competitor (FarEye) plus their status (PoC since March). Distinct from `currentStack`. |
+| `relevantCaseStudies` | One name, validated. Enmovil is referenceable in this org's KB, in the same industry, with relevant scope. |
+
+When this intel is loaded, the widget agent opens with something like:
+
+> "Hey, you must be from Acme Logistics — you all run last-mile dispatch for grocery and pharmacy across India. I noticed the Tier-2 expansion announcement from your October earnings call, and Priya in Operations has been looking at how to keep dispatch SLAs intact while driver utilization is stuck at 62%. Want to walk through how Enmovil tackled the same combination, or jump straight into the FarEye comparison?"
+
+That's what the intel object buys you.
+
+---
+
+## Schema validation summary
+
+| Field | Type | Required | Validation |
+| --- | --- | --- | --- |
+| `companySummary` | `string` | Yes | Non-empty after trimming |
+| `painPoints` | `string[]` | Yes | At least one non-empty entry |
+| `industry` | `string` | No | Trimmed; empty values dropped |
+| `size` | `string` | No | Trimmed; empty values dropped |
+| `champion.name` | `string` | If `champion` present | Required for the `champion` object to persist |
+| `champion.role` | `string` | If `champion` present | Required for the `champion` object to persist |
+| `champion.context` | `string` | No | Optional |
+| `currentStack` | `string[]` | No | Empty arrays dropped |
+| `recentSignals` | `string[]` | No | Empty arrays dropped |
+| `competitorUsage` | `string` | No | Trimmed; empty values dropped |
+| `relevantCaseStudies` | `string[]` | No | Names matched against referenceable customers; unmatched dropped silently |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Partner-intel walkthrough" icon="lock" href="/guides/campaigns/partner-intel">
+    Push a structured intel object synchronously.
+  </Card>
+  <Card title="Auto-enrich walkthrough" icon="sparkles" href="/guides/campaigns/auto-enrich">
+    Have Convinced synthesize intel from rep notes.
+  </Card>
+  <Card title="Sending visitors to the widget" icon="link" href="/guides/campaigns/widget-embedding">
+    Once intel is ready, route visitors to the widget.
+  </Card>
+  <Card title="Campaign mode overview" icon="bullseye-arrow" href="/guides/campaigns/overview">
+    What campaign mode is and how `?c=<token>` works.
+  </Card>
+</CardGroup>

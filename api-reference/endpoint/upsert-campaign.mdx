@@ -1,0 +1,191 @@
+---
+title: 'Upsert campaign'
+openapi: 'POST /api/campaigns'
+---
+
+Campaigns are containers. They group target rows under a stable, human-readable **slug** that you'll reference in every subsequent target call. One campaign per outbound motion is the typical pattern — for example, one per quarter, one per segment, or one per channel.
+
+This endpoint is **upsert-by-slug**. Send the same slug twice and the existing campaign's `name` or `description` is updated in place. The slug itself is immutable once the campaign exists.
+
+<Note>
+  You don't need to call this endpoint before every target upsert — only once
+  per campaign. Most integrations create a campaign during setup, then drive
+  hundreds of target upserts against the same slug.
+</Note>
+
+## When to call this endpoint
+
+<Steps>
+  <Step title="At campaign setup">
+    Create the campaign once when you start a new outbound motion. Pick a slug you can read (`q2-logistics-outreach` beats `c-2026-04`).
+  </Step>
+  <Step title="When campaign metadata changes">
+    Re-send with the same slug to update `name` or `description`. Useful when the campaign name evolves but you don't want to break existing tokens.
+  </Step>
+  <Step title="Never on the hot path">
+    Don't call this endpoint per-target. The target upsert handles that automatically once the campaign exists.
+  </Step>
+</Steps>
+
+## Slug rules
+
+- Lowercase letters, digits, and hyphens.
+- Maximum 64 characters.
+- If you omit `slug`, the API derives one from `name` (e.g. `"Q2 Logistics Outreach"` → `q2-logistics-outreach`).
+- Slugs are scoped per organization — two different orgs can both have a `q2-outreach` campaign.
+
+<Warning>
+  **Slugs are immutable.** If you need to change a campaign's slug, you must
+  create a new campaign and re-push targets. Plan slug structure up front.
+</Warning>
+
+## Examples
+
+<CodeGroup>
+```bash curl
+curl -X POST "$CONVINCED_API_BASE/api/campaigns" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Q2 Logistics Outreach",
+    "slug": "q2-logistics-outreach",
+    "description": "Outbound campaign for logistics accounts"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(`${CONVINCED_API_BASE}/api/campaigns`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${CONVINCED_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    name: 'Q2 Logistics Outreach',
+    slug: 'q2-logistics-outreach',
+    description: 'Outbound campaign for logistics accounts',
+  }),
+})
+
+if (!response.ok) {
+  throw new Error(`Campaign upsert failed: ${response.status} ${await response.text()}`)
+}
+
+const { campaign } = await response.json()
+console.log('Campaign ready:', campaign.slug)
+```
+
+```python Python
+import os
+import requests
+
+response = requests.post(
+    f"{os.environ['CONVINCED_API_BASE']}/api/campaigns",
+    headers={
+        "Authorization": f"Bearer {os.environ['CONVINCED_API_KEY']}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "name": "Q2 Logistics Outreach",
+        "slug": "q2-logistics-outreach",
+        "description": "Outbound campaign for logistics accounts",
+    },
+    timeout=10,
+)
+response.raise_for_status()
+campaign = response.json()["campaign"]
+print("Campaign ready:", campaign["slug"])
+```
+</CodeGroup>
+
+## Response
+
+A successful upsert returns the campaign object:
+
+<AccordionGroup>
+  <Accordion title="Sample 200 OK response">
+    ```json
+    {
+      "campaign": {
+        "id": "8d3f9c2e-7a4b-4f1e-bb4d-2c5a9e7f1d3b",
+        "name": "Q2 Logistics Outreach",
+        "slug": "q2-logistics-outreach",
+        "description": "Outbound campaign for logistics accounts",
+        "status": "active",
+        "createdAt": "2026-04-15T09:12:31.482Z",
+        "updatedAt": "2026-04-15T09:12:31.482Z"
+      }
+    }
+    ```
+  </Accordion>
+  <Accordion title="Sample update response (same slug, new name)">
+    ```json
+    {
+      "campaign": {
+        "id": "8d3f9c2e-7a4b-4f1e-bb4d-2c5a9e7f1d3b",
+        "name": "Q2 Logistics Outreach (revised)",
+        "slug": "q2-logistics-outreach",
+        "description": "Updated copy for the EMEA leg",
+        "status": "active",
+        "createdAt": "2026-04-15T09:12:31.482Z",
+        "updatedAt": "2026-04-22T14:03:09.117Z"
+      }
+    }
+    ```
+
+    Note that `id` and `createdAt` are unchanged — this is the same row, updated in place.
+  </Accordion>
+</AccordionGroup>
+
+## Status field
+
+<ResponseField name="campaign.status" type="string" required>
+  Either `"active"` or `"archived"`. The API creates campaigns as `active` by
+  default. Archived campaigns do **not** resolve targets at the widget — visitors
+  with a token tied to an archived campaign see the default (non-personalized)
+  widget instead.
+</ResponseField>
+
+<Tip>
+  There's no public endpoint to archive a campaign yet. Archive from the
+  dashboard when a campaign sunsets. This prevents stale tokens floating around
+  in old emails from triggering personalized sessions for accounts you've moved
+  on from.
+</Tip>
+
+## Common errors
+
+<AccordionGroup>
+  <Accordion title="400 Bad Request — missing name">
+    ```json
+    { "error": "name is required" }
+    ```
+
+    `name` is the only required field. Either supply a `slug` or let the API derive one from the name.
+  </Accordion>
+  <Accordion title="400 Bad Request — invalid slug">
+    ```json
+    { "error": "slug must contain only lowercase letters, digits, and hyphens" }
+    ```
+
+    Slugs are URL-safe identifiers. Replace spaces, underscores, and uppercase letters before sending.
+  </Accordion>
+  <Accordion title="401 Unauthorized">
+    ```json
+    { "error": "API key missing or invalid." }
+    ```
+
+    Check the `Authorization` header. Confirm the key wasn't revoked from the dashboard.
+  </Accordion>
+</AccordionGroup>
+
+## Next step
+
+<Card
+  title="Push a target"
+  icon="user-plus"
+  href="/api-reference/endpoint/upsert-target"
+>
+  Now that the campaign exists, send target rows. Each target gets its own
+  widget token.
+</Card>

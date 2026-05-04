@@ -1,0 +1,787 @@
+---
+title: 'MCP tools reference'
+description: 'Every Convinced KB tool a partner-scoped key can call — schemas, response shapes, and worked examples.'
+icon: 'screwdriver-wrench'
+---
+
+This page covers every tool available to **partner-scoped** API keys. If you haven't read the [overview](/guides/mcp/overview) and the [setup guide](/guides/mcp/setup) yet, start there.
+
+<Note>
+**Tool naming.** Tools have two names: a short *registry name* (used in MCP `tools/list` and the scope registry, e.g. `get_competitor`) and a *callable name* (the actual HTTP/MCP tool name you invoke, e.g. `get_competitor_comparison`). Each section below shows both. Use the **callable name** in your `tool` field.
+</Note>
+
+All examples below assume you've set:
+
+```bash
+export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+export CONVINCED_API_KEY="ck_live_…"
+```
+
+We use the same fictional account throughout — **Acme Logistics** / **Priya Rao, VP Operations** — so you can trace one example end-to-end.
+
+## Catalog & coverage
+
+These tools answer "what's in the KB?" — the structured shape of your products, the breadth of pain-point coverage, and KB-health gaps you can use to drive curation.
+
+### `get_product_catalog`
+
+> Full product / module / feature tree with fact counts. Optionally filter by product name.
+
+**Registry name:** `get_product_catalog` · **Callable name:** `get_product_catalog`
+
+<ParamField path="product" type="string">
+Filter to a single product. Fuzzy-matched against product names — `"AutoMetric"` resolves to `"Autometrics"`. Omit to return the full org catalog.
+</ParamField>
+
+<ResponseField name="response" type="markdown string">
+A markdown tree: products at H1, modules at H2, features as bullets, with fact counts in parentheses. Empty results return a one-liner explaining why.
+</ResponseField>
+
+**When to use**
+
+<Tip>
+Catalog grounding for an agent that needs to know what your product surface looks like before it answers. Also useful for "build me a coverage matrix" agents that diff your real catalog against marketing claims.
+</Tip>
+
+**Example**
+
+<CodeGroup>
+```bash curl
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "get_product_catalog",
+    "args": { "product": "Autometrics" },
+    "scope": "partner"
+  }'
+```
+
+```typescript Node
+const res = await fetch(`${process.env.CONVINCED_API_BASE}/api/tool`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.CONVINCED_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    tool: 'get_product_catalog',
+    args: { product: 'Autometrics' },
+    scope: 'partner',
+  }),
+})
+const text = await res.text() // markdown
+```
+</CodeGroup>
+
+```markdown Sample response
+# Product Catalog
+
+## Autometrics
+*Real-time logistics intelligence for mid-market 3PLs.*
+
+### Road Logistics (4 modules)
+- **Route Optimization** (12 features, 38 facts)
+- **Freight Reconciliation** (8 features, 24 facts)
+- **ePOD** (5 features, 17 facts)
+- **Exception Management** (6 features, 19 facts)
+
+### Control Tower (2 modules)
+- **Fleet Visibility** (9 features, 31 facts)
+- **SLA Monitoring** (4 features, 12 facts)
+```
+
+---
+
+### `get_knowledge_stats`
+
+> KB health dashboard: entity counts and coverage gaps.
+
+**Registry name:** `get_knowledge_stats` · **Callable name:** `get_knowledge_stats`
+
+<ParamField path="(none)" type="object">
+This tool takes no arguments. Send `"args": {}`.
+</ParamField>
+
+<ResponseField name="response" type="markdown string">
+Counts of products, modules, features, facts, customers, pain points, objections, competitors, prospects — plus *coverage gaps* (features with zero facts, pain points with zero industry proofs).
+</ResponseField>
+
+**When to use**
+
+<Tip>
+Run on a schedule (daily / weekly) to drive a KB-health dashboard. Curation agents can use the gap counts to prioritise what to enrich next.
+</Tip>
+
+**Example**
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "get_knowledge_stats",
+    "args": {},
+    "scope": "partner"
+  }'
+```
+
+```markdown Sample response
+# Knowledge Base Stats
+
+**Entity counts**
+- Products: 2
+- Modules: 6
+- Features: 44
+- Facts: 141
+- Customers: 28
+- Pain points: 19
+- Objections: 14
+- Competitors: 7
+- Prospects: 126
+
+**Coverage gaps**
+- Features with 0 facts: 3
+- Pain points with 0 industry proofs: 5
+- Customers without a deployed module: 1
+```
+
+---
+
+### `list_pain_points_by_industry`
+
+> Pain points grouped by industry, with severity, business impact, and linked-prospect counts.
+
+**Registry name:** `list_pain_points_by_industry` · **Callable name:** `list_pain_points_by_industry`
+
+<ParamField path="industry" type="string">
+Filter to one industry (`"automotive"`, `"FMCG"`, `"pharma"`). Fuzzy-matched. Omit to get all industries.
+</ParamField>
+
+<ResponseField name="response" type="markdown string">
+Pain points grouped under H2 industry headings. Each pain point shows description, category, business impact, industry proof, severity, and linked prospect count.
+</ResponseField>
+
+**When to use**
+
+<Tip>
+A pre-call agent assembling a "what does this industry care about?" briefing. An outbound agent picking which pains to lead with for a target. A coverage tool comparing pain-point breadth across industries.
+</Tip>
+
+**Example**
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "list_pain_points_by_industry",
+    "args": { "industry": "FMCG" },
+    "scope": "partner"
+  }'
+```
+
+```markdown Sample response
+# Pain Points by Industry
+
+## FMCG (4 pain points)
+
+### Driver utilization stuck below 70% during peak windows [high]
+- **Category:** operations
+- **Business Impact:** ~12% margin compression on peak SKUs
+- **Industry Proof:** 6 of 9 FMCG customers cited this as their #1 pain pre-deployment
+- **Industry Severity:** critical
+- **Linked Prospects:** 14
+
+### Manual dispatch decisions during festival surges [high]
+- **Category:** operations
+- **Business Impact:** 8-15% SLA misses on Tier-1 lanes
+- **Industry Proof:** Cited by Marico, Dabur, Nestlé pre-PoC
+- **Industry Severity:** high
+- **Linked Prospects:** 9
+```
+
+## Entity lookups
+
+Use these when your agent already knows which entity it needs. Faster and more focused than `search_knowledge`.
+
+### `get_product` (callable: `get_product_overview` / `get_module_features` / `get_integration_details`)
+
+> Retrieve product information by name. Three callable variants for different depth.
+
+**Registry name:** `get_product`
+
+The registry-level `get_product` tool is exposed via three different callable shapes:
+
+| Callable | Use when |
+| --- | --- |
+| **`get_product_overview`** | You want the product line: tagline, deployed module list, customer count. |
+| **`get_module_features`** | You want a specific module's features and the supporting facts. |
+| **`get_integration_details`** | You want integration capabilities (SAP, Oracle, REST, file drops). |
+
+#### `get_product_overview`
+
+<ParamField path="product" type="string" required>
+Product name. Fuzzy-matched.
+</ParamField>
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "get_product_overview",
+    "args": { "product": "Autometrics" },
+    "scope": "partner"
+  }'
+```
+
+#### `get_module_features`
+
+<ParamField path="module" type="string">
+Module name (e.g. `"Route Optimization"`).
+</ParamField>
+<ParamField path="product" type="string">
+Optional. Scope to a single product when the same module name exists in multiple products.
+</ParamField>
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "get_module_features",
+    "args": { "module": "Route Optimization", "product": "Autometrics" },
+    "scope": "partner"
+  }'
+```
+
+#### `get_integration_details`
+
+<ParamField path="integration" type="string">
+Specific system or protocol (`"SAP"`, `"Oracle"`, `"REST API"`). Omit for the full integration index.
+</ParamField>
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "get_integration_details",
+    "args": { "integration": "SAP" },
+    "scope": "partner"
+  }'
+```
+
+**When to use**
+
+<Tip>
+A demo agent grounded in your product surface, an integrations Q&A bot, or a competitor-pivot move where you want to walk a buyer through your module list rather than lean on a generic comparison.
+</Tip>
+
+---
+
+### `get_case_study` (callable: `list_customers` / `get_customer_story`)
+
+> Retrieve customer case studies by industry, product, or customer name.
+
+**Registry name:** `get_case_study`
+
+| Callable | Use when |
+| --- | --- |
+| **`list_customers`** | You want all customers, optionally filtered by industry. |
+| **`get_customer_story`** | You want one customer's full story — challenge, solution, metrics, testimonials. |
+
+#### `list_customers`
+
+<ParamField path="industry" type="string">
+Optional. Filter to one industry (e.g. `"FMCG"`, `"automotive"`).
+</ParamField>
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "list_customers",
+    "args": { "industry": "FMCG" },
+    "scope": "partner"
+  }'
+```
+
+#### `get_customer_story`
+
+<ParamField path="customer" type="string" required>
+Customer name (`"Marico"`, `"Acme Logistics"`).
+</ParamField>
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "get_customer_story",
+    "args": { "customer": "Acme Logistics" },
+    "scope": "partner"
+  }'
+```
+
+```markdown Sample response
+# Acme Logistics
+
+**Industry:** Logistics / 3PL · **Region:** India
+
+## The challenge
+Mid-market 3PL for grocery + pharmacy chains. Driver utilization stuck at 62%
+across two quarters; peak-window SLA misses cost a major grocery account in Q1.
+
+## What we deployed
+- Route Optimization (Autometrics)
+- Fleet Visibility (Control Tower)
+- SLA Monitoring (Control Tower)
+
+## Metrics that improved
+- Driver utilization: **62% → 78%** (12 weeks)
+- Peak-window SLA hit-rate: **84% → 96%**
+- Dispatch decisions / hour: **210 → 410**
+
+## Testimonial
+> "We stopped losing the grocery account. The dispatch desk runs itself now."
+> — Priya Rao, VP Operations
+```
+
+**When to use**
+
+<Tip>
+Social proof at the right moment in a chat or call. An agent that's about to discuss "fleet utilization" should pull `get_customer_story` for a customer in the same industry to ground its claim.
+</Tip>
+
+---
+
+### `get_pain_points` (callable: `resolve_pain`)
+
+> Resolve a pain query to matching pain points with business impact, severity, customer stories, discovery questions, and adjacent themes.
+
+**Registry name:** `get_pain_points` · **Callable name:** `resolve_pain`
+
+<Note>
+The registry exposes this as `get_pain_points`. The callable name partners actually invoke is **`resolve_pain`**, which is the discovery-tuned variant the Convinced widget itself uses. It accepts a free-form query rather than persona/industry/severity filters, which is what real agent use-cases need.
+</Note>
+
+<ParamField path="query" type="string" required>
+The visitor's question or pain in their own words. Use exact phrasing, not normalised keywords.
+</ParamField>
+
+<ParamField path="industry" type="string">
+Optional. Visitor industry — boosts industry-specific pains and pulls industry-specific severity.
+</ParamField>
+
+<ResponseField name="response" type="JSON object">
+Matching pain points with `description`, `severity`, `businessImpact`, `rootCauses`, `customerStories[]`, `discoveryQuestions[]`, `competitorGaps[]`, and `adjacentThemes[]` for natural follow-up.
+</ResponseField>
+
+**When to use**
+
+<Tip>
+Always call this **first** for a discovery question. The `adjacentThemes` field is gold — surface them as natural follow-up questions to deepen discovery without sounding scripted.
+</Tip>
+
+**Example**
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "resolve_pain",
+    "args": {
+      "query": "our drivers sit idle during peak windows",
+      "industry": "FMCG"
+    },
+    "scope": "partner"
+  }'
+```
+
+---
+
+### `get_objections` (callable: `get_objection_response`)
+
+> Proven response frameworks for common objections — pricing, technical, trust, competition, timeline, change management, adoption.
+
+**Registry name:** `get_objections` · **Callable name:** `get_objection_response`
+
+<ParamField path="objection" type="string">
+Free-text objection in the visitor's own words (e.g. `"your price is too high"`). Either `objection` or `category` is required.
+</ParamField>
+
+<ParamField path="category" type="string">
+Objection category keyword: `pricing`, `technical`, `trust`, `competition`, `timeline`, `change_management`, `adoption`.
+</ParamField>
+
+<ResponseField name="response" type="JSON object">
+The matched objection plus `recommendedResponse`, `proofPoints[]`, and `commonReframes[]`.
+</ResponseField>
+
+**When to use**
+
+<Tip>
+The visitor pushes back. Don't improvise — call this with their exact words and let the proven framework structure your response.
+</Tip>
+
+**Example**
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "get_objection_response",
+    "args": { "objection": "we already use FarEye for visibility" },
+    "scope": "partner"
+  }'
+```
+
+---
+
+### `get_slides` (callable: `show_relevant_slide`)
+
+> Surface the most relevant slide for the current topic.
+
+**Registry name:** `get_slides` · **Callable name:** `show_relevant_slide`
+
+<ParamField path="topic" type="string">
+Topic, keyword, or question to find a slide for (e.g. `"route optimization ROI"`, `"SAP integration"`).
+</ParamField>
+
+<ParamField path="deck_id" type="string">
+Optional. Restrict the search to one deck.
+</ParamField>
+
+<ResponseField name="response" type="JSON object">
+A slide object with `id`, `title`, `imageUrl`, `deckName`, and `caption`. The widget uses this to hand off visually mid-conversation.
+</ResponseField>
+
+**When to use**
+
+<Tip>
+Voice or chat agents that can render images. Pair with `resolve_pain` — once the agent has identified a pain, hand off the proof slide for it.
+</Tip>
+
+**Example**
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "show_relevant_slide",
+    "args": { "topic": "driver utilization improvement" },
+    "scope": "partner"
+  }'
+```
+
+## Search
+
+When you don't know which entity you need.
+
+### `search_knowledge`
+
+> Semantic + keyword search across the entire KB. Returns matched entities with provenance.
+
+**Registry name:** `search_knowledge` · **Callable name:** `search_knowledge`
+
+<ParamField path="query" type="string" required>
+Natural-language query or keyword phrase.
+</ParamField>
+
+<ParamField path="limit" type="number">
+Max results per entity type. Default `15`. The partner scope additionally caps per-call totals.
+</ParamField>
+
+<ParamField path="entity_types" type="string[]">
+Optional. Filter results to specific entity types (`"fact"`, `"case_study"`, `"product"`, `"pain_point"`, `"feature"`, `"objection"`, `"competitor"`).
+</ParamField>
+
+<ResponseField name="response" type="JSON object">
+```json
+{
+  "query": "cold chain SLA",
+  "count": 8,
+  "results": [
+    {
+      "entity_type": "fact",
+      "id": "…",
+      "score": 0.84,
+      "statement": "…",
+      "feature_name": "SLA Monitoring",
+      "module_name": "Control Tower",
+      "product_name": "Autometrics",
+      "case_study_names": ["Marico", "Acme Logistics"]
+    },
+    { "entity_type": "pain_point", "id": "…", "score": 0.78, "description": "…" },
+    { "entity_type": "case_study", "id": "…", "score": 0.71, "title": "…" }
+  ]
+}
+```
+</ResponseField>
+
+**When to use**
+
+<Tip>
+Open-ended questions, "what do you have on X" prompts, and as a fallback when a specific tool returns no results. Vector search handles vocabulary gaps — `"truck driver burnout"` will surface utilization pain points even if the KB never uses that phrasing.
+</Tip>
+
+**Example**
+
+<CodeGroup>
+```bash curl
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "search_knowledge",
+    "args": {
+      "query": "cold chain SLA",
+      "limit": 5,
+      "entity_types": ["case_study", "fact"]
+    },
+    "scope": "partner"
+  }'
+```
+
+```typescript Node
+const res = await fetch(`${process.env.CONVINCED_API_BASE}/api/tool`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.CONVINCED_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    tool: 'search_knowledge',
+    args: {
+      query: 'cold chain SLA',
+      limit: 5,
+      entity_types: ['case_study', 'fact'],
+    },
+    scope: 'partner',
+  }),
+})
+const data = await res.json()
+console.log(`${data.count} results`)
+data.results.forEach((r: any) => console.log(`[${r.entity_type}] ${r.score.toFixed(2)} — ${r.statement ?? r.title ?? r.description}`))
+```
+</CodeGroup>
+
+## Industry & competitive
+
+### `get_industry_proof`
+
+> Industry-specific proof bundle — customers, pain points with industry proofs, ROI metrics, and competitor gaps.
+
+**Registry name:** `get_industry_proof` · **Callable name:** `get_industry_proof`
+
+<ParamField path="industry" type="string" required>
+Industry name (`"FMCG"`, `"automotive"`, `"pharma"`). Fuzzy-matched.
+</ParamField>
+
+<ResponseField name="response" type="markdown string">
+Sectioned proof bundle: customers, pain points + industry proofs, ROI metrics, relevant competitor gaps.
+</ResponseField>
+
+**When to use**
+
+<Tip>
+Open of a vertical-specific demo or outbound campaign — pull one bundle and let the agent reach for everything in it as the conversation moves.
+</Tip>
+
+**Example**
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "get_industry_proof",
+    "args": { "industry": "FMCG" },
+    "scope": "partner"
+  }'
+```
+
+```markdown Sample response
+# Industry Proof — FMCG
+
+## Customers in this industry (4)
+- Marico (Autometrics — Route Optimization, Control Tower)
+- Dabur (Autometrics — Route Optimization)
+- Nestlé India (Control Tower — Fleet Visibility)
+- Acme Logistics (Autometrics — full stack)
+
+## Pain points with industry proof (3)
+### Driver utilization stuck below 70% during peak windows [critical]
+- 6 of 9 FMCG customers cited this as their #1 pain pre-deployment
+- Average lift after deployment: **+14 percentage points**
+
+### Manual dispatch decisions during festival surges [high]
+- Cited by Marico, Dabur, Nestlé pre-PoC
+
+## ROI metrics (industry-tagged)
+- Driver utilization lift: **avg +14 pp**
+- Peak-window SLA hit-rate: **+10-14 pp**
+- Dispatch decisions/hour: **2x**
+
+## Competitor gaps in this industry
+- FarEye: visibility-only, no dispatch decisioning
+- Locus: routing engine but no exception handling
+```
+
+---
+
+### `get_industry_playbook`
+
+> One-call composite: pain points + industry proof + competitor list, all for one industry.
+
+**Registry name:** `get_industry_playbook` · **Callable name:** `get_industry_playbook`
+
+<ParamField path="industry" type="string" required>
+Industry name. Fuzzy-matched.
+</ParamField>
+
+<ResponseField name="response" type="JSON object">
+```json
+{
+  "industry": "FMCG",
+  "pain_points": "<markdown bundle from list_pain_points_by_industry>",
+  "proof": "<markdown bundle from get_industry_proof>",
+  "competitors": "<markdown summary of competitors active in this industry>"
+}
+```
+</ResponseField>
+
+**When to use**
+
+<Tip>
+Agents that need the full industry kit in one call to avoid tool-call latency. Especially useful for voice agents where every additional round-trip costs a perceptible pause.
+</Tip>
+
+**Example**
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "get_industry_playbook",
+    "args": { "industry": "FMCG" },
+    "scope": "partner"
+  }'
+```
+
+---
+
+### `get_competitor` (callable: `get_competitor_comparison`)
+
+> Dimension-by-dimension comparison against a competitor — where we win, where they win, and positioning guidance. **Pricing intelligence is stripped at partner scope.**
+
+**Registry name:** `get_competitor` · **Callable name:** `get_competitor_comparison`
+
+<ParamField path="competitor_name" type="string" required>
+Competitor name (`"FarEye"`, `"Locus"`, `"Shipsy"`).
+</ParamField>
+
+<ParamField path="product_name" type="string">
+Optional. Restrict the comparison to one of your products.
+</ParamField>
+
+<ResponseField name="response" type="JSON object">
+Object with `competitor`, `dimensions[]` (each: `name`, `our_position`, `their_position`, `winner`, `evidence`), `positioning_guidance`. **Pricing tiers, discount data, and pricing-related dimensions are removed for partner scope.**
+</ResponseField>
+
+<Warning>
+**Pricing fields are stripped at partner scope.** If you need pricing intelligence for a deal-specific battlecard, that flow is internal-only — talk to Convinced.
+</Warning>
+
+**When to use**
+
+<Tip>
+The visitor mentions a competitor by name or asks "how are you different from X?". Don't improvise positioning — pull the dimension matrix.
+</Tip>
+
+**Example**
+
+```bash
+curl -X POST "$CONVINCED_API_BASE/api/tool" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "get_competitor_comparison",
+    "args": { "competitor_name": "FarEye", "product_name": "Autometrics" },
+    "scope": "partner"
+  }'
+```
+
+```json Sample response (partner scope, pricing stripped)
+{
+  "competitor": "FarEye",
+  "dimensions": [
+    {
+      "name": "Dispatch decisioning",
+      "our_position": "Real-time decisioning engine with override audit trail",
+      "their_position": "Visibility only — no dispatch decisions",
+      "winner": "us",
+      "evidence": "Acme Logistics, Marico — both displaced FarEye for this gap"
+    },
+    {
+      "name": "Driver app coverage",
+      "our_position": "Native driver app with offline mode",
+      "their_position": "Native driver app, online-only",
+      "winner": "us",
+      "evidence": "Tier-2 deployments cite offline as table-stakes"
+    }
+  ],
+  "positioning_guidance": "Lead with dispatch decisioning. FarEye buyers come to us when visibility-only stops being enough."
+}
+```
+
+## Tools you cannot call as a partner
+
+The MCP server defines additional tools that are **internal-only** — they exist on the server but the partner scope rejects them with `403`. They're listed here so you don't waste cycles trying to call them and so you know what's possible in case a use-case warrants escalating to a Convinced-built integration.
+
+<AccordionGroup>
+  <Accordion title="Mutation tools">
+    `update_entity`, `create_entity`, `mark_for_deletion`, `link_entities`. KB writes go through the dashboard, the campaign API, or Convinced-supervised ingestion pipelines — never partner-side mutations on the live KB.
+  </Accordion>
+  <Accordion title="Prospect-level tools">
+    `get_prospect`, `get_prospect_dossier`, `get_meeting_prep`, `get_cold_call_brief`, `prep_outreach`, `analyze_account`, `search_similar_prospects`. These join CRM-derived prospect data with the KB; that PII surface is gated to internal sales tooling. The [campaign API](/guides/campaigns/overview) is the partner-safe path to per-account personalization.
+  </Accordion>
+  <Accordion title="Analytics tools">
+    `get_knowledge_gaps`, `get_popular_queries`, `analyze_segment`, `find_icp`, `get_market_overview`, `get_win_loss_patterns`, `get_knowledge_coverage`. These read across orgs in some cases or reveal aggregate behavioural signals — outside partner scope by design. `get_knowledge_stats` is the partner-safe subset.
+  </Accordion>
+  <Accordion title="Buyer-question composite">
+    `get_buyer_question_context`. Internal-only until its latency profile and payload size are tuned for external use — the server explicitly rejects it for non-internal scopes today, even though it's powerful for internal demo-prep. Use `search_knowledge` + `resolve_pain` as the partner-safe equivalent.
+  </Accordion>
+  <Accordion title="Competitor pricing intelligence">
+    Not a separate tool — it's a *field filter* on `get_competitor`. Pricing tiers, discount data, and any pricing-tagged dimensions are stripped before the response leaves the server.
+  </Accordion>
+  <Accordion title="Battlecards, competitor lists, ROI calculator">
+    `get_competitor_battlecard`, `list_competitors`, `get_roi_calculator`. The runtime scope registry currently allows these for partner keys, but the canonical MCP tool registry classifies them as **internal**. Treat them as internal-only for forward-compatibility and use `get_competitor` + `search_knowledge` for competitive context, and the campaign API for ROI framing.
+  </Accordion>
+</AccordionGroup>
+
+If your use-case needs one of the above, talk to Convinced. Most can be served via [campaigns](/guides/campaigns/overview), the briefing pipeline, or a Convinced-supervised integration without exposing the raw tool.
+
+## Where to next
+
+<CardGroup cols={2}>
+  <Card title="MCP setup" icon="terminal" href="/guides/mcp/setup">
+    REST + SSE wiring with curl, Node, Python, Claude Desktop, Cursor.
+  </Card>
+  <Card title="API keys" icon="key" href="/guides/getting-started/api-keys">
+    Generate, scope, rotate, revoke partner keys.
+  </Card>
+  <Card title="MCP overview" icon="circle-nodes" href="/guides/mcp/overview">
+    Conceptual orientation — what you can and can't do at partner scope.
+  </Card>
+  <Card title="Campaign API" icon="bullseye-arrow" href="/guides/campaigns/overview">
+    The other partner surface — push target-account intel and get a widget token.
+  </Card>
+</CardGroup>

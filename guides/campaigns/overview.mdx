@@ -1,0 +1,246 @@
+---
+title: 'Campaign mode overview'
+description: "What campaign mode is, when to use it, and how it grounds the Convinced widget in target-account intel."
+icon: 'bullseye-arrow'
+---
+
+## What is campaign mode?
+
+Convinced is a personalized B2B sales widget. Out of the box, it answers questions about your product. **Campaign mode** is the layer that turns it from a generic assistant into a 1:1 outreach experience: each visitor lands on the widget with a `?c=<token>` parameter that resolves to a specific target account, and the agent runs the conversation against intel you (or Convinced) gathered for that account.
+
+When campaign mode is active, the agent's:
+
+- **Opener** mirrors back what the prospect company actually does.
+- **Discovery questions** key off the pain points you supplied.
+- **Case-study mentions** are restricted to customers you pre-matched to this account.
+- **Competitive positioning** is set up around the specific competitor the prospect uses or is evaluating.
+
+Everything is grounded in the **Intel object** — a structured record describing the target. You can supply that record directly (partner-intel mode) or send rep notes and let Convinced synthesize it (auto-enrich mode).
+
+<Note>
+The intel itself is just JSON. The agent does not invent facts to fill gaps — fewer fields means a less personalized session, but never a hallucinated one. See [Intel schema](/guides/campaigns/intel-schema) for the field-by-field reference.
+</Note>
+
+## How `?c=<token>` works
+
+```
+https://app.getconvinced.ai/widget/v2/<org-slug>?c=<token>
+```
+
+When the widget boots, it reads `?c=<token>` and asks the Convinced backend for the matching campaign target. If the row exists, is in an active campaign, and has intel ready (`enrichmentStatus` is `done` or `skipped`), the widget enters **campaign mode** and loads the personalized session. If anything is missing — bad token, archived campaign, enrichment still pending — the widget falls back to a generic session.
+
+The `c` parameter (literally the letter `c`, for "campaign") is the **target token**, not the campaign slug. Tokens are derived from the company name (`Acme Logistics` → `acme-logistics`) unless you set them explicitly.
+
+<Tip>
+Tokens are **unique per organization**, not per campaign. Two campaigns inside the same Convinced org cannot share a token; the API returns `409 Conflict` if you try. Across different orgs, tokens are independent.
+</Tip>
+
+## Campaign vs. target
+
+| Concept | What it is | Example |
+| --- | --- | --- |
+| **Campaign** | A grouping bucket. Tracks intent (`Q2 Logistics Outreach`) and rolls up reporting. Identified by `slug`. | `q2-logistics-outreach` |
+| **Target** | One target account inside a campaign. Holds the intel and the widget token. Identified by `token`. | `acme-logistics` |
+
+A campaign can have many targets; a target lives in exactly one campaign. The widget URL only needs the target token (`?c=acme-logistics`) — the campaign is resolved server-side.
+
+## The two integration modes
+
+<CardGroup cols={2}>
+  <Card title="Partner-intel mode" icon="lock" href="/guides/campaigns/partner-intel">
+    You have a structured intel record from your CRM or research team. Push it directly with `enrich: false` — the row is widget-ready as soon as the API returns.
+  </Card>
+  <Card title="Auto-enrich mode" icon="sparkles" href="/guides/campaigns/auto-enrich">
+    You have free-form rep notes or a microsite link. Send them with `enrich: true` and Convinced runs the AI research pipeline asynchronously (typically 30-90s).
+  </Card>
+</CardGroup>
+
+### Side-by-side
+
+| | Partner-intel (`enrich: false`) | Auto-enrich (`enrich: true`) |
+| --- | --- | --- |
+| **Input** | Structured `intel` object | `rawResearch` text + optional `links` |
+| **Sync/async** | Synchronous — ready on response | Asynchronous — poll until `done` |
+| **Latency** | Single API call | 30-90s typical |
+| **Source of truth** | You | LLM synthesis grounded in your inputs |
+| **Best when** | You already have CRM intel mapped to schema | You have rep notes or a microsite, no time to map fields |
+| **Initial `enrichmentStatus`** | `skipped` | `pending` |
+
+### Which mode should I use?
+
+<AccordionGroup>
+  <Accordion title="Pick partner-intel if...">
+    - You already have structured intel in your CRM (Apollo, Salesforce, ZoomInfo, internal warehouse).
+    - Your sales ops or research team produces account briefs in a fixed format.
+    - You need the widget URL to be live immediately — for example, a real-time hand-off from a chatbot or webhook.
+    - You want full control over what the agent says and never want the LLM to add facts you didn't approve.
+  </Accordion>
+  <Accordion title="Pick auto-enrich if...">
+    - Reps drop free-form notes (Slack threads, call transcripts, raw research) and you want the agent to use them without human cleanup.
+    - You have a microsite or landing page URL the rep has shared with the prospect, and you want the conversation grounded in that page.
+    - You're driving outbound from public signals (news, funding announcements) and don't have structured intel yet.
+    - You're OK with a 30-90 second delay between target creation and the widget being usable.
+  </Accordion>
+  <Accordion title="Can I mix the two?">
+    Not on the same target. A target is either partner-intel (`enrichmentStatus: skipped`) or auto-enriched (`enrichmentStatus: done`). But you can mix freely within the same campaign — some targets coming from your CRM, others from rep notes — and the widget treats them identically once they're widget-ready.
+  </Accordion>
+</AccordionGroup>
+
+## The lifecycle
+
+Every target moves through `enrichmentStatus`:
+
+<Frame>
+
+```
+                    POST /api/campaigns/{slug}/targets
+                                    │
+                  ┌─────────────────┴─────────────────┐
+                  │                                   │
+            enrich: false                       enrich: true
+            (partner-intel)                     (auto-enrich)
+                  │                                   │
+                  ▼                                   ▼
+          ┌─────────────┐                     ┌─────────────┐
+          │  skipped    │                     │  pending    │
+          │ widgetReady │                     │             │
+          └─────────────┘                     └──────┬──────┘
+                                                     │
+                                              (worker picks up)
+                                                     │
+                                                     ▼
+                                              ┌─────────────┐
+                                              │  running    │
+                                              └──────┬──────┘
+                                                     │
+                                       ┌─────────────┴─────────────┐
+                                       │                           │
+                                       ▼                           ▼
+                                ┌─────────────┐             ┌─────────────┐
+                                │    done     │             │   failed    │
+                                │ widgetReady │             │ enrichError │
+                                └─────────────┘             └─────────────┘
+```
+
+</Frame>
+
+### State reference
+
+<ResponseField name="pending" type="enrichmentStatus">
+Auto-enrich job has been queued but the synthesis worker hasn't started yet. The widget falls back to a generic session if the visitor lands now.
+</ResponseField>
+
+<ResponseField name="running" type="enrichmentStatus">
+Synthesis is in flight: web search, KB lookup, and link crawling are running in parallel, then GPT-5.5 stitches them into the intel object. Typical duration 30-90s.
+</ResponseField>
+
+<ResponseField name="done" type="enrichmentStatus">
+Auto-enrich completed successfully. `intel` is populated, `enrichedAt` is set, and `widgetReady` flips to `true` (assuming the campaign is still active).
+</ResponseField>
+
+<ResponseField name="failed" type="enrichmentStatus">
+Synthesis threw an error. `enrichmentError` is populated (truncated to 500 chars). The row is **not** widget-ready and there are **no automatic retries** — re-PATCH the target to retry. Web-search and KB-lookup failures are non-fatal and do not move the row to `failed`; only synthesis errors do.
+</ResponseField>
+
+<ResponseField name="skipped" type="enrichmentStatus">
+Partner-intel mode. The intel was supplied directly, no synthesis was needed. `widgetReady` is true immediately.
+</ResponseField>
+
+<Tip>
+Use the **`widgetReady`** boolean as your gate, not `enrichmentStatus` directly. It encodes all three preconditions: campaign is active, intel is present, and status is `done` or `skipped`. See [Sending visitors to the widget](/guides/campaigns/widget-embedding#widgetready-gate) for the recommended polling pattern.
+</Tip>
+
+## Architecture at a glance
+
+<Frame>
+
+```
+   Partner system                Convinced API                Convinced widget
+   ─────────────                 ─────────────                ───────────────
+                                                                    │
+   POST /api/campaigns           Campaign + Target row         visitor lands on
+       /{slug}/targets    ────►  written to Postgres          page with ?c=<token>
+                                                                    │
+                                       │                            │
+                  ┌────────────────────┤                            │
+                  │                    │                            ▼
+            enrich: false        enrich: true                ┌─────────────┐
+                  │                    │                     │  Resolve    │
+                  │                    │                     │  token →    │
+                  │                    ▼                     │  target     │
+                  │             ┌─────────────┐              └─────┬───────┘
+                  │             │ Web search  │                    │
+                  │             │ (gpt-5-     │                    ▼
+                  │             │  search-api)│              ┌─────────────┐
+                  │             └─────┬───────┘              │ widgetReady?│
+                  │                   │                      └─────┬───────┘
+                  │             ┌─────▼───────┐                    │
+                  │             │ KB lookup   │            ┌───────┴───────┐
+                  │             │ (referenc.  │            │               │
+                  │             │  customers) │           yes              no
+                  │             └─────┬───────┘            │               │
+                  │                   │                    ▼               ▼
+                  │             ┌─────▼───────┐      ┌─────────────┐  generic
+                  │             │ Crawl links │      │ Inject intel│  session
+                  │             └─────┬───────┘      │ into prompt │
+                  │                   │              │ → campaign  │
+                  │             ┌─────▼───────┐      │   mode      │
+                  │             │ Synthesis   │      └─────────────┘
+                  │             │ (gpt-5.5)   │
+                  │             └─────┬───────┘
+                  │                   │
+                  └─────────┬─────────┘
+                            ▼
+                   intel JSON written
+                   to campaign_targets
+                   row
+```
+
+</Frame>
+
+The dashed boundary is important: target creation and intel synthesis are separate. If you POST a target with `enrich: true`, the API returns immediately (`enrichmentStatus: pending`) and Convinced kicks off the synthesis worker in the background. You poll `GET /api/campaigns/{slug}/targets/{token}` until the status flips.
+
+## Common patterns
+
+### Outbound email campaign
+
+1. Sales ops produces a list of 200 target accounts in CSV.
+2. A nightly job loops through the CSV and POSTs one target per row in **partner-intel** mode (intel comes from your CRM).
+3. The job emails each prospect a personalized landing page link: `yourcompany.com/demo?c=<token>`.
+4. When prospects click, the widget loads in campaign mode and runs the conversation grounded in their record.
+
+### Rep-driven 1:1 outreach
+
+1. The rep finishes account research in Notion / Google Doc.
+2. They POST a target in **auto-enrich** mode with `rawResearch` (their notes) + `links` (the prospect's microsite).
+3. While the synthesis worker runs (30-90s), the rep drafts the outreach email.
+4. Once `widgetReady: true`, the rep includes the personalized link in the email.
+
+### Inbound demo request
+
+1. Visitor fills out a form on your site mentioning their company.
+2. Server-side, you POST a target with `enrich: true` and the company name as `rawResearch`.
+3. After ~60s, you redirect them to the widget with `?c=<token>` for a personalized demo conversation.
+
+## Where to next
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get your first target live in 5 minutes.
+  </Card>
+  <Card title="Partner-intel walkthrough" icon="code" href="/guides/campaigns/partner-intel">
+    Synchronous mode, full curl + JS + Python examples.
+  </Card>
+  <Card title="Auto-enrich walkthrough" icon="sparkles" href="/guides/campaigns/auto-enrich">
+    Asynchronous mode, polling patterns, failure modes.
+  </Card>
+  <Card title="Intel schema" icon="list" href="/guides/campaigns/intel-schema">
+    Every field of the intel object: type, behavior, examples.
+  </Card>
+  <Card title="Sending visitors to the widget" icon="link" href="/guides/campaigns/widget-embedding">
+    Four routing options, loader script, UTM passthrough.
+  </Card>
+  <Card title="API reference" icon="terminal" href="/api-reference/introduction">
+    Schemas, status codes, examples for every endpoint.
+  </Card>
+</CardGroup>
