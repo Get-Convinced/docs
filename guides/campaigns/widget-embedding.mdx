@@ -1,6 +1,6 @@
 ---
 title: 'Sending visitors to the widget'
-description: 'Four ways to deliver a personalized session to a visitor — embed, hard-pin, pretty path, hosted page.'
+description: 'Choose the managed iframe or Widget SDK, then route each visitor into the right personalized session.'
 icon: 'link'
 ---
 
@@ -11,6 +11,19 @@ This guide covers the four routing options, the loader script's attributes, and 
 <Note>
 The token in `?c=<token>` is the **target token** — the value returned as `widgetToken` from `POST /api/campaigns/{slug}/targets`. Not the campaign slug. See [Campaign mode overview](/guides/campaigns/overview#campaign-vs-target) for the distinction.
 </Note>
+
+## Choose the iframe or SDK
+
+Both integrations use the same Convinced conversation runtime and campaign tokens. Choose the surface based on how much control your page needs.
+
+| | Managed iframe | Widget SDK |
+| --- | --- | --- |
+| **Setup** | Add the loader script or use the hosted URL | Install `@convinced/widget-sdk` and mount it in your app |
+| **Interface** | Convinced-managed and isolated from your page | Use the supplied UI or render a completely custom interface |
+| **Host-page actions** | Explicit `data-host-tools` bridge into the parent page | Direct bounded registry for SPA navigation, scrolling, highlighting, page logic, and MCP adapters |
+| **Best for** | Exact hosted launchers, mobile behavior, and minimal maintenance | Product-native styling, voice-first custom behavior, and tool-enabled experiences |
+
+Start with the iframe when the managed experience meets your needs. Use the [Widget SDK quickstart](/guides/widget-sdk/quickstart) when you need direct control over rendering, identity collection, events, or host tools.
 
 ## The widgetReady gate
 
@@ -38,7 +51,7 @@ If you send a visitor before `widgetReady: true`, the widget falls back to a **g
 
 For the polling loop pattern, see [Auto-enrich → Step 2: Poll until ready](/guides/campaigns/auto-enrich#step-2-poll-until-ready).
 
-## The four routing options
+## Iframe routing options
 
 | Option | Where the widget lives | Where the token comes from | Best for |
 | --- | --- | --- | --- |
@@ -165,6 +178,34 @@ Your org slug — visible in the dashboard URL. For example, the path `/org/conv
 Hard-pin the campaign target token to this page. When set, the widget ignores `?c=` in the URL. Use for per-account dedicated pages (Option B). Omit for general-purpose embeds (Option A).
 </ParamField>
 
+<ParamField path="data-pid" type="string">
+Hard-pin a personalized-link ID. An explicit `data-pid` wins over `?pid=` and the backwards-compatible `?cid=` alias.
+</ParamField>
+
+<ParamField path="data-token" type="string">
+Optional public embed token for organizations that require one. This is not a Campaign API key and not an ElevenLabs API key.
+</ParamField>
+
+<ParamField path="data-host-tools" type="string">
+Comma-separated parent-page capabilities: `page-context`, `navigate`, `scroll`, and `highlight`. All are disabled by default. See [Managed iframe loader](/guides/widget-sdk/managed-iframe#enable-parent-page-tools).
+</ParamField>
+
+<ParamField path="data-launcher" type="string">
+Preview override for a configured launcher style. Use for QA rather than as the long-term source of tenant configuration.
+</ParamField>
+
+<ParamField path="data-bottom-offset" type="string">
+Safe CSS length that raises launcher-anchored states without rewriting iframe styles.
+</ParamField>
+
+<ParamField path="data-test" type="boolean">
+Set to `true` to request widget test mode.
+</ParamField>
+
+<ParamField path="data-debug" type="boolean">
+Set to `true` to request the widget debug surface.
+</ParamField>
+
 <ParamField path="async" type="boolean">
 Standard async loading. Always include — the loader is non-blocking and doesn't need to run before page render.
 </ParamField>
@@ -172,6 +213,8 @@ Standard async loading. Always include — the loader is non-blocking and doesn'
 ### Where to put it
 
 The loader can go anywhere in `<head>` or `<body>`. Recommendation: at the end of `<body>`, after critical content has loaded. The widget UI mounts on its own — you don't need a placeholder element.
+
+The loader also exposes `openConvinced()`, `closeConvinced()`, `sendEvent()`, `setIdentity()`, `setNavigationHandler()`, `setHostToolAuthorizer()`, and `registerHostTool()` on `window.Convinced`. See [Managed iframe loader](/guides/widget-sdk/managed-iframe#call-the-public-loader-api).
 
 ## Decision table
 
@@ -197,7 +240,7 @@ When a visitor arrives at a page like:
 https://yourcompany.com/demo?c=acme-logistics&utm_source=email&utm_campaign=q2-logistics&utm_medium=outbound
 ```
 
-The widget captures all four parameters at session start. Conversions logged from that session carry the UTM tags forward, which lets you slice analytics by source, medium, and campaign in your downstream tooling.
+The widget captures the five supported UTM fields at session start: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, and `utm_term`. Conversions logged from that session carry the UTM tags forward, which lets you slice analytics by source, medium, and campaign in your downstream tooling.
 
 <Tip>
 Standardize your UTM scheme **before** you start firing campaigns. The `utm_campaign` value should match (or be derivable from) the campaign slug — for example `utm_campaign=q2-logistics-outreach` mirrors `slug: "q2-logistics-outreach"`. That way your funnel reports stay aligned with campaign rollups.
@@ -269,8 +312,8 @@ Putting it together for a hypothetical Acme Logistics campaign with [Priya Rao](
   <Accordion title="UTMs not appearing in conversions">
     The widget captures UTMs from `window.location.search` at session start. If your site rewrites the URL after page load (e.g. SPA route changes that strip query strings), the UTMs are lost. Capture them server-side on the inbound request and pass them into the page some other way.
   </Accordion>
-  <Accordion title="Different prospects keep getting the same conversation">
-    Each visitor needs their own token. If your email blast contains the same `?c=acme-logistics` link sent to 200 different prospects, all 200 see the Acme Logistics conversation. Use one target per prospect and one link per prospect — that's what tokens are for.
+  <Accordion title="Different prospects keep getting the same person-specific conversation">
+    A campaign target token represents the target record you created. Reuse one token when account-level personalization is intentional. Create a person-specific target or personalized link when the opener, role, rep notes, or proof should differ for each recipient.
   </Accordion>
 </AccordionGroup>
 

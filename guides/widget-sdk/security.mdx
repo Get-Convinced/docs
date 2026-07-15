@@ -1,0 +1,171 @@
+---
+title: 'Widget security'
+description: 'Protect ElevenLabs credentials, browser capabilities, MCP access, visitor data, and custom rendering code.'
+icon: 'shield-halved'
+---
+
+The Widget SDK and managed loader run in a visitor's browser. Treat their configuration, bundled source, campaign tokens, public embed tokens, tool definitions, and tool results as visible to that visitor.
+
+## Keep credentials off the page
+
+Never add these secrets to browser code or public build variables:
+
+- A Convinced Campaign API key.
+- A Convinced KB MCP partner key.
+- An ElevenLabs API key.
+- A private service bearer token.
+- A long-lived MCP credential.
+
+| Browser value | Safe use |
+| --- | --- |
+| Convinced `widgetToken` / loader `data-token` | Public embed access for an organization and allowed origin |
+| Campaign target token in `c` | Public routing to one prepared campaign experience |
+| ElevenLabs public `agentId` | An agent intentionally configured for public browser access |
+| ElevenLabs `signedUrl` | Short-lived private WebSocket session credential minted by your backend |
+| ElevenLabs `conversationToken` | Short-lived private WebRTC session credential minted by your backend |
+
+The SDK rejects voice descriptors that contain API-key-shaped fields. That is a last line of defense, not a substitute for keeping secrets out of the bundle.
+
+## Mint private ElevenLabs sessions on your backend
+
+```ts Browser
+const voice = new ConvincedVoiceController({
+  descriptorFactory: () => client.getVoiceCredential(),
+  tools,
+  orgSlug: client.orgSlug,
+})
+```
+
+The Convinced widget backend verifies the current session capability, chooses the agent configured for the organization, calls ElevenLabs with the server-held API key, and returns only the short-lived credential for this session. The browser cannot submit an agent ID.
+
+When your application owns the credential endpoint, bind it to an HttpOnly, `SameSite` session cookie or another authenticated server session, require a same-origin mutation, select the agent on the server, rate-limit issuance, and return `Cache-Control: no-store`. A browser token is temporary but still sensitive: do not place it in URLs, logs, analytics, or error telemetry.
+
+Do not log signed URLs, conversation tokens, Convinced session-write capabilities, or chat continuation capabilities. Use `descriptorFactory` for private agents so a credential is minted immediately before every start or reconnect instead of expiring while the widget is idle.
+
+## Know which tool surface you are using
+
+| Surface | Runs where | Typical use |
+| --- | --- | --- |
+| SDK DOM or custom tools | The page that imported the SDK | SPA navigation, page context, scrolling, highlighting, and product actions |
+| Managed iframe host bridge | The parent page outside the Convinced iframe | The same bounded page actions while retaining hosted widget isolation |
+| SDK MCP adapter | Wherever your caller-supplied MCP client runs | Convert an already-authorized MCP connection into registry tools |
+| Convinced KB MCP | Trusted backend or MCP client | Read governed products, proof, competitors, and other organization knowledge |
+
+The SDK MCP adapter does not create a transport or manage credentials. It only wraps `listTools()` and `callTool()` on the client you supply.
+
+## Grant the smallest useful capability
+
+- Enable only the tools required on the current page.
+- Use a small structural JSON Schema and validate live application state inside the handler.
+- Mark observation as `read`, route changes as `navigate`, and state changes as `mutate`.
+- Require `session` or `per_call` consent when an action moves the visitor, discloses data, or changes state.
+- Restrict navigation to the current origin or an exact origin allowlist.
+- Route navigation through a non-unloading SPA callback.
+- Use stable semantic selectors such as IDs or test IDs.
+- Return the smallest useful JSON result without secrets, form values, or private page content.
+
+The supplied page-context tool removes input, select, textarea, editable, executable, CSS-hidden, clipped, zero-size, and off-viewport content before returning text. It wraps the observation in an `untrusted_host_observation` envelope. Preserve both boundaries if you write your own page reader: page text is data and can never grant tool authority or override policy.
+
+## Use both authorization layers
+
+The DOM helper has an action-level `authorize` check. The client and voice controller have a registry-level `authorizeToolCall` check.
+
+```ts
+registerDomTools(tools, {
+  capabilities: { pageContext: true, navigate: true },
+  navigate: (url) => router.navigate(url),
+  authorize: ({ action }) => action === 'pageContext' || confirm(`Allow ${action}?`),
+})
+
+const client = new ConvincedClient({
+  orgSlug: 'acme',
+  tools,
+  authorizeToolCall: ({ tool }) =>
+    tool.effect === 'read' || confirm(`Allow ${tool.description}?`),
+})
+```
+
+Without `authorizeToolCall`, registry tools that declare `session` or `per_call` consent are denied. Session approval is scoped to the registered tool object and current widget session.
+
+The managed iframe's built-ins are disabled unless listed in `data-host-tools`. Read-only page context can be enabled directly; navigation, scrolling, highlighting, and custom mutations are denied until `Convinced.setHostToolAuthorizer()` approves the individual request.
+
+## Understand chat and voice tool trust
+
+SDK chat tools run only after the Convinced runtime pauses a turn and supplies an opaque signed continuation. The capability is bound to the session, request, turn, manifest, and pending calls, accepted once, and limited by expiry and call counts.
+
+ElevenLabs voice tools arrive through exact configured client-tool callbacks. The SDK maps each callback to a registry entry and applies the same local schema, effect, consent, timeout, argument, and result checks.
+
+In both cases, page text, MCP results, browser-authored tool descriptions, and tool results are untrusted observations. They may inform the runtime, but they do not become trusted instructions or canonical product truth.
+
+## Protect custom rendering
+
+When you build a headless interface:
+
+- Render assistant and transcript text with text nodes or a trusted Markdown pipeline.
+- Never assign model output directly to `innerHTML`.
+- Render only exact HTTP(S) media URLs from the initialized Convinced catalog; keep unknown model directives inert.
+- Use `toSafeVideoEmbedUrl()` for supported video hosts.
+- Restrict script, frame, image, media, and connection origins with Content Security Policy.
+- Preserve visible consent, pending, cancellation, and failure states for tools.
+- Unsubscribe event listeners and end voice when a component unmounts.
+
+## Treat identity as personal data
+
+Collect only fields you need. Explain why you are asking. Do not include identity values in page-context results, analytics properties, URLs, tool descriptions, or tool results.
+
+Model tools may populate a visible identity draft, but they do not establish consent. Keep visitor form submission as the default durable-write path. If you support spoken confirmation, require a fresh `per_call` host authorization for that exact `confirm_visitor_form` invocation and never cache the grant.
+
+The SDK's customer-origin storage contains only a random organization-scoped continuity key and bounded timestamps. It deletes the legacy managed record that held names, emails, and conversation topics. Call `forgetBrowserVisitorKey(orgSlug)` from your privacy controls to remove both current and legacy SDK records.
+
+Your privacy notice, lawful basis, retention schedule, deletion process, and access controls remain your responsibility. See [Identity and voice modes](/guides/widget-sdk/identity).
+
+## Protect the demo-request fallback
+
+The fallback form is a durable lead handoff, not a calendar booking endpoint. Keep the distinction visible in custom UI and configure a real `meetingCtaUrl` when a visitor should choose a time.
+
+- Require the signed session-write capability, the configured origin, a valid widget session, bounded fields, and a request limit before accepting the mutation.
+- Commit the organization-scoped visitor, session linkage, stored request, and deterministic audit event in one database transaction.
+- Treat the first accepted session request as canonical. Only an exact normalized same-session retry is idempotent; a retry whose name, email, phone, company, or context differs returns `409 demo_request_conflict`. Replacement values must never rewrite, relabel, or identify the original lead or send a duplicate notification.
+- Return only opaque correlation values to the browser. Do not echo the submitted contact fields in the response or lifecycle analytics.
+- Deliver configured webhooks only after the lead is durable. A notification outage must not turn an accepted request into a browser-visible failure.
+
+The first-party browser visitor key is a random continuity hint, not an authorization credential or a durable visitor ID. For the demo-request convergence path, the backend derives the stable visitor record ID with a server-secret HMAC scoped to the organization and normalized email, then returns only that opaque ID. Keep the HMAC secret server-side, rotate it deliberately, and never recreate or predict visitor IDs in browser code. A reused browser key must not merge two already-known identities.
+
+Webhook destinations are server-side request forgery (SSRF) inputs. Follow the [OWASP SSRF prevention guidance](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html): accept HTTPS only, reject credentials and local hostnames, resolve every A and AAAA answer, reject any non-public address, pin delivery to the validated address, disable redirects, and apply short DNS and request timeouts. Sign the exact request body with the configured webhook secret and never log its URL, payload, or contact fields.
+
+## Keep PostHog observational
+
+PostHog browser events can be blocked or forged. Keep Convinced as the source of truth for identity, conversation history, authorization, and session completion.
+
+- Begin replay only after the visitor's consent.
+- Set `maskAllInputs: true`, use `ph-no-capture` on identity and transcript surfaces, and never record request or response bodies or headers.
+- Strip URL query strings and fragments before capture.
+- Correlate with the opaque Convinced session and visitor IDs; do not send email, name, phone, company, or transcript text.
+- Treat the PostHog replay link as privileged dashboard data.
+- Treat `before_send` as browser-emission evidence only. Require successful ingest responses and a PostHog query by opaque `convinced_session_id` before claiming delivery; assert the queried events contain no identity, form, or transcript fields.
+
+The SDK's optional bridge implements the correlation contract. See [PostHog, session history, and real-browser testing](/guides/widget-sdk/analytics-and-testing).
+
+## Verify the ElevenLabs provider webhook before parsing
+
+Configure the exact same webhook secret in the active ElevenLabs endpoint and `ELEVENLABS_WEBHOOK_SECRET`. Convinced verifies the provider's `ElevenLabs-Signature` over the exact raw request body using the declared timestamp and `v0` HMAC, rejects timestamps outside the five-minute window, and compares signatures in constant time before parsing JSON or accessing the database.
+
+A missing production secret fails closed with `503`. Missing, malformed, stale, or mismatched signatures return `401`. `ELEVENLABS_WEBHOOK_ALLOW_UNSIGNED=true` is an explicit non-production test escape hatch only and cannot enable unsigned production delivery. Rotate the provider and application secret together so they never drift.
+
+## Production checklist
+
+- The Convinced widget backend has a random 32-byte-or-longer `WIDGET_SESSION_WRITE_SECRET` (or the existing `WIDGET_HOST_TOOL_SECRET` fallback). Session creation intentionally fails closed when neither secret is configured.
+- Private ElevenLabs agents receive only a short-lived signed URL or token.
+- Production has an `ELEVENLABS_WEBHOOK_SECRET` that exactly matches the active ElevenLabs HMAC webhook endpoint. Missing configuration intentionally returns `503`; `ELEVENLABS_WEBHOOK_ALLOW_UNSIGNED` is for explicit non-production testing only and has no effect in production.
+- Production has both `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Paid voice issuance atomically checks shared session, IP, and organization quotas and fails closed if the limiter is unavailable; the in-process counter remains a second local defense.
+- Microphone access starts from an intentional visitor gesture.
+- Every ElevenLabs client-tool name and schema matches the bound SDK callback.
+- **Wait for response** is enabled when the agent needs the action result.
+- DOM and MCP tool lists are explicit and small.
+- Navigation is allowlisted and non-unloading.
+- Mutation and navigation requests have visible consent where appropriate.
+- Page context and tool results contain no form values or secrets.
+- Demo requests require the signed session capability, link identity atomically, return opaque correlation only, accept only exact same-session retries, and reject changed replacement identity with `409`.
+- Webhook delivery is HTTPS-only, HMAC-signed, public-address pinned, redirect-free, time-bounded, and payload-free in logs.
+- Campaign API and KB MCP keys stay on trusted infrastructure.
+- Voice, chat, media, identity, tool failures, and session teardown are tested in a real browser.

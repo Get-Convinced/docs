@@ -1,0 +1,85 @@
+---
+title: 'Build with a coding agent'
+description: 'Give your coding agent one reviewed prompt for a secure, voice-first Convinced widget implementation.'
+icon: 'wand-magic-sparkles'
+---
+
+Use the SDK's plain-text build prompt when an AI coding agent is implementing your widget. It covers the complete iframe-free path: ElevenLabs voice, chat fallback, campaigns, progressive identity, session history, PostHog, page tools, MCP, slides, video, custom themes, consent, security, and testing.
+
+<CardGroup cols={2}>
+  <Card title="Open the agent build prompt" icon="file-lines" href="https://raw.githubusercontent.com/Get-Convinced/convinced-widget-sdk/main/AGENT_BUILD_PROMPT.txt">
+    Open the plain-text file, then copy its entire contents into your coding agent.
+  </Card>
+  <Card title="View the SDK repository" icon="github" href="https://github.com/Get-Convinced/convinced-widget-sdk">
+    Review the package source, examples, tests, and release notes.
+  </Card>
+</CardGroup>
+
+## Use the prompt
+
+1. Open your web application in the coding agent's workspace.
+2. Open [`AGENT_BUILD_PROMPT.txt`](https://raw.githubusercontent.com/Get-Convinced/convinced-widget-sdk/main/AGENT_BUILD_PROMPT.txt).
+3. Copy and paste the entire file into the agent.
+4. Replace the placeholders you know, especially `<CONVINCED_ORG_SLUG>`, the desired presentation, router, allowed routes, brand reference, and test commands.
+5. Leave unknown placeholders unchanged. Ask the agent to inspect the application first and request only values that block implementation.
+
+<Warning>
+  Do not paste ElevenLabs API keys, PostHog personal API keys, MCP bearer tokens, Convinced partner keys, database credentials, or personal data into the prompt. The browser should receive only public configuration and short-lived session credentials.
+</Warning>
+
+The prompt tells the agent to install the public package:
+
+```bash
+npm install @convinced/widget-sdk
+```
+
+It also tells the agent to use the repository's existing package manager, framework, router, design system, consent flow, analytics setup, and test tools.
+
+## Choose the presentation before you start
+
+Use `managed-v2` when you want the SDK's functional default composition with custom brand tokens. Choose `headless` when your application must own every element and interaction.
+
+| Choice | Best for | You still configure |
+| --- | --- | --- |
+| `managed-v2` | Fast voice-first launch with campaign, identity, chat, and media surfaces included | Brand tokens, placement, voice credentials, host tools, consent, and analytics |
+| `headless` | Novel themes, product-native layouts, staged identity, custom accessibility, or full-screen experiences | Every visible state and interaction, plus voice credentials, tools, consent, analytics, and teardown |
+
+The SDK is not a pixel-for-pixel port of every historical hosted launcher. Use the [managed iframe](/guides/widget-sdk/managed-iframe) when exact hosted presentation is required.
+
+The managed identity policy uses one email-required form. Choose a headless identity surface for a truly staged company, then name/email, then phone experience.
+
+## Give the agent the right access
+
+The coding agent should have access to:
+
+- The host application's source and existing design system.
+- Its router and route definitions.
+- Its consent and privacy requirements.
+- Its unit and browser-test setup.
+- A non-production Convinced organization or campaign for acceptance testing.
+- An approved private ElevenLabs agent for the final microphone test.
+
+Keep production secrets in backend environment variables. When an external credential or dashboard check is unavailable, the agent should report that test as blocked instead of replacing it with a mock and claiming completion.
+
+## Require evidence before launch
+
+The prompt requires both automated checks and real-browser evidence. Final acceptance includes recognized microphone speech, audible ElevenLabs output, campaign personalization, SPA navigation, scroll and highlight, allowed and denied tools, slides/video, progressive identity, durable session history, PostHog ingestion and queryability, the matching Convinced dashboard session, and security fallbacks.
+
+An ElevenLabs text simulation does not prove microphone input, synthesized audio, DOM execution, PostHog delivery, or durable Convinced history. Use the [real-browser testing guide](/guides/widget-sdk/analytics-and-testing) for the complete acceptance path.
+
+## Continue with the implementation guides
+
+<CardGroup cols={2}>
+  <Card title="Voice-first quickstart" icon="microphone-lines" href="/guides/widget-sdk/quickstart">
+    Install the package and create the shared campaign, voice, chat, and tool clients.
+  </Card>
+  <Card title="Custom UI and themes" icon="paintbrush" href="/guides/widget-sdk/custom-ui">
+    Choose managed-v2, minimal, or a fully headless renderer.
+  </Card>
+  <Card title="Host tools and MCP" icon="screwdriver-wrench" href="/guides/widget-sdk/host-tools">
+    Add bounded SPA navigation, page context, scrolling, highlighting, and application tools.
+  </Card>
+  <Card title="Widget security" icon="shield-halved" href="/guides/widget-sdk/security">
+    Review credentials, authorization, consent, PII, replay, and production checks.
+  </Card>
+</CardGroup>

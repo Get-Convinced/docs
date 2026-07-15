@@ -223,6 +223,43 @@ This walkthrough takes you from "I have a partner API key" to "the visitor sees 
         ```
       </Tab>
 
+      <Tab title="JavaScript SDK — voice first">
+        Use the SDK when ElevenLabs voice is the primary path and your page needs a custom theme, headless UI, identity policy, media, or host tools.
+
+        ```ts
+        import {
+          ConvincedClient,
+          ConvincedVoiceController,
+          mountConvincedWidget,
+        } from '@convinced/widget-sdk'
+
+        const client = new ConvincedClient({ orgSlug: '<org-slug>' })
+
+        await client.initialize({
+          session: { c: 'acme-logistics' },
+        })
+
+        const voice = new ConvincedVoiceController({
+          descriptor: {
+            agentId: '<public-elevenlabs-agent-id>',
+            genericClientTool: false,
+          },
+          tools: client.tools,
+          orgSlug: client.orgSlug,
+          sessionId: () => client.state.session?.sessionId ?? null,
+          onConversationId: (id) => client.linkElevenLabsConversation(id),
+        })
+
+        mountConvincedWidget({
+          client,
+          voice,
+          preset: 'managed-v2',
+        })
+        ```
+
+        Install the public `@convinced/widget-sdk` package. Follow the [voice-first SDK quickstart](/guides/widget-sdk/quickstart) for setup, private-agent credentials, and tool configuration.
+      </Tab>
+
       <Tab title="Hosted full-page">
         No embed needed. Send the visitor straight to Convinced — best for cold outbound where you don't have a landing page yet.
 
@@ -258,7 +295,10 @@ Read [auto-enrich mode](/guides/campaigns/auto-enrich) for the full pipeline and
     Skip the wait — push fully-formed intel directly from your CRM.
   </Card>
   <Card title="Widget embedding" icon="code-pull-request" href="/guides/campaigns/widget-embedding">
-    Loader script, pretty URLs, and hosted-widget options in detail.
+    Compare the iframe loader, pretty URLs, hosted widget, and JavaScript SDK.
+  </Card>
+  <Card title="Widget SDK" icon="code" href="/guides/widget-sdk/quickstart">
+    Build a voice-first browser experience with the supplied or headless interface.
   </Card>
   <Card title="Full API reference" icon="code" href="/api-reference/introduction">
     Endpoint specs, request/response schemas, and error codes.

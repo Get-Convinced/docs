@@ -1,0 +1,178 @@
+---
+title: 'Campaign sessions in the SDK'
+description: 'Resolve target attribution, use personalized session fields, and keep voice and chat on the same campaign context.'
+icon: 'bullseye-arrow'
+---
+
+The SDK and managed loader use the same campaign session endpoint. A target token changes the session's opener, research context, suggested enquiries, proof, slides, videos, and talk track before either voice or chat begins.
+
+Only send traffic after the target reports `widgetReady: true`. See [Sending visitors to the widget](/guides/campaigns/widget-embedding#the-widgetready-gate).
+
+## Attribution precedence
+
+The first campaign-token source that contains a value wins:
+
+1. An explicit `c` passed to `browserSessionInput()` or `client.initialize()`; this is the SDK equivalent of loader `data-c`.
+2. The page's `?c=` query parameter.
+3. A `/for/<target-token>/` path segment.
+4. The page's `?utm_campaign=` value as a fallback.
+
+The token is normalized to lowercase letters, numbers, and hyphens, repeated hyphens are collapsed, and the result is limited to 64 characters.
+
+Personalized-link IDs have their own precedence:
+
+1. An explicit `pid`.
+2. `?pid=`.
+3. `?cid=` as a backwards-compatible alias.
+
+When both a valid personalized-link ID and campaign token are sent, the more specific personalized-link record supplies the session personalization.
+
+The SDK also captures these five UTM fields when present:
+
+- `utm_source`
+- `utm_medium`
+- `utm_campaign`
+- `utm_content`
+- `utm_term`
+
+## Use the current browser URL
+
+`initialize()` reads the browser URL automatically:
+
+```ts
+const client = new ConvincedClient({ orgSlug: 'acme' })
+
+// On https://acme.com/for/northstar-logistics/
+//     ?utm_source=email&utm_medium=outbound
+await client.initialize()
+```
+
+Use `browserSessionInput()` when your router or application wants to make the inputs explicit:
+
+```ts
+import { browserSessionInput } from '@convinced/widget-sdk'
+
+await client.initialize({
+  session: browserSessionInput({
+    url: window.location.href,
+    c: accountTokenFromYourRouter,
+    pid: personalizedLinkId,
+    pageTitle: document.title,
+    referrer: document.referrer,
+  }),
+})
+```
+
+Use the pure resolver without creating a session:
+
+```ts
+import { resolveWidgetSessionAttribution } from '@convinced/widget-sdk'
+
+const attribution = resolveWidgetSessionAttribution(
+  'https://acme.com/demo?c=northstar&utm_source=email&cid=link_123',
+)
+
+// {
+//   c: 'northstar',
+//   pid: 'link_123',
+//   utmData: { utm_source: 'email' }
+// }
+```
+
+## Read the personalized session
+
+After initialization, inspect `client.state.session`:
+
+```ts
+const session = client.state.session
+if (!session) throw new Error('Session unavailable')
+
+console.log(session.personalization?.firstMessage)
+console.log(session.config.pillsConfig?.pills)
+console.log(session.recommendedSlides)
+console.log(session.recommendedVideos)
+```
+
+The session can contain:
+
+| Field | What it provides |
+| --- | --- |
+| `personalization.targetCompany` | Target account name |
+| `personalization.targetPerson`, `personalization.targetRole`, `personalization.targetIndustry` | Person and account context when available |
+| `personalization.agentMode` | The selected outreach mode, such as campaign or warm outreach |
+| `personalization.firstMessage` | Target-specific opener to render and pass as an ElevenLabs first-message override |
+| `personalization.promptAdditions` | Research intelligence added to the agent context |
+| `knowledgeKit` / `personalization.knowledgeKit` | Campaign or visitor knowledge pack |
+| `recommendedSlides` / `personalization.recommendedSlides` | Ranked proof slides for this target |
+| `personalization.talkTrack` | Suggested conversation path |
+| `personalization.challenges` | Researched target pains |
+| `personalization.caseStudies` | Pre-matched customer proof and its relevance |
+| `personalization.repNotes` | Optional rep-supplied context |
+| `recommendedVideos` | Ranked videos and optional timeline detail |
+| `returnVisitor` | Previous topics and last-session date when available |
+| `config.pillsConfig` | Opening enquiry pills and voice warmup settings |
+
+Campaign pills are generated from the target's researched pains, recent signals, and current stack. A successful generation returns up to five short labels with longer first-person prompts. Those pills replace static pill entries while preserving the rest of the organization's pill configuration. If generation fails, the session still loads and falls back to configured suggested questions.
+
+## Default preset behavior
+
+The SDK's `managed-v2` preset uses the session in this order:
+
+- Target-specific `personalization.firstMessage` first.
+- A configured return-visitor greeting when applicable.
+- The configured first message, welcome message, or greeting as a fallback.
+- Campaign pills before generic suggested questions.
+- The deployment's voice mode and `allowModeToggle` setting.
+
+```ts
+mountConvincedWidget({
+  client,
+  voice,
+  preset: 'managed-v2',
+})
+```
+
+A headless interface receives the same fields but decides how and when to render them.
+
+## Keep voice and chat aligned
+
+Chat requests automatically include the initialized session's knowledge kit, recommended slides, recommended videos, slide list, and slide metadata.
+
+For `managed-v2`, the widget builds the current campaign, knowledge, media, page, identity, transcript, and first-message context at the moment voice starts. A headless renderer calls the same adapter explicitly:
+
+```ts
+import { buildManagedVoiceStartContext } from '@convinced/widget-sdk'
+
+await voice.start(buildManagedVoiceStartContext(client.state, {
+  pageUrl: window.location.href,
+  pageTitle: document.title,
+}))
+```
+
+The helper keeps payloads compact, applies the campaign first-message override, and marks campaign research, host-page observations, and transcript excerpts as untrusted data. Keep its variable names aligned with the ElevenLabs prompt. Descriptor-level variables remain available for client-specific values.
+
+## Track route and behavior changes
+
+```ts
+await client.updatePage({
+  url: window.location.href,
+  title: document.title,
+})
+
+await client.track('pricing_plan_opened', {
+  plan: 'enterprise',
+})
+```
+
+`updatePage()` records a `page_view` event. When voice is active, also call `voice.sendContextualUpdate()` so the live ElevenLabs conversation knows which route the visitor now sees.
+
+## Test the generic fallback
+
+Campaign testing should include both paths:
+
+1. A ready target that returns the expected opener, five or fewer campaign pills, proof, and media.
+2. A missing, inactive, pending, or failed target that creates a generic session without leaking another target's context.
+
+The repository's `examples/managed-parity` sample serves the printed `?c=lumen-expansion` URL as the ready campaign case. Open the same sample without `c` to exercise its generic inbound response; its smoke test asserts that no Lumen target context appears in that response.
+
+Use the [campaign API readiness check](/guides/campaigns/widget-embedding#the-widgetready-gate) before production traffic rather than treating the browser fallback as a readiness signal.

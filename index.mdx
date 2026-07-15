@@ -4,9 +4,9 @@ description: "Personalized B2B sales agent for your highest-intent accounts."
 icon: "star"
 ---
 
-Convinced is a personalized B2B sales widget. Partners push target-account intel through the campaign API, and the widget loads with `?c=<token>` to ground the conversation in that intel — opener, discovery questions, case studies, and competitive positioning all keyed off the account in front of it.
+Convinced is a personalized, voice-first B2B sales widget with chat as a fallback. Partners push target-account intel through the campaign API, and the widget loads with `?c=<token>` to ground the conversation in that intel — opener, discovery questions, case studies, and competitive positioning all keyed off the account in front of it.
 
-This site covers how to integrate the campaign API, what intel the agent uses, and how to embed the widget in your outbound flow.
+This site covers how to integrate the campaign API, what intel the agent uses, and how to add the managed widget or build a custom experience with the Widget SDK.
 
 ## Get started
 
@@ -34,6 +34,9 @@ This site covers how to integrate the campaign API, what intel the agent uses, a
   <Card title="API reference" icon="code" href="/api-reference/introduction">
     Endpoints, request/response shapes, and lifecycle states.
   </Card>
+  <Card title="Widget SDK" icon="code" href="/guides/widget-sdk/quickstart">
+    Lead with ElevenLabs voice, keep chat as fallback, or build a completely custom interface.
+  </Card>
 </CardGroup>
 
 ## What is campaign mode?
@@ -45,7 +48,7 @@ A **campaign** groups target companies under a stable slug. For each target you 
     Synchronous. Send a structured intel object, widget is ready immediately.
   </Card>
   <Card title="Embed the widget" icon="code-pull-request" href="/guides/campaigns/widget-embedding">
-    Loader script, pretty URLs, hosted widget — pick what fits your channel.
+    Compare the managed iframe, hosted widget, and JavaScript SDK.
   </Card>
 </CardGroup>
 

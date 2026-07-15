@@ -1,0 +1,284 @@
+---
+title: 'Default, themed, and headless UI'
+description: 'Use the managed-v2 preset, apply design tokens, or build a completely novel voice-first interface.'
+icon: 'paintbrush'
+---
+
+The SDK separates the Convinced session and ElevenLabs voice controller from presentation. You can use the supplied Shadow DOM renderer, customize its tokens, or skip it and render the full experience in your application.
+
+<Tip>
+  To have a coding agent build the integration in your application, copy [`AGENT_BUILD_PROMPT.txt`](https://raw.githubusercontent.com/Get-Convinced/convinced-widget-sdk/main/AGENT_BUILD_PROMPT.txt). The [coding-agent guide](/guides/widget-sdk/build-with-an-agent) explains which placeholders and access to provide.
+</Tip>
+
+## Choose a presentation level
+
+| Level | You own | The SDK supplies |
+| --- | --- | --- |
+| `preset: 'managed-v2'` | Brand tokens and optional identity wording | Campaign greeting and pills, deployment voice modes, identity gate, voice controls, chat fallback, transcript, media, welcome card, engagement offers, meeting CTA, and configured launcher treatments |
+| `preset: 'minimal'` | Identity timing and all managed marketing surfaces | The compact panel, session state, voice controls, chat, pills, and media; managed welcome, offer, meeting, callout, ticker, and theme treatments stay hidden |
+| Headless | Every DOM element and interaction | Typed session, chat, voice, media, lifecycle, and tool APIs |
+
+`managed-v2` is the default preset.
+
+```ts
+const widget = mountConvincedWidget({
+  client,
+  voice,
+  preset: 'managed-v2',
+  placement: 'floating',
+})
+```
+
+It uses the deployment's `voiceMode`, `allowModeToggle`, first-message configuration, return-visitor greeting, campaign pills, suggested questions, welcome card, engagement triggers, meeting CTA, launcher position and style, v2 theme, callout, ticker, colors, agent name, launcher label, and dark-mode flag.
+
+<Note>
+  The preset is a functional reconstruction, not a pixel-for-pixel port of every hosted launcher. Use the [managed iframe](/guides/widget-sdk/managed-iframe) when exact hosted visuals are a requirement.
+</Note>
+
+## Theme the supplied renderer
+
+```ts
+const widget = mountConvincedWidget({
+  client,
+  voice,
+  preset: 'managed-v2',
+  title: 'Talk to a product specialist',
+  launcherLabel: 'Open product guide',
+  theme: {
+    primary: '#0f766e',
+    onPrimary: '#ffffff',
+    accent: '#ffffff',
+    background: '#f0fdfa',
+    surface: '#ffffff',
+    text: '#134e4a',
+    muted: '#5f7471',
+    border: '#99f6e4',
+    radius: '14px',
+    fontFamily: 'system-ui, sans-serif',
+    width: '420px',
+    height: '680px',
+    zIndex: 1000,
+  },
+})
+```
+
+The renderer lives in an open Shadow DOM so host-page styles do not accidentally rewrite its internals. Theme keys map to variables on `widget.host`:
+
+| Theme key | CSS variable |
+| --- | --- |
+| `primary` | `--convinced-primary` |
+| `onPrimary` | `--convinced-on-primary` |
+| `accent` | `--convinced-accent` |
+| `background` | `--convinced-background` |
+| `surface` | `--convinced-surface` |
+| `text` | `--convinced-text` |
+| `muted` | `--convinced-muted` |
+| `border` | `--convinced-border` |
+| `radius` | `--convinced-radius` |
+| `fontFamily` | `--convinced-font-family` |
+| `width` | `--convinced-width` |
+| `height` | `--convinced-height` |
+| `zIndex` | `--convinced-z-index` |
+
+Use `onPrimary` for readable text and icons on `primary` controls. Keep `accent` for decorative highlights, voice state, and secondary brand color; do not assume two neighboring brand colors have sufficient text contrast.
+
+Update tokens after mount when your site changes theme:
+
+```ts
+widget.host.style.setProperty('--convinced-primary', '#2563eb')
+widget.host.style.setProperty('--convinced-background', '#0b1020')
+widget.host.style.setProperty('--convinced-text', '#f8fafc')
+```
+
+The host exposes current mode and deployment decisions through data attributes such as `data-mode`, `data-voice-mode`, `data-launcher-style`, `data-widget-theme`, and `data-dark`. The supplied CSS applies their functional treatments; your application can inspect them for diagnostics and host-level layout decisions.
+
+## Use managed marketing surfaces
+
+`managed-v2` renders the functional deployment surfaces returned in `WidgetConfig`:
+
+| Configuration | Supplied behavior |
+| --- | --- |
+| `pillsConfig.welcomeCard` | Bounded tagline, up to four stats, up to eight safe customer logos, optional background, and CTA before the first chat or voice message |
+| `engagementTriggers.emailCapture` | A rules-owned email enquiry after the configured number of completed assistant turns |
+| `engagementTriggers.resourceOffer` | A rules-owned offer that sends its configured prompt into the active voice or chat channel |
+| `engagementTriggers.meetingCta` | A rules-owned meeting action; it opens the safe HTTP(S) URL when configured or the in-widget demo-request form otherwise |
+| `meetingCtaText` / `meetingCtaUrl` | A safe persistent meeting link when configured; `show_book_demo_cta` falls back to the durable in-widget request form when the URL is absent |
+| `launcherStyle`, `launcherPosition`, `v2Theme` | Functional launcher and panel treatments for the configured preset |
+| `launcherCallout`, `launcherCalloutEnabled`, `launcherPulseEnabled` | Configured callout and pulse treatment |
+| `tickerColor`, `tickerLines`, `tickerLuxStyle`, `tickerBarEnabled`, `tickerIntroEnabled` | Configured ticker copy and presentation |
+
+Engagement mode `rules` or `both` renders the deterministic surface. Mode `ai_decides` remains agent-owned so the browser does not turn an adaptive enquiry into a fixed timer. Unsafe, credential-bearing, or non-HTTP(S) meeting and logo URLs are not rendered. Motion-heavy treatments honor `prefers-reduced-motion`.
+
+Headless interfaces can own the complete fallback handoff:
+
+```ts
+client.reportDemoRequestOpened('pricing_page')
+
+const request = await client.submitDemoRequest({
+  name: 'Priya Rao',
+  email: 'priya@acme.example',
+  phone: '+91 90000 00000',
+  company: 'Acme',
+  context: 'Interested in an enterprise rollout',
+})
+
+console.log(request.requestId, request.visitorId, request.alreadySubmitted)
+```
+
+The backend stores the request, links the session to the organization-scoped visitor, and creates its audit event in one transaction. It returns opaque `requestId` and `visitorId` values. An exact signed backend retry—after normalization, every submitted field is unchanged—returns the original correlation with `alreadySubmitted: true` instead of creating a second lead. Within one SDK client, identical concurrent and completed calls are coalesced onto the first response, so they do not create another network mutation.
+
+The first accepted request emits `identity` before the successful `demo_request` event, so the current UI, voice gate, and consented PostHog bridge see the linked identity immediately. An idempotent replay returns correlation only; it does not apply the retry's form values to SDK identity or PostHog. A second same-session submission whose name, email, phone, company, or context differs is rejected with `409 demo_request_conflict`. Do not treat that conflict as a new identity, call `identify()` with the replacement values, or relabel the existing lead—start a new Convinced session when a different person needs to submit.
+
+The SDK also supports an older backend that does not return `visitorId` by calling the canonical identity endpoint before reporting a first accepted request as successful. Keep the form values and retry action visible when submission or identity synchronization fails.
+
+<Note>
+  This fallback creates a request for team follow-up; it does not reserve a calendar time. Configure `meetingCtaUrl` when the CTA should open a real scheduler.
+</Note>
+
+## Mount inline
+
+```html
+<div id="sales-guide"></div>
+```
+
+```ts
+mountConvincedWidget({
+  client,
+  voice,
+  target: '#sales-guide',
+  placement: 'inline',
+  preset: 'managed-v2',
+})
+```
+
+Run the mount after the target exists. Inline mode renders a region instead of a floating dialog and requires an explicit target.
+
+## Control the supplied widget
+
+```ts
+widget.open()
+widget.close()
+widget.toggle()
+widget.setMode('voice')
+await widget.startVoice()
+await widget.endVoice()
+await widget.endSession()
+```
+
+`setMode('voice')` still enforces the configured voice mode and warmup count. `smart_gate` and `email_gate` enforce their managed identity requirement; `always_voice` and `voice_only` connect first and collect identity in the conversation. `voice_only` prevents switching to the separate chat channel.
+
+`endVoice()` only stops the current ElevenLabs transport. Use the awaited `endSession()` boundary when the buyer is finished: the managed renderer also persists its merged chat/voice transcript, linked conversation IDs, captured identity, and exact shown slide filenames.
+
+## Build a novel headless interface
+
+Do not call `mountConvincedWidget()` when your application owns the renderer. Subscribe to the chat client and voice controller independently:
+
+```ts
+const stopClient = client.on('state', (state) => {
+  renderChatMessages(state.messages)
+  renderCampaignPills(state.config?.pillsConfig?.pills ?? [])
+  renderIdentity(state.identity)
+  setChatBusy(['initializing', 'streaming', 'paused'].includes(state.status))
+})
+
+const stopVoiceState = voice.subscribe((state) => {
+  renderVoiceState({
+    status: state.status,
+    mode: state.mode,
+    muted: state.muted,
+    pushToTalkActive: state.pushToTalkActive,
+  })
+})
+
+const stopVoiceMessages = voice.on('message', ({ source, message }) => {
+  renderVoiceTranscript(source, message)
+})
+
+await client.initialize()
+
+voiceButton.addEventListener('click', async () => {
+  await client.markVoiceUpgrade(
+    client.state.messages.map(({ role, text: content }) => ({ role, content })),
+  )
+  await voice.start()
+})
+
+chatForm.addEventListener('submit', async (event) => {
+  event.preventDefault()
+  await client.sendMessage(composer.value)
+})
+```
+
+This is the path for novel themes, product-native layouts, avatar animation, full-screen demos, custom accessibility behavior, or a client-specific identity enquiry.
+
+## Render campaign greeting and pills
+
+The headless client returns all inputs the default preset uses:
+
+```ts
+const session = client.state.session
+const config = client.state.config
+
+const greeting =
+  session?.personalization?.firstMessage ||
+  (session?.returnVisitor ? config?.returnVisitorGreeting : '') ||
+  config?.firstMessageText ||
+  config?.welcomeMessage ||
+  config?.greetingMessage
+
+const campaignPills = config?.pillsConfig?.enabled
+  ? [...config.pillsConfig.pills].sort((a, b) => a.order - b.order)
+  : []
+```
+
+When a visitor presses a pill, send its `prompt`, not its short `label`:
+
+```ts
+pillButton.addEventListener('click', () => {
+  void client.sendMessage(pill.prompt)
+})
+```
+
+Headless interfaces receive the same configuration fields and can replace any supplied surface while keeping the same session, voice, campaign, and lifecycle clients.
+
+## Own identity timing
+
+The default renderer accepts an `identityPolicy`:
+
+```ts
+mountConvincedWidget({
+  client,
+  voice,
+  identityPolicy: ({ state, assistantMessages }) => {
+    if (state.identity || assistantMessages < 2) return false
+
+    return {
+      title: 'Get your tailored rollout plan',
+      description: 'Where should we send it?',
+      submitLabel: 'Send my plan',
+      fields: ['email', 'name', 'company', 'role'],
+    }
+  },
+})
+```
+
+Headless interfaces listen for `profile_gate` on the client's `activity` event and call `client.captureIdentity()` from their own form. See [Identity and voice modes](/guides/widget-sdk/identity).
+
+## Clean up one owner
+
+Choose one component to own teardown:
+
+```ts
+stopClient()
+stopVoiceState()
+stopVoiceMessages()
+
+await widget.endSession()
+client.destroy()
+```
+
+For a mounted interface, `widget.endSession()` is the complete public teardown: it ends the attached ElevenLabs conversation, merges the SDK chat and voice transcript in time order, includes the exact slide filenames shown by the renderer, and persists the result to the current Convinced session. It de-duplicates matching transcript rows and applies the session history limits before sending.
+
+In a headless interface, collect voice `message` events and shown slide filenames yourself, then pass them as `clientMessages` and `slidesViewed` to `client.endSession()`. The client-only default contains SDK chat messages; it cannot infer which custom voice transcript rows or media your renderer displayed.
+
+`widget.destroy()` removes the supplied interface and unsubscribes its listeners. When a voice controller is attached, it also attempts to end voice and persist the same merged history. Explicitly awaiting `widget.endSession()` is easier to observe and retry when delivery matters.

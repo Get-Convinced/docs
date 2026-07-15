@@ -5,7 +5,7 @@
   "colors": {
     "primary": "#7C3AED",
     "light": "#A78BFA",
-    "dark": "#5B21B6"
+    "dark": "#9F7AEA"
   },
   "favicon": "/favicon.svg",
   "navigation": {
@@ -29,6 +29,24 @@
               "guides/campaigns/auto-enrich",
               "guides/campaigns/intel-schema",
               "guides/campaigns/widget-embedding"
+            ]
+          },
+          {
+            "group": "Widget SDK",
+            "pages": [
+              "guides/widget-sdk/quickstart",
+              "guides/widget-sdk/build-with-an-agent",
+              "guides/widget-sdk/voice",
+              "guides/widget-sdk/campaigns",
+              "guides/widget-sdk/managed-iframe",
+              "guides/widget-sdk/custom-ui",
+              "guides/widget-sdk/identity",
+              "guides/widget-sdk/media",
+              "guides/widget-sdk/host-tools",
+              "guides/widget-sdk/events",
+              "guides/widget-sdk/analytics-and-testing",
+              "guides/widget-sdk/security",
+              "guides/widget-sdk/migration"
             ]
           },
           {

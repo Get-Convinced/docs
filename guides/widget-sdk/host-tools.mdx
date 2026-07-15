@@ -1,0 +1,234 @@
+---
+title: 'Host tools and MCP'
+description: 'Let ElevenLabs voice and chat navigate an SPA, inspect the page, or call a bounded application or MCP tool.'
+icon: 'screwdriver-wrench'
+---
+
+Host tools are explicit capabilities that run in the page containing the SDK. They let the agent observe or act, return a structured result, and continue the same voice or chat turn.
+
+Use one `ClientToolRegistry` for both channels. The Convinced runtime remains the owner of conversation behavior; your page remains the owner of DOM access, application state, consent, and MCP connectivity.
+
+<Warning>
+  Never expose arbitrary JavaScript evaluation, unrestricted DOM access, a generic authenticated fetch proxy, or privileged credentials as a browser tool.
+</Warning>
+
+## Register the supplied DOM tools
+
+Every DOM capability is off by default:
+
+```ts
+import {
+  ClientToolRegistry,
+  ConvincedClient,
+  registerDomTools,
+} from '@convinced/widget-sdk'
+
+const tools = new ClientToolRegistry()
+
+const removeDomTools = registerDomTools(tools, {
+  capabilities: {
+    pageContext: true,
+    navigate: true,
+    scroll: true,
+    highlight: true,
+  },
+  allowedNavigationOrigins: ['https://checkout.acme.com'],
+
+  // Required for host_navigate. This callback must not unload the page.
+  navigate: (url) => appRouter.navigate(url),
+
+  authorize: ({ action, target }) => {
+    if (action === 'pageContext') return true
+    return window.confirm(`Allow ${action}${target ? `: ${target}` : ''}?`)
+  },
+  highlightColor: '#ff5c35',
+})
+
+const client = new ConvincedClient({
+  orgSlug: 'acme',
+  tools,
+  authorizeToolCall: ({ tool }) => {
+    if (tool.effect === 'read') return true
+    return window.confirm(`Allow ${tool.description}?`)
+  },
+})
+```
+
+| SDK tool | Effect | Consent | Boundary |
+| --- | --- | --- | --- |
+| `host_get_page_context` | `read` | `session` | Compact visible-page summary; excludes form values and editable or executable nodes |
+| `host_navigate` | `navigate` | `per_call` | Explicit non-unloading SPA callback; current origin plus exact allowed origins; HTTP(S) only |
+| `host_scroll_to` | `mutate` | `per_call` | One safe selector |
+| `host_highlight` | `mutate` | `per_call` | One safe selector; temporary style restored after 500 ms to 10 seconds |
+
+The helper rejects broad, executable, or invalid selectors. Add `selectorValidator` when your application needs a smaller allowlist.
+
+Call `removeDomTools()` when the current page no longer offers those capabilities.
+
+## Bind the tools to ElevenLabs voice
+
+The name on the left must exactly match the client tool configured on the ElevenLabs agent:
+
+```ts
+const voice = new ConvincedVoiceController({
+  descriptor: {
+    agentId: 'agent_123',
+    exactClientTools: {
+      host_navigate: 'host_navigate',
+      host_get_page_context: 'host_get_page_context',
+      host_scroll_to: 'host_scroll_to',
+      host_highlight: 'host_highlight',
+    },
+    genericClientTool: { name: 'host_extension_call' },
+  },
+  tools,
+  orgSlug: client.orgSlug,
+  sessionId: () => client.state.session?.sessionId ?? null,
+  authorizeToolCall: ({ tool }) => {
+    if (tool.effect === 'read') return true
+    return window.confirm(`Allow voice to use ${tool.description}?`)
+  },
+})
+```
+
+Enable **Wait for response** on the ElevenLabs client tools. The agent then receives a success or failure result after navigation, scrolling, highlighting, or application logic completes.
+
+## Keep SPA navigation alive
+
+`host_navigate` requires an explicit router callback because a full-page navigation would destroy the active SDK and prevent the tool result from returning.
+
+```ts
+navigate: async (url) => {
+  const target = new URL(url)
+  await router.push(`${target.pathname}${target.search}${target.hash}`)
+  await client.updatePage({ url: target.href, title: document.title })
+}
+```
+
+The helper allows the current origin. Add exact extra origins only when your SPA router can move there without unloading the SDK.
+
+If navigation happens outside the tool, keep the live voice session current:
+
+```ts
+router.onChange(({ url, title }) => {
+  void client.updatePage({ url, title })
+
+  if (voice.state.status === 'connected') {
+    voice.sendContextualUpdate(`Current page: ${title} (${url})`, 'current-page')
+  }
+})
+```
+
+## Define a custom application tool
+
+```ts
+import { HOST_TOOL_PROTOCOL_VERSION } from '@convinced/widget-sdk'
+
+const unregister = client.registerTool({
+  version: HOST_TOOL_PROTOCOL_VERSION,
+  name: 'host_open_pricing',
+  description: 'Open the pricing panel for one named plan.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      plan: {
+        type: 'string',
+        enum: ['starter', 'growth', 'enterprise'],
+      },
+    },
+    required: ['plan'],
+    additionalProperties: false,
+  },
+  locality: 'host',
+  effect: 'mutate',
+  consent: 'per_call',
+  timeoutMs: 2_000,
+  constraints: {
+    allowedPlans: ['starter', 'growth', 'enterprise'],
+  },
+  handler: async ({ plan }) => {
+    if (typeof plan !== 'string') throw new Error('Invalid plan')
+    openPricingPanel(plan)
+    return { opened: true, plan }
+  },
+})
+```
+
+Names must start with `host_` or `client_` and use lowercase letters, numbers, and underscores. Call `unregister()` when the action is no longer available.
+
+The registry validates the manifest, JSON Schema, arguments, declared effect and consent, timeout, and serialized result. Handler-level checks remain useful because they can enforce live application state that a static schema cannot express.
+
+## Use the generic voice gateway
+
+One ElevenLabs client tool named `host_extension_call` can dispatch to any bounded tool already registered for the session:
+
+```json
+{
+  "name": "host_open_pricing",
+  "arguments_json": "{\"plan\":\"enterprise\"}"
+}
+```
+
+The canonical ElevenLabs schema uses `arguments_json`, a JSON object encoded as a string. The SDK parser also tolerates an `arguments` object for existing custom configurations. The gateway still applies the target tool's schema, consent, and timeout. Unknown tool names fail with a structured result.
+
+Set `genericClientTool: false` when the agent does not define this gateway. Exact ElevenLabs bindings plus the gateway are capped at 16 callbacks.
+
+## Adapt an MCP client
+
+`createMcpTools()` converts tools from a caller-supplied MCP client into SDK registry entries. Your application must create, connect, and authenticate that client.
+
+```ts
+import { createMcpTools } from '@convinced/widget-sdk'
+
+const mcpTools = await createMcpTools(mcpClient, {
+  allow: ['find_product', 'check_inventory'],
+  policy: (tool) => ({
+    effect: tool.name === 'check_inventory' ? 'read' : 'mutate',
+    consent: tool.name === 'check_inventory' ? 'session' : 'per_call',
+    timeoutMs: 10_000,
+  }),
+})
+
+client.tools.registerMany(mcpTools)
+```
+
+Adapted names use the `client_mcp_` prefix by default. An explicit `allow` list or predicate is required. If you omit `policy`, the adapter uses `effect: 'mutate'` and `consent: 'per_call'` because MCP discovery does not provide a trustworthy read/write classification.
+
+An ElevenLabs agent can reach an adapted tool through `host_extension_call`:
+
+```json
+{
+  "name": "client_mcp_check_inventory",
+  "arguments_json": "{\"sku\":\"A-42\"}"
+}
+```
+
+<Warning>
+  The adapter does not create an MCP transport and never accepts credentials. Keep MCP bearer tokens on your backend, or use an OAuth flow designed for a public browser client. The [Convinced KB MCP server](/guides/mcp/overview) is a separate credentialed surface; never put its partner key in widget code.
+</Warning>
+
+## Chat continuation
+
+For SDK chat, the client advertises the registry manifest with the turn. When the runtime requests a tool, it pauses the stream with an opaque signed capability. The SDK executes the approved handlers, returns their results with the capability unchanged, and resumes the same turn.
+
+Do not persist, inspect, construct, or replay that capability. If a resume was claimed and its network response is lost, start a new chat turn instead of retrying the mutation.
+
+## Limits
+
+| Boundary | Limit |
+| --- | --- |
+| Registered client tools | 16 |
+| Calls in one continuation round | 16 |
+| Chat continuation rounds | 4 |
+| Total calls in one chat continuation chain | 64 |
+| Arguments | 16 KiB, depth 8 |
+| Result | 32 KiB, depth 8 |
+| Full manifest | 48 KiB |
+| Individual schema and constraints | 12 KiB, depth 8 |
+| Tool timeout | Up to 30 seconds |
+
+The supported schema subset includes primitive, object, and array types; properties and required fields; additional properties; enums and constants; uniform or tuple items; length, count, and numeric bounds; and `anyOf`, `oneOf`, and `allOf`. Unsupported keywords such as `$ref`, `format`, `pattern`, and custom annotations are rejected.
+
+## Managed iframe equivalent
+
+The managed loader has a separate cross-origin bridge for the same page-context, navigation, scroll, highlight, and extension actions. See [Managed iframe loader](/guides/widget-sdk/managed-iframe#enable-parent-page-tools).

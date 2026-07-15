@@ -1,0 +1,134 @@
+---
+title: 'Migration and capability matrix'
+description: 'Choose the managed iframe, the SDK default preset, or a headless renderer without losing campaign or voice behavior.'
+icon: 'arrow-right-arrow-left'
+---
+
+There are three supported presentation paths around the same Convinced conversation runtime:
+
+1. The hosted managed iframe for the exact current widget appearance and lowest maintenance.
+2. The SDK `managed-v2` preset for an iframe-free functional composition.
+3. The headless SDK for a completely custom voice-first experience.
+
+## Capability matrix
+
+| Capability | Managed iframe | SDK `managed-v2` preset | Headless SDK |
+| --- | --- | --- | --- |
+| ElevenLabs voice as primary path | Built in | Supply `ConvincedVoiceController`; preset renders voice, mute, push-to-talk, and transcript | Supply controller and render your own controls |
+| Chat fallback | Built in | Built in; recoverable audio-start failures retry as an ElevenLabs text-only conversation | `ConvincedClient.sendMessage()` |
+| Campaign and personalized-link attribution | Loader resolves it | `initialize()` / `browserSessionInput()` resolve the same precedence | Same client API |
+| Target-specific opener | Rendered and used for ElevenLabs | Rendered; pass it to ElevenLabs `overrides` | Field available on the session |
+| Campaign pills | Rendered | Rendered before generic questions | Data available on `config.pillsConfig` |
+| Knowledge, proof, slides, and videos in chat | Built in | Chat context and typed rendering built in | Chat context built in; renderer is yours |
+| Slides and videos in voice | Built-in managed client tools and voice context | Built-in managed media callbacks and automatic ranked-media context | Use `buildManagedVoiceStartContext()` and render the callback result yourself |
+| Voice modes and mode toggle | Full hosted flow | Honors `text_only`, `smart_gate`, `email_gate`, `always_voice`, `voice_only`, and `allowModeToggle` | Your UI enforces deployment policy |
+| Identity | Hosted profile and voice gates | Managed gated modes plus in-conversation voice-led identity tools and `identityPolicy` | `captureIdentity()`, `identify()`, and `profile_gate` events |
+| Meeting CTA, engagement offers, and welcome card | Built in | Built in; `rules` and `both` render deterministic offers while `ai_decides` stays agent-owned | Render from `meetingCta*`, `engagementTriggers`, and `pillsConfig.welcomeCard` |
+| SPA navigation, page context, scroll, highlight | Explicit `data-host-tools` parent bridge | Direct `registerDomTools()` registry | Same registry |
+| Custom page functions | `registerHostTool()` plus `host_extension_call` | Custom registry tools and generic gateway | Same registry |
+| MCP adapter | Expose one bounded parent extension or trusted backend action | `createMcpTools()` for a caller-managed client | Same adapter |
+| Lifecycle and analytics | `sendEvent()`, `setIdentity()`, open, and close | `track()`, `identify()`, `updatePage()`, voice linking, and `endSession()` | Same APIs |
+| Hosted launcher, callout, ticker, and theme variants | Exact source of truth | Functional config-driven style, position, v2 theme, callout, pulse, ticker bar, intro, and lux treatments | Unlimited custom presentation |
+| Mobile keyboard and hosted geometry behavior | Built in | Responsive supplied panel | Your application owns it |
+| Style isolation | Cross-origin iframe | Shadow DOM | Your application's styling model |
+| Availability today | Hosted production loader | Public `@convinced/widget-sdk` npm package | Public `@convinced/widget-sdk` npm package |
+
+## Can the original widget be built through the SDK?
+
+The SDK can reproduce the original widget's functional composition: campaign session, personalized greeting, pills, voice modes, identity gating, ElevenLabs voice, chat fallback, transcript, slides, videos, tools, lifecycle, welcome card, rules-owned engagement offers, meeting CTA, launcher callout, ticker, position, and theme presets. Its headless clients expose the same configuration for novel presentations.
+
+The supplied `managed-v2` preset intentionally leaves `ai_decides` enquiries to the agent runtime. It does not reproduce every historical launcher animation, mobile transition, and theme pixel for pixel. The managed iframe remains the exact visual reference. A client that needs a novel theme should use the SDK; a client that needs the exact hosted appearance should keep the iframe.
+
+The managed preset's automatic text-only recovery is limited to microphone, media-device, and voice-transport startup failures. Authentication, agent or token configuration, quota, concurrency, and capacity errors fail visibly and must be fixed before launch.
+
+## Map loader concepts to SDK APIs
+
+| Managed loader | SDK replacement |
+| --- | --- |
+| `data-org` | `new ConvincedClient({ orgSlug })` |
+| `data-token` | `widgetToken` client option |
+| `data-c` | `browserSessionInput({ c })` or `initialize({ session: { c } })` |
+| `data-pid` | `browserSessionInput({ pid })` |
+| `data-host-tools` | `registerDomTools()` capabilities |
+| `Convinced.openConvinced()` | `widget.open()` |
+| `Convinced.closeConvinced()` | `widget.close()` |
+| `Convinced.sendEvent()` | `client.sendEvent()` or `client.track()` |
+| `Convinced.setIdentity()` | `client.setIdentity()` or `client.identify()` |
+| `Convinced.setNavigationHandler()` | `registerDomTools({ navigate })` |
+| `Convinced.registerHostTool()` | `client.registerTool()` |
+| Hosted UI configuration | `preset`, `theme`, or a headless renderer |
+
+## Migrate an existing embed
+
+<Steps>
+  <Step title="Inventory the hosted deployment">
+    Record the organization slug, public embed token, campaign URLs, configured voice mode, first message, campaign pills, launcher, identity behavior, slides, videos, meeting CTA, return-visitor behavior, and any public loader calls.
+  </Step>
+  <Step title="Inventory the ElevenLabs contract">
+    Record the agent ID or private-session flow, prompt dynamic-variable names, exact client-tool names and schemas, first-message override, and which tools wait for a response. Do not assume SDK names automatically match an existing agent.
+  </Step>
+  <Step title="Create the SDK session first">
+    Initialize `ConvincedClient` from the same campaign URL and compare `session.personalization`, `config.pillsConfig`, recommended slides, and recommended videos with the managed session.
+  </Step>
+  <Step title="Create one shared tool registry">
+    Register only the page and application capabilities the current route needs. Pass the registry to both `ConvincedClient` and `ConvincedVoiceController`.
+  </Step>
+  <Step title="Confirm the voice context contract">
+    The `managed-v2` preset automatically passes session, campaign, knowledge, page, identity, transcript, and ranked-media context. A headless renderer calls `buildManagedVoiceStartContext()` explicitly. Map exact page/application tool names and enable the generic extension gateway only when it exists on the agent.
+  </Step>
+  <Step title="Choose the renderer">
+    Start with `preset: 'managed-v2'` to compare behavior. Move to headless only for visual or interaction requirements the preset does not cover.
+  </Step>
+  <Step title="Link and close the session">
+    Call `linkElevenLabsConversation()` from `onConversationId`, track SPA route changes, and await `voice.end()` plus `client.endSession()` from a reliable teardown path.
+  </Step>
+  <Step title="Run parity tests">
+    Test campaign and generic sessions, each configured voice mode, chat fallback, real microphone and audio, exact ElevenLabs tool callbacks, SPA navigation, scroll, highlight, identity, slides, videos, welcome card, engagement modes, meeting CTA, configured launcher treatments, reconnect or second voice session, lifecycle events, and mobile layouts.
+  </Step>
+</Steps>
+
+## Run both paths during rollout
+
+Keep the iframe integration available behind a reversible application flag while validating the SDK:
+
+```ts
+if (flags.useSdkWidget) {
+  mountSdkWidget()
+} else {
+  loadManagedWidgetScript()
+}
+```
+
+Do not mount both for the same visitor session. They would create separate browser runtimes and could duplicate greetings, analytics, identity enquiries, or ElevenLabs conversations.
+
+## Browser script migration
+
+Sites without a bundler can self-host the built IIFE or use the exact versioned CDN asset with Subresource Integrity:
+
+```html
+<script
+  src="https://cdn.jsdelivr.net/npm/@convinced/widget-sdk@0.1.0/dist/convinced-widget.global.js"
+  integrity="sha384-g8AYpyuu5oqMRGjIrOtLRdzIcRBENgwn+mwfJ6gTyzZFIrUIEwUa+J0YunulT8VS"
+  crossorigin="anonymous"
+></script>
+<script>
+  const SDK = window.ConvincedWidgetSDK
+  const client = new SDK.ConvincedClient({ orgSlug: 'acme' })
+
+  // Construct voice after client.initialize(), then pass both into the mount.
+</script>
+```
+
+Pin the deployed asset to a reviewed package version. Recalculate the SRI value whenever you upgrade; never fetch an unversioned development build in production.
+
+## Evidence to keep before removing the iframe
+
+- One successful ready-target campaign session and one generic fallback session.
+- A real ElevenLabs conversation ID linked to the Convinced session.
+- Browser evidence that a voice tool changed an SPA route without reload.
+- Browser evidence for scroll and temporary highlight on stable selectors.
+- Voice and chat proof that target-specific opener, pills, knowledge, and media are present.
+- Configured welcome card, deterministic engagement offers, safe meeting link, callout, ticker, position, and theme treatment.
+- Identity success and failure paths for every configured voice mode.
+- Desktop and mobile screenshots at the breakpoints your site supports.
+- A test trace for tool name, arguments, authorization, result, and final agent response.

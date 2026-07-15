@@ -1,0 +1,247 @@
+---
+title: 'Lifecycle, events, and analytics'
+description: 'Observe voice and chat, track page behavior, link ElevenLabs conversations, and close sessions cleanly.'
+icon: 'bolt'
+---
+
+The SDK exposes two event sources:
+
+- `ConvincedClient` for session, campaign, chat, media, identity, and chat-tool state.
+- `ConvincedVoiceController` for ElevenLabs connection, turn mode, transcript, and voice-tool state.
+
+Both support `on()`, `once()`, and `off()`. `on()` and `once()` return an unsubscribe function.
+
+## Chat and session events
+
+```ts
+const stopDelta = client.on('message_delta', ({ messageId, delta, text }) => {
+  updateStreamingMessage(messageId, text)
+})
+
+const stopError = client.on('error', (error) => {
+  showError(error.message)
+})
+
+// Run when the owning component unmounts.
+stopDelta()
+stopError()
+```
+
+| Client event | Payload | Use it for |
+| --- | --- | --- |
+| `state` | Complete `ConvincedClientState` snapshot | One-store rendering and lifecycle UI |
+| `ready` | Initialized state snapshot | Enable controls or create the voice controller |
+| `message` | Completed `ChatMessage` | Add a visitor or assistant message |
+| `message_delta` | `{ messageId, delta, text }` | Render streaming assistant text |
+| `content` | `{ messageId, content }` | Render parsed text, slide, and video parts |
+| `activity` | Activity or `profile_gate` event | Show progress and identity states |
+| `client_tool_call` | Requested chat host-tool call | Audit which page capability chat requested |
+| `client_tool_pause` | Turn ID and signed capability | Advanced diagnostics; the SDK resumes automatically |
+| `client_tool_result` | Structured chat tool result | Record success or failure |
+| `identity` | Submitted identity and server response | Confirm capture and update application state |
+| `demo_request` | Privacy-safe `opened`, `submitted`, or `failed` lifecycle | Render handoff, retry, and correlation states without exposing form values |
+| `raw_event` | Raw SSE event | Diagnostics and forward-compatible instrumentation |
+| `error` | `Error` | Show a retry state and report failures |
+
+The client status is:
+
+```ts
+type ClientStatus =
+  | 'idle'
+  | 'initializing'
+  | 'ready'
+  | 'streaming'
+  | 'paused'
+  | 'error'
+  | 'destroyed'
+```
+
+`paused` means a chat host-tool continuation is active. Do not start a second chat turn until the client returns to `ready`.
+
+## Voice events
+
+```ts
+const stopVoice = voice.subscribe((state) => {
+  renderVoiceStatus(state.status)
+  renderTurnMode(state.mode) // listening or speaking
+  renderMuted(state.muted)
+})
+
+const stopTranscript = voice.on('message', ({ source, message }) => {
+  appendTranscript(source, message)
+})
+
+const stopTools = voice.on('client_tool_result', ({
+  elevenLabsToolName,
+  registryToolName,
+  result,
+}) => {
+  recordVoiceTool({ elevenLabsToolName, registryToolName, result })
+})
+```
+
+| Voice event | Payload | Use it for |
+| --- | --- | --- |
+| `state` | `ConvincedVoiceState` | Connection, listening/speaking mode, mute, push-to-talk, conversation ID, and error |
+| `message` | ElevenLabs user or agent message | Render the live transcript |
+| `client_tool_call` | ElevenLabs and registry names plus arguments | Audit the requested voice action |
+| `client_tool_result` | Tool request and `ClientToolResult` | Verify the page or MCP action completed |
+| `error` | `Error` | Recover from a failed ElevenLabs session |
+
+`subscribe()` is a convenience for voice state. It immediately receives the current snapshot and then listens for changes.
+
+## Identify a known visitor
+
+```ts
+await client.identify({
+  email: currentUser.email,
+  name: currentUser.name,
+  company: currentAccount.name,
+  role: currentUser.role,
+})
+```
+
+Aliases that match the managed loader are also available:
+
+```ts
+await client.setIdentity({ company: currentAccount.name })
+```
+
+`setIdentity()` stores session context without forcing the durable email-capture endpoint. See [Identity and voice modes](/guides/widget-sdk/identity).
+
+## Observe a demo-request handoff
+
+```ts
+const stopDemoRequests = client.on('demo_request', (event) => {
+  if (event.status === 'opened') {
+    showDemoForm()
+    return
+  }
+
+  if (event.status === 'submitted') {
+    showRequestReceived({
+      requestId: event.requestId,
+      alreadySubmitted: event.alreadySubmitted,
+    })
+    return
+  }
+
+  showDemoRetry({ stage: event.stage, code: event.errorCode })
+})
+
+client.reportDemoRequestOpened('custom_pricing_page')
+await client.submitDemoRequest({ name, email, company, phone, context })
+```
+
+The lifecycle payload contains booleans, opaque correlation values, and safe error codes. It never contains the submitted name, email, phone, company, or context. A first accepted call updates `client.state.identity` and emits `identity` before `demo_request` reports `submitted`. An already-submitted replay reports the original opaque correlation without applying the retry's form values to SDK identity or analytics.
+
+The signed Convinced behavior history uses `demo_request_opened`, `demo_request_submitted`, and `demo_request_failed`. The accepted backend handoff remains the source of truth: visitor linkage, the stored request, and its durable audit event commit together. Identical concurrent calls are coalesced in the SDK, and an exact same-session backend retry returns the original request. A retry with changed name, email, phone, company, or context receives `409 demo_request_conflict`; it must not relabel the lead that already owns that session.
+
+## Track behavior
+
+```ts
+await client.track('pricing_plan_opened', {
+  plan: 'enterprise',
+  source: 'comparison_table',
+})
+```
+
+Managed-loader-compatible aliases are available:
+
+```ts
+await client.sendEvent('pricing_plan_opened', { plan: 'enterprise' })
+await client.trackEvent('pricing_plan_opened', { plan: 'enterprise' })
+```
+
+Event names accept letters, numbers, dots, colons, underscores, and hyphens. Keep properties small and free of secrets or raw form values.
+
+The `managed-v2` renderer also records best-effort UI events through the same client: `widget_launcher_opened`, `widget_welcome_cta_clicked`, `widget_engagement_offer_clicked`, and `widget_meeting_cta_clicked`. Its fallback form reports the demo-request lifecycle above. An external calendar link remains a meeting CTA and does not emit fallback-form lifecycle events. A failed analytics sync never blocks the visitor's UI action.
+
+## Track SPA pages
+
+```ts
+router.onChange(async ({ url, title }) => {
+  await client.updatePage({ url, title })
+
+  if (voice.state.status === 'connected') {
+    voice.sendContextualUpdate(`Current page: ${title} (${url})`, 'current-page')
+  }
+})
+```
+
+`updatePage()` records a `page_view` event with the current URL, title, and referrer unless you override them.
+
+## Mark a chat-to-voice upgrade
+
+Before starting voice, persist the chat messages that led to the upgrade:
+
+```ts
+await client.markVoiceUpgrade(
+  client.state.messages.map(({ role, text: content }) => ({ role, content })),
+)
+
+await voice.start()
+```
+
+This marks the session as upgraded to voice and gives the backend a bounded copy of the chat path. Pass the same history to the ElevenLabs dynamic variables when the voice agent must continue it conversationally.
+
+## Link ElevenLabs conversations
+
+```ts
+const voice = new ConvincedVoiceController({
+  // ...descriptor, tools, and session options
+  onConversationId: (conversationId) => {
+    client.linkElevenLabsConversation(conversationId)
+  },
+})
+```
+
+The client keeps every linked ID for the current Convinced session. IDs reset when a new session is created.
+
+## End the session
+
+```ts
+await voice.end()
+
+await client.endSession({
+  // A headless UI supplies its merged chat/voice history and shown media.
+  clientMessages: mergedChatAndVoiceHistory,
+  slidesViewed: shownSlideFilenames,
+  email: client.state.identity?.email,
+})
+
+client.destroy()
+```
+
+`endSession()` sends:
+
+- The current Convinced session ID.
+- SDK chat messages by default, or your canonical chat/voice transcript when you provide `clientMessages`.
+- Exact shown slide filenames when you provide `slidesViewed`.
+- The latest and complete set of linked ElevenLabs conversation IDs.
+- Captured email, name, and company when available.
+
+Call it from an explicit close, completed conversation, route teardown, or another application path that can await the network request. `beforeunload` and `pagehide` cannot guarantee an async request finishes.
+
+For a mounted interface, call `await widget.endSession()`. It ends the attached voice controller and persists the time-ordered, de-duplicated SDK chat plus voice transcript together with the slides actually shown by the renderer. `destroy()` attempts the same work, but an explicit awaited teardown is easier to monitor and retry.
+
+A headless interface owns its voice transcript and media history. Pass those values explicitly to `client.endSession()`; calling the client alone cannot infer which voice rows or slides a custom renderer presented.
+
+## Direct context sync
+
+Most integrations use the higher-level methods above. `updateSessionContext()` is available when you already have a complete bounded snapshot:
+
+```ts
+await client.updateSessionContext({
+  events: [
+    { name: 'comparison_opened', props: { plan: 'enterprise' }, ts: Date.now() },
+  ],
+  identity: { company: 'Acme Logistics' },
+})
+```
+
+Do not use direct context updates as a second conversation brain. They are deterministic session and analytics data; adaptive response behavior remains in the Convinced runtime.
+
+## Rendering ownership
+
+Use `state` when your framework prefers immutable snapshots. Use granular message, content, and tool events for append-only or streaming updates. Pick one ownership pattern for each visual region so completed messages are not inserted twice.
