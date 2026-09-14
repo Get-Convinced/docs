@@ -1,17 +1,17 @@
 ---
 title: 'Client implementation handoff'
-description: 'Install the reviewed SDK, provision the backend and agent, and verify the website before rollout.'
+description: 'Use the published SDK and Convinced backend to build more pages, expose website actions, and manage your agent.'
 icon: 'clipboard-check'
 ---
 
-Use this guide as the implementation order for your engineering team. The handoff build is `@convinced/widget-sdk@0.1.1-webmcp.2`; WebMCP and prompt administration require this prerelease and the accompanying backend changes.
+Use this guide as the implementation order for your engineering team. The published SDK is `@convinced/widget-sdk@0.1.1-webmcp.2`, and the matching Convinced management API is deployed. Your team owns the website, its pages and its deployment. Reuse the SDK and hosted backend as you add pages.
 
 ## Production release: 14 September 2026
 
 - SDK: `@convinced/widget-sdk@0.1.1-webmcp.2` is published under `next`; stable `latest` remains `0.1.0`.
 - Convinced management API: deployed at `https://app.getconvinced.ai`. Enmovil's authenticated administrator read returned `200`; a no-op save returned `200` with both fields unchanged; a stale revision returned `409`. Unauthenticated access returned `401`.
 - Documentation: live at [convinced.mintlify.app](https://convinced.mintlify.app).
-- Enmovil website integration: prepared in [PR #50](https://github.com/ensomarketing/enmovil-website/pull/50), but not deployed. Its Vercel team must grant the Git author access before deployment can proceed.
+- Enmovil website integration: delivered in [PR #50](https://github.com/ensomarketing/enmovil-website/pull/50). The client team reviews, tests, merges and deploys this change using its own repository and Vercel access. The website is not deployed by the Convinced handoff.
 
 The production check preserved Enmovil's instructions and opener. Actual persisted changes were tested separately on temporary ElevenLabs agents. WebMCP remains experimental and opt-in; the four page-outcome failures below still need acceptance work.
 
@@ -21,7 +21,7 @@ The production check preserved Enmovil's instructions and opener. Actual persist
 | --- | --- |
 | Pinned npm version or SDK tarball, plus lockfile | Reproducible browser package: `@convinced/widget-sdk@0.1.1-webmcp.2` |
 | SDK source patch and base commit | Review or extend the browser integration |
-| Backend source patch and base commit | Install authenticated prompt GET/PATCH routes and the ElevenLabs adapter |
+| Backend source patch and base commit | Reference implementation of the already-deployed management API; no backend redeployment is needed for each new page |
 | Mintlify source and documentation patch | Keep implementation guides and API reference with the release |
 | ElevenLabs tool JSON and generic prompt | Configure the two WebMCP callbacks on the intended agent |
 | Test reports | Distinguish browser transport, page outcomes, provider persistence and remaining live acceptance |
@@ -32,8 +32,8 @@ No provider credentials belong in this bundle. Configure them through your appro
 
 | Owner | Work |
 | --- | --- |
-| Convinced backend team | Deploy management routes, configure the server's ElevenLabs key, verify organization ADMIN access, and provision the exact SDK agent ownership binding |
-| Customer website team | Install the SDK, own UI and route lifecycle, expose permitted actions, provide current page context, and handle errors and teardown |
+| Convinced backend team | Operate the management API, hold the server's ElevenLabs key, verify organization ADMIN access, and provision ownership when a new SDK agent is added |
+| Customer website team | Review and deploy the website PR, install the SDK, build pages, own UI and route lifecycle, expose permitted actions, provide current page context, and handle errors and teardown |
 | Agent configuration owner | Configure the intended live branch, client-tool schemas, generic instructions, opener and any session-override permissions |
 | Customer administrators | Edit the system prompt and first message through their authenticated editor |
 
@@ -46,7 +46,7 @@ The SDK agent may be different from the organization's default widget agent. Mat
     Install the exact npm version or supplied `.tgz`, commit the lockfile, and record the matching backend and docs revision. See [SDK overview](/guides/widget-sdk/overview).
   </Step>
   <Step title="Provision management access">
-    Deploy the GET/PATCH API, configure the ElevenLabs key server-side, and verify the authenticated customer ADMIN can access only their registered agent. A customer-domain editor needs an authenticated proxy; partner API keys are not accepted by these endpoints.
+    Use the deployed Convinced management API and verify the authenticated customer ADMIN can access their registered agent. Convinced holds the ElevenLabs key server-side. A customer-domain editor needs an authenticated proxy; partner API keys are not accepted by these endpoints.
   </Step>
   <Step title="Connect a conversation">
     Set the organization and agent identity. Start a public agent directly or fetch a fresh private credential on each start. Verify microphone access, speech and reconnect using [ElevenLabs voice](/guides/widget-sdk/voice).
@@ -67,6 +67,20 @@ The SDK agent may be different from the organization's default widget agent. Mat
     Test the customer's real login, ownership binding, live agent branch, changed opener in a new conversation, supported browsers, session history and relevant analytics. Keep the previous integration available during rollout.
   </Step>
 </Steps>
+
+## Add more pages with the same SDK
+
+You do not need a new SDK build or a new Convinced endpoint for each page. Your website supplies the capabilities and current page context; the shared agent discovers and uses them.
+
+1. Install the pinned SDK once in your application and manage its lifecycle through your application's route changes. Follow [page-aware guides](/guides/widget-sdk/page-aware-guides) for context and navigation.
+2. Register each page's useful reads and actions with input schemas, host authorization and real application handlers. Use [WebMCP](/guides/widget-sdk/webmcp) where supported, and retain [host tools](/guides/widget-sdk/host-tools) as your tested fallback.
+3. Reuse the generic discovery instructions and two WebMCP callbacks. Replace Transformation-specific instructions on the intended agent before using it as a general guide; adding the SDK to a page does not rewrite the agent's saved prompt.
+4. Update tool registrations and page context when routes change, and dispose of stale registrations. The agent can act on capabilities the website exposes; it does not automatically gain control of every new page.
+5. Verify one read and one visible action on each page, then test navigation between pages, errors, authorization and the browsers your visitors use.
+
+The same registered agent can serve multiple pages. If you choose a separate agent for a new experience, ask Convinced to provision that agent's ownership once. Use [prompt administration](/guides/widget-sdk/agent-prompts) to build an authenticated editor for its saved system prompt and first message.
+
+WebMCP is still an opt-in integration. Complete the remaining page-action and real-voice acceptance checks before making it the default experience for visitors.
 
 ## WebMCP study path
 
