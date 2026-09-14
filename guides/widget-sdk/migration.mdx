@@ -17,7 +17,7 @@ There are three supported presentation paths around the same Convinced conversat
 | ElevenLabs voice as primary path | Built in | Supply `ConvincedVoiceController`; preset renders voice, mute, push-to-talk, and transcript | Supply controller and render your own controls |
 | Chat fallback | Built in | Built in; recoverable audio-start failures retry as an ElevenLabs text-only conversation | `ConvincedClient.sendMessage()` |
 | Campaign and personalized-link attribution | Loader resolves it | `initialize()` / `browserSessionInput()` resolve the same precedence | Same client API |
-| Target-specific opener | Rendered and used for ElevenLabs | Rendered; pass it to ElevenLabs `overrides` | Field available on the session |
+| Target-specific opener | Rendered and used for ElevenLabs | Rendered and passed automatically to voice | Field available; use `buildManagedVoiceStartContext()` |
 | Campaign pills | Rendered | Rendered before generic questions | Data available on `config.pillsConfig` |
 | Knowledge, proof, slides, and videos in chat | Built in | Chat context and typed rendering built in | Chat context built in; renderer is yours |
 | Slides and videos in voice | Built-in managed client tools and voice context | Built-in managed media callbacks and automatic ranked-media context | Use `buildManagedVoiceStartContext()` and render the callback result yourself |
@@ -59,6 +59,8 @@ The managed preset's automatic text-only recovery is limited to microphone, medi
 | Hosted UI configuration | `preset`, `theme`, or a headless renderer |
 
 ## Migrate an existing embed
+
+For the `0.1.1-webmcp.2` handoff, install the supplied tarball and deploy its matching management backend before using `ConvincedAgentAdmin`. WebMCP migration is optional: publish existing handlers, configure the two generic provider callbacks on an isolated agent, then test discovery and visible outcomes. See [WebMCP](/guides/widget-sdk/webmcp) and [client handoff](/guides/widget-sdk/client-handoff).
 
 <Steps>
   <Step title="Inventory the hosted deployment">

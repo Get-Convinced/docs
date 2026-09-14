@@ -12,6 +12,8 @@ The SDK separates the Convinced session and ElevenLabs voice controller from pre
 
 ## Choose a presentation level
 
+An administrator prompt editor is a separate authenticated surface. Use [ConvincedAgentAdmin](/guides/widget-sdk/agent-prompts) there to edit the ElevenLabs system prompt and first message. This visitor UI receives only the public greeting and session configuration it needs.
+
 | Level | You own | The SDK supplies |
 | --- | --- | --- |
 | `preset: 'managed-v2'` | Brand tokens and optional identity wording | Campaign greeting and pills, deployment voice modes, identity gate, voice controls, chat fallback, transcript, media, welcome card, engagement offers, meeting CTA, and configured launcher treatments |
@@ -153,6 +155,23 @@ mountConvincedWidget({
 
 Run the mount after the target exists. Inline mode renders a region instead of a floating dialog and requires an explicit target.
 
+## Mount a product-native guide rail
+
+Use the headless clients when the guide must remain beside an interactive product page. Mount the conversation owner at the application-shell level and render the transcript in an existing rail region:
+
+```html
+<div class="app-shell">
+  <main id="page-content"></main>
+  <aside id="product-guide" aria-label="Product guide"></aside>
+</div>
+```
+
+Keep the SDK session and voice controller mounted when the visitor changes routes or collapses the rail. End the conversation only from an explicit end-session action.
+
+On a narrow screen, convert the rail into a bottom sheet or compact launcher. Do not leave the global navigation underneath an open rail or allow the guide to cover the page's only primary action.
+
+The rail should call bounded page callbacks and render their observed results. See [Build a page-aware guide](/guides/widget-sdk/page-aware-guides) for the complete integration contract.
+
 ## Control the supplied widget
 
 ```ts
@@ -174,6 +193,8 @@ await widget.endSession()
 Do not call `mountConvincedWidget()` when your application owns the renderer. Subscribe to the chat client and voice controller independently:
 
 ```ts
+import { buildManagedVoiceStartContext } from '@convinced/widget-sdk'
+
 const stopClient = client.on('state', (state) => {
   renderChatMessages(state.messages)
   renderCampaignPills(state.config?.pillsConfig?.pills ?? [])
@@ -200,7 +221,10 @@ voiceButton.addEventListener('click', async () => {
   await client.markVoiceUpgrade(
     client.state.messages.map(({ role, text: content }) => ({ role, content })),
   )
-  await voice.start()
+  await voice.start(buildManagedVoiceStartContext(client.state, {
+    pageUrl: window.location.href,
+    pageTitle: document.title,
+  }))
 })
 
 chatForm.addEventListener('submit', async (event) => {

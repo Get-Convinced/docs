@@ -10,6 +10,8 @@ Only send traffic after the target reports `widgetReady: true`. See [Sending vis
 
 ## Attribution precedence
 
+Campaign `personalization.firstMessage` is a per-session opener. It can override the saved agent first message when you use the managed voice-context builder. To change shared ElevenLabs defaults, use [Prompts and first message](/guides/widget-sdk/agent-prompts).
+
 The first campaign-token source that contains a value wins:
 
 1. An explicit `c` passed to `browserSessionInput()` or `client.initialize()`; this is the SDK equivalent of loader `data-c`.

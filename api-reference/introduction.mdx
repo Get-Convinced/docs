@@ -1,7 +1,11 @@
 ---
 title: 'API Reference'
-description: 'Programmatic access to Convinced campaigns, targets, and widget tokens.'
+description: 'Campaign APIs, browser SDK integrations, and authenticated ElevenLabs prompt management.'
 ---
+
+<Note>
+  Replace `YOUR_CONVINCED_API_HOST` with the public HTTPS Campaign/KB MCP origin supplied for your organization. The Railway internal hostname is private-network only and is not a customer-facing base URL. The dashboard and SDK management API use a different origin.
+</Note>
 
 The **Convinced Campaign API** lets you push target-account intel into Convinced and get back a stable widget token. Drop the token onto your landing page (or hosted widget URL) and the conversational agent grounds the entire session — opener, discovery questions, case studies, competitive positioning — in the context you supplied.
 
@@ -11,37 +15,47 @@ The **Convinced Campaign API** lets you push target-account intel into Convinced
   language-agnostic version.
 </Note>
 
-## Base URL
+## API surfaces
 
-All endpoints live at:
+| Surface | Authentication | Documentation |
+| --- | --- | --- |
+| Campaign and KB MCP service | Organization-bound partner key on your backend | The campaign reference below |
+| Browser widget runtime | Public embed configuration and scoped session capabilities | [SDK overview](/guides/widget-sdk/overview) |
+| SDK agent management | Authenticated organization ADMIN session | [Get](/api-reference/endpoint/get-agent-prompt) and [update](/api-reference/endpoint/update-agent-prompt) prompt |
+
+The management endpoints live on the Convinced app backend and require the prerelease deployment. Campaign partner keys do not authorize prompt editing.
+
+## Campaign base URL
+
+The campaign endpoints shown below use the KB MCP service:
 
 ```
-http://convinced-kb-mcp.railway.internal
+https://YOUR_CONVINCED_API_HOST
 ```
 
 This is the **KB MCP API host**, not the dashboard URL. Set it once in your integration:
 
 <CodeGroup>
 ```bash Shell
-export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+export CONVINCED_API_BASE="https://YOUR_CONVINCED_API_HOST"
 export CONVINCED_API_KEY="<partner-api-key>"
 ```
 
 ```typescript TypeScript
-const CONVINCED_API_BASE = 'http://convinced-kb-mcp.railway.internal'
+const CONVINCED_API_BASE = 'https://YOUR_CONVINCED_API_HOST'
 const CONVINCED_API_KEY = process.env.CONVINCED_API_KEY!
 ```
 
 ```python Python
 import os
-CONVINCED_API_BASE = "http://convinced-kb-mcp.railway.internal"
+CONVINCED_API_BASE = "https://YOUR_CONVINCED_API_HOST"
 CONVINCED_API_KEY = os.environ["CONVINCED_API_KEY"]
 ```
 </CodeGroup>
 
 ## Authentication
 
-Every request is authenticated with a **Bearer token** issued from the Convinced dashboard. Mint one under **Settings → API Keys**.
+Every campaign request is authenticated with a **Bearer token** issued from the Convinced dashboard. Mint one under **Settings → API Keys**.
 
 ```http
 Authorization: Bearer <partner-api-key>

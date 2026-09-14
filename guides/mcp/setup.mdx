@@ -4,6 +4,10 @@ description: 'Wire a partner API key into the KB MCP server — REST endpoint, C
 icon: 'terminal'
 ---
 
+<Note>
+  Replace `YOUR_CONVINCED_API_HOST` with the public HTTPS Campaign/KB MCP origin supplied for your organization. The Railway internal hostname is private-network only and is not a customer-facing base URL. The dashboard and SDK management API use a different origin.
+</Note>
+
 This page covers the two transports the Convinced KB MCP server speaks: a stateless `POST /api/tool` REST endpoint and the standard MCP/SSE protocol. Read [MCP overview](/guides/mcp/overview) first if you haven't picked between them.
 
 Both transports use the same partner API key. Generate one from **Settings → API Keys** in the dashboard before you start — see [API keys](/guides/getting-started/api-keys).
@@ -12,7 +16,7 @@ Both transports use the same partner API key. Generate one from **Settings → A
 Set these once in your environment so every example below works as-is:
 
 ```bash
-export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+export CONVINCED_API_BASE="https://YOUR_CONVINCED_API_HOST"
 export CONVINCED_API_KEY="ck_live_…"
 ```
 </Note>
@@ -266,7 +270,7 @@ The server also exposes `/sse/widget` and `/messages/widget` — these are widge
     {
       "mcpServers": {
         "convinced": {
-          "url": "http://convinced-kb-mcp.railway.internal/sse",
+          "url": "https://YOUR_CONVINCED_API_HOST/sse",
           "headers": {
             "Authorization": "Bearer ck_live_…"
           }
@@ -291,7 +295,7 @@ Both Cursor and Windsurf use the same MCP config shape as Claude Desktop. The ex
 {
   "mcpServers": {
     "convinced": {
-      "url": "http://convinced-kb-mcp.railway.internal/sse",
+      "url": "https://YOUR_CONVINCED_API_HOST/sse",
       "headers": {
         "Authorization": "Bearer ck_live_…"
       }

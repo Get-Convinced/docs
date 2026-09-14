@@ -28,6 +28,8 @@ The SDK rejects voice descriptors that contain API-key-shaped fields. That is a 
 
 ## Mint private ElevenLabs sessions on your backend
 
+Saved prompt administration is a separate access level: `ConvincedAgentAdmin` requires organization ADMIN access and a server-recorded agent binding. It uses same-origin admin authentication, not widget credentials or a Campaign API partner key. The backend holds the provider key. See [editor authentication](/guides/widget-sdk/agent-prompts#authenticate-the-editor).
+
 ```ts Browser
 const voice = new ConvincedVoiceController({
   descriptorFactory: () => client.getVoiceCredential(),
@@ -48,6 +50,7 @@ Do not log signed URLs, conversation tokens, Convinced session-write capabilitie
 | --- | --- | --- |
 | SDK DOM or custom tools | The page that imported the SDK | SPA navigation, page context, scrolling, highlighting, and product actions |
 | Managed iframe host bridge | The parent page outside the Convinced iframe | The same bounded page actions while retaining hosted widget isolation |
+| Experimental WebMCP bridge | Same-origin browser model context | Discover registered website actions through two fixed SDK callbacks |
 | SDK MCP adapter | Wherever your caller-supplied MCP client runs | Convert an already-authorized MCP connection into registry tools |
 | Convinced KB MCP | Trusted backend or MCP client | Read governed products, proof, competitors, and other organization knowledge |
 
@@ -90,6 +93,8 @@ Without `authorizeToolCall`, registry tools that declare `session` or `per_call`
 The managed iframe's built-ins are disabled unless listed in `data-host-tools`. Read-only page context can be enabled directly; navigation, scrolling, highlighting, and custom mutations are denied until `Convinced.setHostToolAuthorizer()` approves the individual request.
 
 ## Understand chat and voice tool trust
+
+The WebMCP bridge requires host authorization for every discovered tool invocation. Annotations do not grant access. Handles expire on tool changes or disposal. Never expose prompt administration, account keys or an unrestricted authenticated fetch proxy as a website tool.
 
 SDK chat tools run only after the Convinced runtime pauses a turn and supplies an opaque signed continuation. The capability is bound to the session, request, turn, manifest, and pending calls, accepted once, and limited by expiry and call counts.
 

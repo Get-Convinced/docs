@@ -1,0 +1,145 @@
+---
+title: 'WebMCP website tools'
+description: 'Use two fixed agent callbacks to discover and execute actions offered by an opted-in website.'
+icon: 'globe'
+---
+
+WebMCP lets a website register structured tools in the browser. The experimental SDK bridge discovers same-origin tools and exposes two fixed callbacks to the agent:
+
+| ElevenLabs callback | SDK registry tool |
+| --- | --- |
+| `webmcp_list_tools` | `host_webmcp_list_tools` |
+| `webmcp_execute_tool` | `host_webmcp_execute_tool` |
+
+The website still defines the useful actions, their schemas and their handlers. The agent no longer needs a separate static callback mapping for every website action.
+
+<Note>
+  Install the handoff build `0.1.1-webmcp.2`. Native WebMCP is experimental. The browser experiment used Chrome 152 with WebMCP flags, without a polyfill. Feature-detect support and provide your tested non-WebMCP integration when unavailable.
+</Note>
+
+## Choose the correct interface
+
+| Interface | What it connects |
+| --- | --- |
+| `registerDomTools()` or custom registry entries | Explicit page actions known by the host application |
+| `createMcpTools()` | Tools from an MCP client your application already connected |
+| `createWebMcpBridge()` | Tools exposed by the current website's browser model context |
+| ElevenLabs server-side MCP integration | An HTTP/SSE MCP service; it does not expose the visitor's tab |
+
+WebMCP does not make uninstrumented sites callable. This implementation supports same-origin tools, not arbitrary cross-origin iframes. Browser detection prefers `document.modelContext` and supports the older `navigator.modelContext` location.
+
+## Publish your existing SDK tools
+
+If you already use `ClientToolRegistry`, publish the same handlers without duplicating them:
+
+```ts
+import { getWebMcpModelContext, publishRegistryToWebMcp } from '@convinced/widget-sdk'
+
+const modelContext = getWebMcpModelContext()
+if (!modelContext?.registerTool) throw new Error('WebMCP registration is unavailable')
+
+const published = publishRegistryToWebMcp(tools, {
+  modelContext,
+  execution: () => ({
+    orgSlug: client.orgSlug,
+    sessionId: client.state.session?.sessionId ?? null,
+    turnId: crypto.randomUUID(),
+  }),
+  authorize: ({ tool }) => applicationPermissions.allowTool(tool.name),
+})
+await published.ready
+
+// When these tools leave the page:
+published.dispose()
+```
+
+The publisher preserves registry validation, authorization and execution policies. It publishes a snapshot: when your registry changes, dispose and republish it. Direct WebMCP websites may instead register their own browser tools; they do not need Convinced's `host_` naming convention.
+
+## Connect the generic voice bridge
+
+```ts
+import {
+  ClientToolRegistry,
+  ConvincedVoiceController,
+  createWebMcpBridge,
+  getWebMcpModelContext,
+  WEBMCP_VOICE_BINDINGS,
+} from '@convinced/widget-sdk'
+
+const modelContext = getWebMcpModelContext()
+if (!modelContext?.getTools) throw new Error('WebMCP discovery is unavailable')
+
+const bridge = createWebMcpBridge({
+  modelContext,
+  origin: window.location.origin,
+  authorize: (tool, input) => applicationPermissions.allowWebTool(tool, input),
+  argumentEncoding: 'json-string',
+})
+
+const voice = new ConvincedVoiceController({
+  orgSlug: 'acme',
+  tools: new ClientToolRegistry(bridge.tools),
+  descriptor: {
+    agentId: 'YOUR_PUBLIC_WEBMCP_AGENT_ID',
+    connectionType: 'webrtc',
+    exactClientTools: WEBMCP_VOICE_BINDINGS,
+    genericClientTool: false,
+  },
+})
+
+talkButton.addEventListener('click', () => voice.start())
+
+// During application teardown:
+await voice.end()
+bridge.dispose()
+```
+
+`applicationPermissions` represents your application's actual policy. Supply it for every underlying tool invocation; annotations such as `readOnlyHint` are hints, not authorization. For private agents, use a fresh server-issued descriptor and retain the same two bindings.
+
+Keep the bridge and voice controller in a persistent owner for SPA navigation. Register and remove page actions with their route lifecycle. The browser's `toolchange` event invalidates prior handles.
+
+## Configure ElevenLabs once
+
+From the SDK source checkout, generate the two tool schemas and generic instructions:
+
+```bash
+bun run build
+bun run export:webmcp:agent
+```
+
+The exporter writes `artifacts/webmcp/elevenlabs-tools.json` and `agent-prompt.txt`. It makes no remote changes. Configure those two client tools on an isolated ElevenLabs agent, enable **Wait for response**, and save the generic instructions to its live configuration.
+
+The existing canonical 11-tool sync script configures a different contract. Do not run it on a dedicated two-callback WebMCP agent expecting it to preserve that design. The bridge also does not automatically replace a prompt that refers to old Transformation-specific tool names.
+
+## Discovery and execution
+
+1. `webmcp_list_tools({})` returns up to eight summaries and `next_offset`.
+2. Request more pages with `offset` when needed.
+3. Call `webmcp_list_tools({ names: ['the_selected_name'] })` for one full `input_schema_json` and an opaque tool ID.
+4. Call `webmcp_execute_tool({ tool_id, arguments_json })` with JSON matching that schema.
+5. Report the action only when the returned state confirms it.
+
+The bridge exposes the same operations locally as `listTools(names?, offset?)`, `executeTool(id, input, signal?)`, and `dispose()`.
+
+The tested Chrome 152 API expects JSON-encoded arguments and serializes results. `argumentEncoding: 'json-string'` is the default. The explicit `'object'` mode supports newer API shapes but has not been validated across a native browser matrix. The SDK never retries a mutation with a different encoding.
+
+## Limits and trust
+
+- The ordinary registry's 16-entry limit still applies; the bridge consumes two entries regardless of the underlying browser catalog size.
+- Catalog pages contain eight summaries; a schema request contains one tool.
+- Schemas travel as JSON strings so nesting does not exceed the SDK observation-depth limit.
+- Argument, result and timeout bounds still apply. Large catalogs and schemas still consume model context when discovered.
+- Handles are bound to origin, browser window, schema and lifecycle. Rediscover after a stale-handle error.
+- Tool output is untrusted data. It cannot grant permissions or rewrite the agent's instructions.
+
+## What has been tested
+
+The native browser experiment discovered and exercised all 16 Enmovil actions through two generic callbacks. An independently authored shop and Google's public pizza demo also worked. The report retains four Enmovil page-outcome failures: transport success is not evidence that a page action succeeded.
+
+Voice callbacks in that experiment used a fake transport. Autonomous model selection, actual speech and cross-browser performance remain separate acceptance tests. The later live ElevenLabs tests verify saved prompt/first-message persistence only.
+
+References: [Chrome WebMCP](https://developer.chrome.com/docs/ai/webmcp), [imperative API](https://developer.chrome.com/docs/ai/webmcp/imperative-api), [WebMCP draft](https://webmachinelearning.github.io/webmcp/), [browser evaluation guidance](https://developer.chrome.com/docs/ai/webmcp/evals).
+
+## Type-checked integration example
+
+The [SDK handoff example](/examples/sdk-handoff.ts) contains typed editor, tool-publisher and voice-bridge helpers. Supply your real application permissions and authenticated backend; it contains no credentials.

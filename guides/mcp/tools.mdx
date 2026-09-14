@@ -4,6 +4,10 @@ description: 'Every Convinced KB tool a partner-scoped key can call — schemas,
 icon: 'screwdriver-wrench'
 ---
 
+<Note>
+  Replace `YOUR_CONVINCED_API_HOST` with the public HTTPS Campaign/KB MCP origin supplied for your organization. The Railway internal hostname is private-network only and is not a customer-facing base URL. The dashboard and SDK management API use a different origin.
+</Note>
+
 This page covers every tool available to **partner-scoped** API keys. If you haven't read the [overview](/guides/mcp/overview) and the [setup guide](/guides/mcp/setup) yet, start there.
 
 <Note>
@@ -13,7 +17,7 @@ This page covers every tool available to **partner-scoped** API keys. If you hav
 All examples below assume you've set:
 
 ```bash
-export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+export CONVINCED_API_BASE="https://YOUR_CONVINCED_API_HOST"
 export CONVINCED_API_KEY="ck_live_…"
 ```
 

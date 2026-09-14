@@ -4,6 +4,10 @@ description: 'Push a fully-formed Intel object and have the widget ready synchro
 icon: 'lock'
 ---
 
+<Note>
+  Replace `YOUR_CONVINCED_API_HOST` with the public HTTPS Campaign/KB MCP origin supplied for your organization. The Railway internal hostname is private-network only and is not a customer-facing base URL. The dashboard and SDK management API use a different origin.
+</Note>
+
 Partner-intel mode is the synchronous path: you supply a fully-formed [`intel`](/guides/campaigns/intel-schema) object, Convinced stores it as-is, and the row is widget-ready as soon as the response returns. No LLM, no waiting, no surprises.
 
 This is the right mode when **you are the source of truth**. Your CRM, your research team, your data warehouse — you've already structured the account intel and you don't need the synthesis layer.
@@ -51,7 +55,7 @@ The trade-off: you're responsible for field quality. Convinced does not invent o
 Every request authenticates with a partner API key issued from the Convinced dashboard. Keys are organization-bound — the org context is implicit, you never pass it explicitly.
 
 ```bash
-export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+export CONVINCED_API_BASE="https://YOUR_CONVINCED_API_HOST"
 export CONVINCED_API_KEY="<partner-api-key>"
 ```
 

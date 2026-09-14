@@ -14,6 +14,14 @@ Use the supplied `managed-v2` preset for a functional default composition, or us
 
 ## 1. Install the package
 
+The stable npm `latest` tag is `0.1.0`. For WebMCP and persistent prompt/first-message administration, pin the published `0.1.1-webmcp.2` prerelease and use the matching backend from the [handoff guide](/guides/widget-sdk/client-handoff):
+
+```bash Experimental handoff
+npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.2
+```
+
+The commands below install the published baseline:
+
 <CodeGroup>
 ```bash npm
 npm install @convinced/widget-sdk
@@ -32,7 +40,7 @@ The package contains ESM, TypeScript declarations, and a browser IIFE at `dist/c
 
 ## 2. Configure the ElevenLabs agent
 
-The canonical Convinced agent uses 11 ElevenLabs client tools. Provision the complete catalog even when a particular page exposes only a subset:
+Choose the agent tool contract before provisioning. The canonical managed Convinced agent uses the 11 tools below. A dedicated WebMCP agent uses [two discovery/execution callbacks](/guides/widget-sdk/webmcp); additional managed UI callbacks need separate configuration if your renderer uses them.
 
 | ElevenLabs tool name | Purpose |
 | --- | --- |
@@ -255,6 +263,8 @@ Open the printed `/home?voice=real` URL and grant microphone access from the voi
 
 ## Next steps
 
+To let customer administrators edit saved ElevenLabs instructions and the opening message, use [Prompts and first message](/guides/widget-sdk/agent-prompts). The visitor widget never receives management credentials.
+
 <CardGroup cols={2}>
   <Card title="Build with a coding agent" icon="wand-magic-sparkles" href="/guides/widget-sdk/build-with-an-agent">
     Give an AI coding agent one reviewed implementation and acceptance prompt.
@@ -267,6 +277,9 @@ Open the printed `/home?voice=real` URL and grant microphone access from the voi
   </Card>
   <Card title="Host tools and MCP" icon="screwdriver-wrench" href="/guides/widget-sdk/host-tools">
     Add SPA navigation, scrolling, highlighting, and bounded application tools.
+  </Card>
+  <Card title="Page-aware guides" icon="compass" href="/guides/widget-sdk/page-aware-guides">
+    Map semantic page objects to discovery tools, bounded actions, and observed UI receipts.
   </Card>
   <Card title="Migration and parity" icon="arrow-right-arrow-left" href="/guides/widget-sdk/migration">
     Choose the iframe, default preset, or headless client feature by feature.

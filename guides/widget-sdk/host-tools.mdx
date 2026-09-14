@@ -8,11 +8,17 @@ Host tools are explicit capabilities that run in the page containing the SDK. Th
 
 Use one `ClientToolRegistry` for both channels. The Convinced runtime remains the owner of conversation behavior; your page remains the owner of DOM access, application state, consent, and MCP connectivity.
 
+<Tip>
+  Building a guide that understands named products, roles, or sections? Use [Build a page-aware guide](/guides/widget-sdk/page-aware-guides) for the semantic manifest, discovery-first tool pattern, observed receipts, and visitor-wins arbitration.
+</Tip>
+
 <Warning>
   Never expose arbitrary JavaScript evaluation, unrestricted DOM access, a generic authenticated fetch proxy, or privileged credentials as a browser tool.
 </Warning>
 
 ## Register the supplied DOM tools
+
+For tools already exposed through browser WebMCP, use [the WebMCP adapter](/guides/widget-sdk/webmcp). It consumes two registry entries while discovering the underlying website catalog. `createMcpTools()` below connects an already-authorized MCP client and serves a different interface.
 
 Every DOM capability is off by default:
 
@@ -217,7 +223,7 @@ Do not persist, inspect, construct, or replay that capability. If a resume was c
 
 | Boundary | Limit |
 | --- | --- |
-| Registered client tools | 16 |
+| Registered client tools | 16 (a WebMCP bridge occupies two entries) |
 | Calls in one continuation round | 16 |
 | Chat continuation rounds | 4 |
 | Total calls in one chat continuation chain | 64 |

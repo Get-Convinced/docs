@@ -4,6 +4,10 @@ description: "Go from zero to a personalized widget session in under 5 minutes."
 icon: "rocket"
 ---
 
+<Note>
+  Replace `YOUR_CONVINCED_API_HOST` with the public HTTPS Campaign/KB MCP origin supplied for your organization. The Railway internal hostname is private-network only and is not a customer-facing base URL. The dashboard and SDK management API use a different origin.
+</Note>
+
 This walkthrough takes you from "I have a partner API key" to "the visitor sees a widget grounded in their account intel" using **auto-enrich mode** — the lowest-friction path. You hand Convinced rep notes and a few links; the AI research pipeline synthesizes the structured intel for you.
 
 <Tip>
@@ -20,10 +24,10 @@ This walkthrough takes you from "I have a partner API key" to "the visitor sees 
 
 <Steps>
   <Step title="Create a partner API key">
-    In the [dashboard](https://app.getconvinced.ai), open **Admin → API keys** under your org:
+    In the [dashboard](https://app.getconvinced.ai), open **Settings → API Keys** under your org:
 
     ```
-    https://app.getconvinced.ai/org/<your-org-slug>/admin/api-keys
+    https://app.getconvinced.ai/org/<your-org-slug>/settings/api-keys
     ```
 
     Click **New key**, name it (for example `partner-outbound-pipeline`), and copy the key once — it's only shown to you at creation time.
@@ -38,12 +42,12 @@ This walkthrough takes you from "I have a partner API key" to "the visitor sees 
 
     <CodeGroup>
     ```bash bash
-    export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+    export CONVINCED_API_BASE="https://YOUR_CONVINCED_API_HOST"
     export CONVINCED_API_KEY="<your-partner-api-key>"
     ```
 
     ```fish fish
-    set -x CONVINCED_API_BASE "http://convinced-kb-mcp.railway.internal"
+    set -x CONVINCED_API_BASE "https://YOUR_CONVINCED_API_HOST"
     set -x CONVINCED_API_KEY "<your-partner-api-key>"
     ```
     </CodeGroup>
@@ -142,15 +146,19 @@ This walkthrough takes you from "I have a partner API key" to "the visitor sees 
     ```
 
     ```bash polling-loop
-    # Polls every 5 seconds for up to 3 minutes.
-    until status=$(curl -sS \
-      "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets/acme-logistics" \
-      -H "Authorization: Bearer $CONVINCED_API_KEY" | jq -r '.target.enrichmentStatus') \
-      && [[ "$status" == "done" || "$status" == "failed" || "$status" == "skipped" ]]; do
-      echo "status=$status — waiting…"
-      sleep 5
+    # Polls up to 36 times, with five seconds between attempts.
+    enrichment_status="pending"
+    for ((attempt=1; attempt<=36; attempt++)); do
+      enrichment_status=$(curl -fsS \
+        "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets/acme-logistics" \
+        -H "Authorization: Bearer $CONVINCED_API_KEY" | jq -r '.target.enrichmentStatus')
+      if [[ "$enrichment_status" == "done" || "$enrichment_status" == "failed" || "$enrichment_status" == "skipped" ]]; then
+        break
+      fi
+      if ((attempt < 36)); then sleep 5; fi
     done
-    echo "final status: $status"
+    echo "Last observed status: $enrichment_status"
+    # A pending status after the final attempt is still pending, not success.
     ```
 
     ```json response

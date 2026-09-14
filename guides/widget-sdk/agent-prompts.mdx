@@ -1,0 +1,134 @@
+---
+title: 'Prompts and first message'
+description: 'Let authenticated customer administrators edit the saved ElevenLabs system prompt and opening message through the SDK.'
+icon: 'pen'
+---
+
+`ConvincedAgentAdmin` reads and updates two fields on the actual ElevenLabs agent:
+
+| SDK field | ElevenLabs field | Meaning |
+| --- | --- | --- |
+| `systemPrompt` | `conversation_config.agent.prompt.prompt` | Instructions for how the agent behaves |
+| `firstMessage` | `conversation_config.agent.first_message` | The opening message it says when a conversation starts |
+
+The backend selects the branch receiving live traffic, saves the requested fields, and reads them back before returning success. The customer can edit either field or both in one request.
+
+<Note>
+  Requires the `0.1.1-webmcp.2` SDK and matching Convinced management API. Each agent must have an explicit server-controlled owner before a customer administrator can read or edit its configuration.
+</Note>
+
+## Authenticate the editor
+
+Use this client inside an authenticated Convinced admin application. Both read and write endpoints require organization `ADMIN` membership. The server verifies that the exact ElevenLabs agent ID belongs to that organization, using its deployment record or an explicit server-owned binding. Conflicting owners are rejected.
+
+The browser uses the administrator's session. The backend uses its own ElevenLabs key. A public widget token, campaign token, public agent ID, or Campaign API partner key does not grant prompt-editing access.
+
+For an editor hosted on the customer's own domain, implement an authenticated same-origin management proxy. A custom SDK `fetch` can route requests through that integration. Pointing `apiBase` at another website does not create a backend there, and the current management API does not accept cross-origin browser writes or issue external management API keys.
+
+## Provision a dedicated SDK agent
+
+The Convinced operator can bind a dedicated agent through its `AgentDeployment.voiceConfig` record, or configure the server-only `SDK_AGENT_OWNER_BINDINGS` JSON map:
+
+```json
+{"agent_123": "acme"}
+```
+
+The keys are ElevenLabs agent IDs and values are organization slugs. This setting is controlled by the server operator and must never be built from visitor input. An agent assigned to another organization in either source is rejected. Malformed configuration returns `503 ownership_not_configured`.
+
+This lets a dedicated SDK guide use its own identity without replacing the organization's default widget agent. Customer administrators still need their organization session and `ADMIN` role; the mapping does not expose a public editing API.
+
+## Read both fields
+
+```ts
+import { ConvincedAgentAdmin } from '@convinced/widget-sdk'
+
+const agent = new ConvincedAgentAdmin({
+  orgSlug: 'acme',
+  agentId: 'agent_123', // The same agent used by the voice SDK
+  apiBase: window.location.origin, // Origin serving the authenticated API
+})
+
+let current = await agent.getPrompt()
+systemPromptEditor.value = current.systemPrompt
+firstMessageEditor.value = current.firstMessage
+```
+
+Keep `current.revision` with the loaded editor state. It detects changes made after the editor loaded, including changes to the first message.
+
+## Save both fields
+
+```ts
+saveButton.addEventListener('click', async () => {
+  saveButton.disabled = true
+  try {
+    current = await agent.updatePrompt({
+      systemPrompt: systemPromptEditor.value,
+      firstMessage: firstMessageEditor.value,
+      expectedRevision: current.revision,
+    })
+    status.textContent = 'Saved to ElevenLabs'
+  } catch (error) {
+    status.textContent = 'Save could not be confirmed. Reload before retrying.'
+  } finally {
+    saveButton.disabled = false
+  }
+})
+```
+
+To change only the opener, omit `systemPrompt`:
+
+```ts
+current = await agent.updatePrompt({
+  firstMessage: 'Hi! What would you like to explore?',
+  expectedRevision: current.revision,
+})
+```
+
+Omitted fields are preserved. An empty `firstMessage` is supported when the visitor should speak first. The system prompt must remain non-empty. Limits are 100,000 UTF-8 bytes for `systemPrompt` and 10,000 for `firstMessage`.
+
+Both methods accept `{ signal }` as their optional final argument. If cancellation or a network failure happens during a save, reload before deciding whether to retry: the provider may already have applied it.
+
+## Understand what future visitors use
+
+Saved settings apply to subsequent conversations using the live branch. Existing conversations are not restarted. An explicitly pinned version or per-session override can use a different value.
+
+| Setting | Scope |
+| --- | --- |
+| `updatePrompt({ firstMessage })` | Saved ElevenLabs opener for future conversations |
+| `overrides.agent.firstMessage` at voice start | This conversation's opener; requires provider override permission |
+| Campaign `personalization.firstMessage` | Per-target opener passed by the managed voice-context builder |
+| `WidgetConfig` greeting or a hardcoded page welcome card | Your visible UI copy, configured separately |
+
+For a single shared opener, avoid supplying a conflicting session override. If your interface displays a welcome card before voice starts, manage that public UI copy separately; do not fetch the admin-only system prompt from the visitor page.
+
+## Live branches and verification
+
+ElevenLabs' default agent GET can return Main even when another branch receives the visitors. The management API discovers the sole branch receiving 100% of traffic and uses an explicit `branch_id` on reads and writes. It refuses split traffic or an incomplete branch listing instead of changing your experiments.
+
+Only the requested prompt fields are PATCHed. The server verifies both resulting values and the branch identity, including preservation of an omitted field. Voice, tools, model and traffic settings are not sent in this update.
+
+Revision checking detects stale edits but is not an atomic provider lock. Simultaneous writes from another server or the ElevenLabs dashboard can still race.
+
+## Handle errors
+
+`ConvincedApiError` exposes `status`, `code` and `details`.
+
+| Status or code | What to do |
+| --- | --- |
+| `403`, `admin_required` | Sign in with an organization administrator account |
+| `404`, `agent_not_found` | Confirm the exact SDK agent has a server-side ownership binding |
+| `409`, `prompt_conflict` | Reload and reconcile the edit |
+| `409`, `agent_traffic_conflict` | Resolve the provider traffic configuration separately |
+| `409`, `shared_agent` | Use an agent owned by one customer organization |
+| `400`, `invalid_prompt_update` | Correct fields, size limits and revision |
+| `503`, `provider_not_configured` | Configure the ElevenLabs key on the server |
+| `502`, `provider_update_unconfirmed` | The write's outcome is unknown; reload before retrying |
+| `502`, `provider_verification_failed` | ElevenLabs accepted the write but read-back could not confirm it; reload |
+
+The SDK never automatically retries a save. Show success only after the promise resolves.
+
+See [GET agent prompt](/api-reference/endpoint/get-agent-prompt), [PATCH agent prompt](/api-reference/endpoint/update-agent-prompt), and the [client handoff](/guides/widget-sdk/client-handoff).
+
+## Type-checked integration example
+
+The [SDK handoff example](/examples/sdk-handoff.ts) contains typed editor, tool-publisher and voice-bridge helpers. Supply your real application permissions and authenticated backend; it contains no credentials.
