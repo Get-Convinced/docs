@@ -23,7 +23,7 @@ The SDK bridge currently restricts discovery to same-origin tools. The browser s
 
 ## Configure the voice agent
 
-Download the [two ElevenLabs tool definitions](/examples/elevenlabs-webmcp-tools.json) and [generic website-agent instructions](/examples/webmcp-agent-prompt.txt). Each JSON entry contains a `tool_config`. Create those client tools in ElevenLabs, attach their tool IDs to the intended agent and enable **Wait for response**. Save the generic instructions on its live configuration.
+Download the [two ElevenLabs tool definitions](/examples/elevenlabs-webmcp-tools.json) and [generic website-agent instructions](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/webmcp-agent-prompt.txt). Each JSON entry contains a `tool_config`. Create those client tools in ElevenLabs, attach their tool IDs to the intended agent and enable **Wait for response**. Save the generic instructions on its live configuration.
 
 A standalone WebMCP voice controller needs those two callbacks. If you also use `managed-v2`, configure its six [managed UI callbacks](/guides/widget-sdk/voice#configure-the-provider-tools); the renderer adds them when it starts voice. Adding WebMCP does not remove an existing page-specific saved prompt or tool catalog.
 
@@ -31,7 +31,7 @@ The definitions and instructions are plain downloadable files; no private reposi
 
 ## Connect existing page tools
 
-Save [sdk-handoff.ts](/examples/sdk-handoff.ts) in your application. Its typed helpers publish a registry and create a standalone public-agent voice bridge. The following browser module uses those helpers after the DOM exists:
+Save [sdk-handoff.ts](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/sdk-handoff.ts) in your application. Its typed helpers publish a registry and create a standalone public-agent voice bridge. The following browser module uses those helpers after the DOM exists:
 
 ```ts
 import { ClientToolRegistry, registerDomTools } from '@convinced/widget-sdk'
