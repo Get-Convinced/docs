@@ -58,3 +58,5 @@ Share [SDK overview](https://convinced.mintlify.app/guides/widget-sdk/overview).
 The guides target published npm `0.1.1-webmcp.2`. The overview records verified hosted availability, including missing private voice credentials and chat-tool protocol gaps. Prompt endpoints use authenticated organization ADMIN sessions; Campaign partner keys are a separate credential.
 
 Downloadable examples in `examples/` contain the complete quickstart module, editor, WebMCP helpers, matching provider schemas and reviewed implementation instructions. Validate these against the pinned published SDK when changing examples. Do not include private backend source or credentials in public documentation.
+
+Mintlify serves the JSON tool catalogs directly. TypeScript and text downloads link to immutable commits in this public repository because those extensions are not served by the current Mintlify plan. Check the deployed download URLs as well as `mint broken-links`.

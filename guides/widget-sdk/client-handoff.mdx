@@ -19,7 +19,7 @@ The voice agent can differ from the organization's default widget agent. Match t
 
 ## Prepare the implementation
 
-1. Install `@convinced/widget-sdk@0.1.1-webmcp.2` and commit the lockfile. Use the [quickstart module](/examples/sdk-quickstart.ts) or [reviewed coding-agent prompt](/examples/sdk-implementation-prompt.txt).
+1. Install `@convinced/widget-sdk@0.1.1-webmcp.2` and commit the lockfile. Use the [quickstart module](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/sdk-quickstart.ts) or [reviewed coding-agent prompt](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/sdk-implementation-prompt.txt).
 2. Select the supplied widget, headless UI or hosted iframe. The hosted loader does not expose the SDK's page-tool bridge.
 3. Confirm your Convinced organization, allowed origin and any required widget token. Test a generic session before adding optional campaign attribution.
 4. Configure the actual ElevenLabs agent. Use the [managed callback definitions](/examples/elevenlabs-managed-tools.json) or [WebMCP callbacks](/examples/elevenlabs-webmcp-tools.json), matching only the capabilities your integration activates.
@@ -33,7 +33,7 @@ See [current availability](/guides/widget-sdk/overview#current-availability) bef
 
 Register the new page's useful reads and actions, supply current context and remove stale registrations when the route leaves. Keep route names, product IDs and factual page content in tool observations rather than hardcoding them into general instructions.
 
-With WebMCP, reuse the same two discovery/execution callbacks and [generic instructions](/examples/webmcp-agent-prompt.txt). The website still needs to expose its own actions and the browser must support the tested API shape. Adding the SDK does not rewrite a Transformation-specific prompt already saved on an agent.
+With WebMCP, reuse the same two discovery/execution callbacks and [generic instructions](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/webmcp-agent-prompt.txt). The website still needs to expose its own actions and the browser must support the tested API shape. Adding the SDK does not rewrite a Transformation-specific prompt already saved on an agent.
 
 A new page normally needs no new SDK version or Convinced endpoint. A new protected backend operation still needs its own implementation and access checks. A separate voice agent needs its ownership and provider configuration provisioned once.
 
