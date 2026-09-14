@@ -6,6 +6,15 @@ icon: 'clipboard-check'
 
 Use this guide as the implementation order for your engineering team. The handoff build is `@convinced/widget-sdk@0.1.1-webmcp.2`; WebMCP and prompt administration require this prerelease and the accompanying backend changes.
 
+## Production release: 14 September 2026
+
+- SDK: `@convinced/widget-sdk@0.1.1-webmcp.2` is published under `next`; stable `latest` remains `0.1.0`.
+- Convinced management API: deployed at `https://app.getconvinced.ai`. Enmovil's authenticated administrator read returned `200`; a no-op save returned `200` with both fields unchanged; a stale revision returned `409`. Unauthenticated access returned `403`.
+- Documentation: live at [convinced.mintlify.app](https://convinced.mintlify.app).
+- Enmovil website integration: prepared in [PR #50](https://github.com/ensomarketing/enmovil-website/pull/50), but not deployed. Its Vercel team must grant the Git author access before deployment can proceed.
+
+The production check preserved Enmovil's instructions and opener. Actual persisted changes were tested separately on temporary ElevenLabs agents. WebMCP remains experimental and opt-in; the four page-outcome failures below still need acceptance work.
+
 ## What to hand over
 
 | Deliverable | Purpose |
@@ -81,7 +90,7 @@ For the voice side, use [ElevenLabs client tools](https://elevenlabs.io/docs/ele
 | Persisted system prompt | Real temporary ElevenLabs agent update and independent read-back |
 | Persisted first message | Real first-message-only, combined and empty-opener updates; temporary agent deleted afterward |
 | API authorization and failure handling | Controlled integration tests covering administrators, tenant binding, stale revisions and provider failures |
-| Customer's deployed login and ownership binding | Must be verified during rollout; the local ownership database was unavailable |
+| Customer's deployed login and ownership binding | Enmovil production administrator GET, no-op save and stale-revision rejection verified; repeat with each customer's login and agent |
 | Autonomous WebMCP voice quality and supported browser matrix | Must be tested; fake transport callback tests do not prove speech or model selection |
 
 For every customer rollout, verify an authenticated GET and a saved update against the deployed management origin. Provider persistence tests alone do not verify the customer's login, proxy, agent ownership or subsequent voice conversation.
