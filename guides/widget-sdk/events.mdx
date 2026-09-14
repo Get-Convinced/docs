@@ -38,7 +38,7 @@ stopError()
 | `content` | `{ messageId, content }` | Render parsed text, slide, and video parts |
 | `activity` | Activity or `profile_gate` event | Show progress and identity states |
 | `client_tool_call` | Requested chat host-tool call | Audit which page capability chat requested |
-| `client_tool_pause` | Turn ID and signed capability | Advanced diagnostics; the SDK resumes automatically |
+| `client_tool_pause` | Turn ID and signed capability | Compatible chat backends only; the SDK resumes automatically |
 | `client_tool_result` | Structured chat tool result | Record success or failure |
 | `identity` | Submitted identity and server response | Confirm capture and update application state |
 | `demo_request` | Privacy-safe `opened`, `submitted`, or `failed` lifecycle | Render handoff, retry, and correlation states without exposing form values |
@@ -58,7 +58,7 @@ type ClientStatus =
   | 'destroyed'
 ```
 
-`paused` means a chat host-tool continuation is active. Do not start a second chat turn until the client returns to `ready`.
+`paused` means a chat host-tool continuation is active on a backend that supports that protocol. The current hosted chat route does not implement SDK host-tool continuation; browser voice callbacks are separate. Do not start a second chat turn until the client returns to `ready`.
 
 ## Voice events
 
@@ -135,9 +135,11 @@ client.reportDemoRequestOpened('custom_pricing_page')
 await client.submitDemoRequest({ name, email, company, phone, context })
 ```
 
-The lifecycle payload contains booleans, opaque correlation values, and safe error codes. It never contains the submitted name, email, phone, company, or context. A first accepted call updates `client.state.identity` and emits `identity` before `demo_request` reports `submitted`. An already-submitted replay reports the original opaque correlation without applying the retry's form values to SDK identity or analytics.
+The lifecycle payload contains safe status fields and optional opaque correlation values. It omits submitted name, email, phone, company, and context. A first accepted SDK call synchronizes identity and emits `identity` before `demo_request` reports `submitted`; this may require a separate identity request on older backends.
 
-The signed Convinced behavior history uses `demo_request_opened`, `demo_request_submitted`, and `demo_request_failed`. The accepted backend handoff remains the source of truth: visitor linkage, the stored request, and its durable audit event commit together. Identical concurrent calls are coalesced in the SDK, and an exact same-session backend retry returns the original request. A retry with changed name, email, phone, company, or context receives `409 demo_request_conflict`; it must not relabel the lead that already owns that session.
+The current hosted demo endpoint returns `ok` and `submittedAt`, without a request ID or server idempotency. Do not require `requestId` in your success UI or retry an ambiguous submission automatically. The SDK coalesces identical calls within one client instance, but that does not prevent duplicate network mutations after a reload. See [the demo-request fallback](/guides/widget-sdk/custom-ui#use-managed-marketing-surfaces).
+
+The client records `demo_request_opened`, `demo_request_submitted`, and `demo_request_failed` through its behavior-history API. It forwards a signed session capability when the session response supplies one; the current hosted response does not supply that capability. Analytics events are not evidence that a mutation was authorized or delivered.
 
 ## Track behavior
 
@@ -182,10 +184,13 @@ await client.markVoiceUpgrade(
   client.state.messages.map(({ role, text: content }) => ({ role, content })),
 )
 
-await voice.start()
+await voice.start(buildManagedVoiceStartContext(client.state, {
+  pageUrl: window.location.href,
+  pageTitle: document.title,
+}))
 ```
 
-This marks the session as upgraded to voice and gives the backend a bounded copy of the chat path. Pass the same history to the ElevenLabs dynamic variables when the voice agent must continue it conversationally.
+Import `buildManagedVoiceStartContext` from `@convinced/widget-sdk`. This marks the session as upgraded to voice and gives the backend a bounded copy of the chat path. The context builder includes a bounded copy of the same history for the live ElevenLabs agent.
 
 ## Link ElevenLabs conversations
 

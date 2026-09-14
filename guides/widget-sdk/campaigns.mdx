@@ -120,9 +120,9 @@ Campaign pills are generated from the target's researched pains, recent signals,
 
 The SDK's `managed-v2` preset uses the session in this order:
 
-- Target-specific `personalization.firstMessage` first.
-- A configured return-visitor greeting when applicable.
-- The configured first message, welcome message, or greeting as a fallback.
+- A return-visitor greeting when return visits are enabled and the last session falls within `returnVisitorDays` (30 days by default).
+- Target-specific `personalization.firstMessage` when no applicable return greeting exists.
+- `firstMessageText` when `firstMessageEnabled` is not false, then `welcomeMessage` or `greetingMessage`.
 - Campaign pills before generic suggested questions.
 - The deployment's voice mode and `allowModeToggle` setting.
 

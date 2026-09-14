@@ -4,7 +4,7 @@ description: 'Find the public SDK classes, methods, tool adapters and lifecycle 
 icon: 'code'
 ---
 
-Import public APIs from `@convinced/widget-sdk`. The installed package's TypeScript declarations are the exact signature reference; this page groups them by the work they perform.
+Import public APIs from `@convinced/widget-sdk@0.1.1-webmcp.2` using the module name `@convinced/widget-sdk`. The installed package's TypeScript declarations are the exact signature reference; this page groups them by the work they perform.
 
 ## Session and chat
 
@@ -12,16 +12,18 @@ Import public APIs from `@convinced/widget-sdk`. The installed package's TypeScr
 
 | Operation | Methods |
 | --- | --- |
-| Initialize and read configuration | `initialize()`, `getConfig()`, `createSession()`, `state` |
+| Initialize and read configuration | `initialize()`, `getConfig()`, `createSession()`, `renewSession()`, `state` |
 | Converse | `sendMessage()`, `cancelActiveTurn()` |
 | Identity and enrichment | `captureIdentity()`, `identify()`, `setIdentity()`, `getVisitorIntel()` |
-| Voice association | `getVoiceCredential()`, `markVoiceUpgrade()`, `linkElevenLabsConversation()` |
+| Voice association | `getVoiceCredential()` (hosted endpoint unavailable), `markVoiceUpgrade()`, `linkElevenLabsConversation()` |
 | Media | `getSlides()`, `getSlideMetadata()` |
 | Site and session context | `updatePage()`, `updateSessionContext()` |
 | Lifecycle events | `track()`, `sendEvent()`, `on()`, `once()`, `off()` |
 | Application tools | `registerTool()`, `tools` |
 | Lead handoff | `reportDemoRequestOpened()`, `submitDemoRequest()` |
 | Teardown | `endSession()`, `destroy()` |
+
+The hosted service currently lacks the private `voice-token` endpoint and the complete signed chat-tool continuation protocol. Package methods describe the SDK interface, not backend availability. See [current availability](/guides/widget-sdk/overview#current-availability).
 
 Use `browserSessionInput()` and `resolveWidgetSessionAttribution()` to prepare attribution. `forgetBrowserVisitorKey()` clears the SDK continuity key for privacy controls. See [campaigns](/guides/widget-sdk/campaigns), [identity](/guides/widget-sdk/identity) and [events](/guides/widget-sdk/events).
 
@@ -41,7 +43,7 @@ Use `browserSessionInput()` and `resolveWidgetSessionAttribution()` to prepare a
 
 ## Saved agent configuration
 
-Available in the experimental handoff build:
+Available in `0.1.1-webmcp.2` with the deployed authenticated management API. This example shows the call shape; supply your organization, agent ID and management origin:
 
 ```ts
 const admin = new ConvincedAgentAdmin({ orgSlug, agentId, apiBase })

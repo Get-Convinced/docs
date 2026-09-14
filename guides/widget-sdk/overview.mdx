@@ -1,68 +1,89 @@
 ---
 title: 'SDK overview'
-description: 'Choose your integration, understand the browser and server responsibilities, and install the client handoff build.'
+description: 'Add a conversation agent to your website, choose its interface, and expose the actions it can perform.'
 icon: 'layer-group'
 ---
 
-The Convinced Widget SDK connects your website to a conversation agent. Your application supplies the interface and permitted page actions; the SDK supplies session, voice, chat, tools and lifecycle APIs.
+The Convinced Widget SDK is a JavaScript package for adding voice, chat and permitted page actions to your website. Use the supplied widget or build your own interface. It works without React and can be integrated into an existing application.
 
-## Choose your integration
+**Start here when adding the SDK to a new website.** You supply the website's content, routes and useful actions. Adding a new page does not require a new SDK build.
 
-| Need | Use | Start here |
+## Choose an integration
+
+| Your goal | Integration | Next step |
 | --- | --- | --- |
-| Hosted appearance with a small embed | Managed iframe and parent-page bridge | [Managed iframe](/guides/widget-sdk/managed-iframe) |
-| A supplied UI with your brand | `mountConvincedWidget()` and `managed-v2` | [Quickstart](/guides/widget-sdk/quickstart) |
-| Complete control of the interface | `ConvincedClient` and `ConvincedVoiceController` | [Custom UI](/guides/widget-sdk/custom-ui) |
-| Explicit application actions | `ClientToolRegistry`, DOM tools or `createMcpTools()` | [Host tools](/guides/widget-sdk/host-tools) |
-| Discover actions exposed by different websites | Experimental WebMCP bridge | [WebMCP](/guides/widget-sdk/webmcp) |
-| Let customer admins edit saved instructions and the opener | `ConvincedAgentAdmin` plus the management backend | [Prompts and first message](/guides/widget-sdk/agent-prompts) |
+| Add a ready-made interface inside your page | `mountConvincedWidget()` with the `managed-v2` preset | [SDK quickstart](/guides/widget-sdk/quickstart) |
+| Own the entire interface | `ConvincedClient` and `ConvincedVoiceController` | [Custom UI](/guides/widget-sdk/custom-ui) |
+| Embed the existing hosted widget | Hosted iframe loader | [Managed iframe](/guides/widget-sdk/managed-iframe) |
+| Let the agent use your website's actions | Explicit registry tools, or experimental WebMCP discovery | [Website tools](/guides/widget-sdk/host-tools) · [WebMCP](/guides/widget-sdk/webmcp) |
+| Let administrators change saved instructions and the opener | `ConvincedAgentAdmin` in an authenticated management interface | [Prompts and first message](/guides/widget-sdk/agent-prompts) |
 
-## Handoff build and availability
+The hosted iframe and the JavaScript SDK are separate integrations. The published iframe loader does not expose the SDK's host-tool registration or WebMCP bridge. Choose the JavaScript SDK when your agent needs to act on the parent page.
 
-<Note>
-  WebMCP and saved prompt administration are available in `0.1.1-webmcp.2`, published under the npm `next` tag. Pin the exact version below. WebMCP remains experimental; prompt administration requires the matching authenticated backend and a registered agent owner.
-</Note>
+## Before you start
+
+- Get your Convinced organization slug and widget configuration from your Convinced administrator. Configure the website's allowed origin and supply a widget token if required.
+- For voice, get the intended ElevenLabs agent ID and configure its matching client tools. A public agent can connect by ID; a private agent needs a server-issued conversation credential.
+- Run the visitor page over HTTPS, or localhost during development, for microphone access. Start voice from a visitor's button press.
+- For npm, use Node.js 22.14 or newer and your application's JavaScript bundler. A standalone browser bundle is also included.
+
+Campaigns are optional. An ordinary page can create a session without a campaign link. See [campaign sessions](/guides/widget-sdk/campaigns) for personalized campaign experiences.
+
+## Install
+
+These guides target the published prerelease **`0.1.1-webmcp.2`**:
 
 ```bash
 npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.2
 ```
 
-Commit your package-manager lockfile so another developer can reproduce the build. Ordinary `npm install @convinced/widget-sdk` selects the stable `latest` tag, currently `0.1.0`, which does not include these new exports. The supplied tarball is an offline installation option.
+Commit your lockfile. This version is under npm's `next` tag; the unversioned install selects `latest`, which remains `0.1.0` and lacks WebMCP and saved prompt administration. The [tagged source](https://github.com/Get-Convinced/convinced-widget-sdk/tree/v0.1.1-webmcp.2) matches these guides.
 
-The package contains ESM, TypeScript declarations, an optional browser IIFE, and reference examples. It works without React. The browser entry point never contains the ElevenLabs management key.
-
-## What each part owns
+## How the pieces connect
 
 ```mermaid
-flowchart LR
-  Visitor --> UI[Your website UI]
+flowchart TB
+  Visitor --> UI[Your website interface]
   UI --> SDK[Convinced browser SDK]
-  SDK --> Voice[ElevenLabs conversation]
   SDK --> Runtime[Convinced session and chat API]
-  Voice --> Bridge[Registered tools or WebMCP bridge]
-  Bridge --> Actions[Your permitted page actions]
-  Admin[Authenticated customer admin] --> Management[Convinced management API]
-  Management --> Settings[ElevenLabs live agent configuration]
+  SDK --> Voice[ElevenLabs conversation]
+  Voice --> Tools[Registered tools or WebMCP bridge]
+  Tools --> Page[Your authorized page actions]
+  Admin[Customer administrator] --> Management[Authenticated management API]
+  Management --> Agent[Saved ElevenLabs agent settings]
 ```
 
-The runtime and the management API serve different users. A visitor can converse and request approved actions. An administrator can edit the saved agent configuration after the server checks their organization and agent ownership.
+The website owns its page actions and access checks. Convinced owns its hosted session service. ElevenLabs runs the voice conversation. Saved prompt editing uses a separate authenticated management API; visitor credentials do not grant administration access.
 
-## Add another website
+## Current availability
 
-1. Configure the site's organization, public embed settings and allowed origins.
-2. Select the intended ElevenLabs agent and its public or private-session connection.
-3. Keep one SDK owner mounted while SPA routes change.
-4. Expose the new page's actions and current context. Use WebMCP when the page and browser support it, or register explicit application tools.
-5. Use instructions that discover the current site's capabilities. Keep route names, product IDs and factual content in the page's context and tool results.
-6. Test the new website's actual task outcomes, including denied actions and route teardown.
+The September 14, 2026 audit checked the published package against the hosted services. A browser API being present in the package does not mean every corresponding backend endpoint is deployed.
 
-WebMCP standardizes how an opted-in website exposes actions. It does not automatically add actions to an arbitrary URL, supply account permissions, make every browser compatible, or guarantee that the model chooses the right action.
+| Capability | Current status |
+| --- | --- |
+| Hosted widget configuration, session initialization and session end | Verified against the deployed Convinced backend |
+| Public ElevenLabs connection, managed UI and explicit voice tools | Implemented in the SDK; configure the agent and test your real voice flow |
+| Saved system prompt and first message | Management API deployed; requires Convinced organization ADMIN authentication and a registered agent owner |
+| WebMCP discovery and execution | Experimental; native browser transport tested, real voice task acceptance still required |
+| `client.getVoiceCredential()` for private voice | **Unavailable on the hosted backend**; its endpoint returned `404`. Use your own authenticated credential service as described in [voice](/guides/widget-sdk/voice) |
+| Signed session capabilities and chat tool continuation | SDK protocol support exists; the hosted routes do not provide the complete protocol. Do not depend on these server guarantees |
+| Host tools through the hosted iframe loader | Unavailable; use the JavaScript SDK for website actions |
 
-## Continue
+See [security](/guides/widget-sdk/security) and the [capability matrix](/guides/widget-sdk/migration) before choosing features for production.
+
+## Add more pages and websites
+
+Keep one SDK owner mounted across SPA route changes. Update the page context, register the route's actions and remove tools that are no longer available. Use existing application controllers so a tool produces the same observable result as the interface.
+
+WebMCP lets the agent discover website actions through two fixed callbacks. Each website must still expose its own tools, validate arguments and enforce permissions. This SDK bridge supports same-origin discovery in compatible browsers; it does not give an agent automatic control of arbitrary websites.
+
+Keep saved agent instructions general: discover the current page's capabilities, use their schemas and confirm the returned outcome. Supply page-specific names, IDs and content as context or tool results. Adding the SDK to another page does not rewrite an existing page-specific agent prompt.
+
+## Build your integration
 
 <CardGroup cols={2}>
-  <Card title="WebMCP integration" icon="globe" href="/guides/widget-sdk/webmcp">Publish existing tools and connect the two discovery/execution callbacks.</Card>
-  <Card title="Prompts and first message" icon="pen" href="/guides/widget-sdk/agent-prompts">Build an authenticated editor that updates ElevenLabs itself.</Card>
-  <Card title="SDK API map" icon="code" href="/guides/widget-sdk/api-reference">Find the public classes, helpers, methods and limits.</Card>
-  <Card title="Client handoff" icon="clipboard-check" href="/guides/widget-sdk/client-handoff">Provision, verify and release the integration with clear responsibilities.</Card>
+  <Card title="SDK quickstart" icon="microphone-lines" href="/guides/widget-sdk/quickstart">Install, initialize a session and mount the supplied interface.</Card>
+  <Card title="Build with a coding agent" icon="wand-magic-sparkles" href="/guides/widget-sdk/build-with-an-agent">Use a reviewed implementation prompt and acceptance checklist.</Card>
+  <Card title="WebMCP website tools" icon="globe" href="/guides/widget-sdk/webmcp">Expose website actions and configure discovery and execution.</Card>
+  <Card title="Implementation checklist" icon="clipboard-check" href="/guides/widget-sdk/client-handoff">Verify ownership and actual task outcomes before launch.</Card>
 </CardGroup>

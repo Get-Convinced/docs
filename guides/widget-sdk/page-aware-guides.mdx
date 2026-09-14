@@ -42,27 +42,29 @@ You do not need to rewrite landing-page content unless the page does not contain
 Mount the Convinced client and voice controller above the route content when the conversation must survive SPA navigation.
 
 ```ts
+import {
+  ClientToolRegistry,
+  ConvincedClient,
+  ConvincedVoiceController,
+  HOST_TOOL_PROTOCOL_VERSION,
+  type ClientToolDefinition,
+  type JsonObject,
+} from "@convinced/widget-sdk";
+
+const tools = new ClientToolRegistry();
+const authorizePageTool = ({ tool }: { tool: ClientToolDefinition }) =>
+  tool.effect === "read" || window.confirm(`Allow ${tool.description}?`);
+
 const client = new ConvincedClient({
   orgSlug: "acme",
   tools,
-  authorizeToolCall: ({ tool }) => {
-    if (tool.effect === "read") return true;
-    return pageToolConsent(tool);
-  },
+  authorizeToolCall: authorizePageTool,
 });
 
 await client.initialize();
-
-const voice = new ConvincedVoiceController({
-  descriptorFactory: () => client.getVoiceCredential(),
-  tools,
-  orgSlug: client.orgSlug,
-  sessionId: () => client.state.session?.sessionId ?? null,
-  onConversationId: (id) => client.linkElevenLabsConversation(id),
-});
 ```
 
-Use a short-lived signed credential for a private ElevenLabs agent. Keep the ElevenLabs API key on your backend.
+The following sections continue in this module. Register the page tools before starting the voice controller in step 5. Supply your organization slug, an intentionally public ElevenLabs agent ID (or your own credential endpoint), and the page's existing `pageActions` adapter. Keep the ElevenLabs API key on your backend.
 
 ## 2. Describe the page with semantic IDs
 
@@ -84,10 +86,6 @@ const pageGuide = {
       label: "Supplier",
       roleIds: [
         "ai-inbound-scheduler",
-        "ai-visibility-controller",
-        "ai-resilience-controller",
-        "ai-sourcing-strategist",
-        "ai-settlement-auditor",
       ],
     },
   ],
@@ -115,13 +113,6 @@ Keep this contract compact:
 A discovery-oriented guide normally needs one tool that inspects an exact scope and one tool that presents a selected entity.
 
 ```ts
-import {
-  ClientToolRegistry,
-  HOST_TOOL_PROTOCOL_VERSION,
-} from "@convinced/widget-sdk";
-
-const tools = new ClientToolRegistry();
-
 tools.register({
   version: HOST_TOOL_PROTOCOL_VERSION,
   name: "host_inspect_workforce_scope",
@@ -145,7 +136,7 @@ tools.register({
   constraints: {
     section: "ai-workforce-range",
   },
-  handler: async ({ scope_id }) => {
+  handler: async ({ scope_id }): Promise<JsonObject> => {
     const scope = pageGuide.scopes.find((item) => item.id === scope_id);
 
     if (!scope) {
@@ -161,16 +152,14 @@ tools.register({
       scope_id: scope.id,
       scope_label: scope.label,
       exact_role_ids: scope.roleIds,
-      roles: scope.roleIds.map((roleId) =>
-        pageGuide.roles.find((role) => role.id === roleId),
-      ),
+      roles: pageGuide.roles.filter((role) => scope.roleIds.includes(role.id)),
       presentation_performed: false,
     };
   },
 });
 ```
 
-The read tool prevents the agent from guessing which products belong to a visible area.
+The read tool prevents the agent from guessing which products belong to a visible area. This minimal example defines one role. When extending it, ensure every `roleIds` reference resolves to a full role object; validate the relationship when loading your page manifest.
 
 ## 4. Return an observed receipt after every page mutation
 
@@ -200,12 +189,12 @@ tools.register({
     presentationOnly: true,
     section: "ai-workforce-range",
   },
-  handler: async ({ role_id }) => {
+  handler: async ({ role_id }): Promise<JsonObject> => {
     const requestedRole = pageGuide.roles.find((role) => role.id === role_id);
     if (!requestedRole)
       return { status: "not_found", requested_role_id: role_id };
 
-    await pageActions.presentRole(role_id);
+    await pageActions.presentRole(requestedRole.id);
     const observed = pageActions.readSettledSelection();
 
     return {
@@ -237,7 +226,7 @@ The tool names configured on the ElevenLabs agent are on the left. The registere
 ```ts
 const voice = new ConvincedVoiceController({
   descriptor: {
-    agentId: "agent_123",
+    agentId: "YOUR_PUBLIC_ELEVENLABS_AGENT_ID",
     connectionType: "webrtc",
     exactClientTools: {
       inspect_workforce_scope: "host_inspect_workforce_scope",
@@ -248,10 +237,16 @@ const voice = new ConvincedVoiceController({
   tools,
   orgSlug: client.orgSlug,
   sessionId: () => client.state.session?.sessionId ?? null,
+  authorizeToolCall: authorizePageTool,
+  onConversationId: (id) => client.linkElevenLabsConversation(id),
 });
 ```
 
+For a private agent, replace `descriptor` with your own authenticated `descriptorFactory`; the hosted `getVoiceCredential()` endpoint is not deployed. See [ElevenLabs voice](/guides/widget-sdk/voice#choose-a-browser-safe-descriptor).
+
 Enable **Wait for response** for both ElevenLabs client tools. The agent must receive the observed tool result before it explains the page.
+
+The chat client and voice controller have separate authorization hooks; passing a hook only to `ConvincedClient` does not authorize voice actions. The example's `session` consent permits subsequent calls to that same tool after the visitor approves it once. Use `per_call` when each invocation needs a fresh decision.
 
 Use a dedicated guide agent when changing the prompt, tool catalog, or sales motion would affect an existing production widget. The landing page can still use the same Widget SDK.
 
@@ -337,12 +332,12 @@ router.onChange(async ({ url, title, pageId }) => {
 });
 ```
 
-Mount one manifest per route and unregister route-specific tools when that route unmounts. Keep the session owner above the router.
+Mount one manifest per route and unregister route-specific tools when that route unmounts. Keep the session owner above the router. A full document navigation unloads the browser voice transport; a conventional multi-page site starts a new SDK owner on the destination page rather than preserving an uninterrupted voice call.
 
 ## Client handoff checklist
 
 - The SDK is mounted once in a persistent owner.
-- The browser receives a short-lived voice credential, never an ElevenLabs API key.
+- The browser receives an intentionally public agent ID or a short-lived private credential, never an ElevenLabs API key.
 - Every page object has a stable semantic ID.
 - Scope membership and other important relationships are exact.
 - Read tools do not mutate the page.

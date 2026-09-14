@@ -1,290 +1,95 @@
 ---
-title: 'Voice-first SDK quickstart'
-description: 'Run ElevenLabs voice as the primary channel, keep chat as a fallback, and mount the widget without an iframe.'
+title: 'SDK quickstart'
+description: 'Mount a voice and chat widget on your website using the published JavaScript SDK.'
 icon: 'microphone-lines'
 ---
 
-The Widget SDK is the iframe-free integration path. It creates a Convinced campaign session, connects an ElevenLabs conversation, and lets the same bounded tool registry serve voice and chat.
+This example adds the supplied `managed-v2` interface to an existing browser application. It creates a Convinced session, connects a public ElevenLabs agent when the visitor starts voice, and exposes page context, scrolling and highlighting. Campaign attribution is optional.
 
-Use the supplied `managed-v2` preset for a functional default composition, or use the headless clients when your application owns every visual element.
+## 1. Install
 
-<Note>
-  Using a coding agent? Copy the complete [`AGENT_BUILD_PROMPT.txt`](https://raw.githubusercontent.com/Get-Convinced/convinced-widget-sdk/main/AGENT_BUILD_PROMPT.txt), or follow [Build with a coding agent](/guides/widget-sdk/build-with-an-agent). It covers the voice-first integration, progressive identity, tools, analytics, security, and real-browser acceptance.
-</Note>
+Use Node.js 22.14 or newer. From your application's package directory:
 
-## 1. Install the package
-
-The stable npm `latest` tag is `0.1.0`. For WebMCP and persistent prompt/first-message administration, pin the published `0.1.1-webmcp.2` prerelease and use the matching backend from the [handoff guide](/guides/widget-sdk/client-handoff):
-
-```bash Experimental handoff
+```bash
 npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.2
 ```
 
-The commands below install the published baseline:
+Commit the lockfile. Load the code below through your application's bundler on the client, after the DOM exists. For a script-tag integration, see [browser bundle](/guides/widget-sdk/migration).
 
-<CodeGroup>
-```bash npm
-npm install @convinced/widget-sdk
-```
+## 2. Configure your organization and agent
 
-```bash bun
-bun add @convinced/widget-sdk
-```
+You need your provisioned Convinced `orgSlug`, the website's allowed origin and a public ElevenLabs `agentId`. Supply `widgetToken` if your deployment requires it. Use HTTPS or localhost for microphone access.
 
-```bash pnpm
-pnpm add @convinced/widget-sdk
-```
-</CodeGroup>
+Download the [ElevenLabs managed tool definitions](/examples/elevenlabs-managed-tools.json). Each entry contains a `tool_config` with the exact name, description, input schema and response setting. Configure matching client tools in the ElevenLabs dashboard or through its [Tools API](https://elevenlabs.io/docs/api-reference/tools/create), then attach their tool IDs to your agent.
 
-The package contains ESM, TypeScript declarations, and a browser IIFE at `dist/convinced-widget.global.js`. It does not require React.
+For this quickstart, attach these **nine** client tools:
 
-## 2. Configure the ElevenLabs agent
-
-Choose the agent tool contract before provisioning. The canonical managed Convinced agent uses the 11 tools below. A dedicated WebMCP agent uses [two discovery/execution callbacks](/guides/widget-sdk/webmcp); additional managed UI callbacks need separate configuration if your renderer uses them.
-
-| ElevenLabs tool name | Purpose |
+| Tools | Supplied by |
 | --- | --- |
-| `show_slide` | Render an allowed slide in the widget |
-| `show_youtube_embed` | Render an allowed recommended video |
-| `set_visitor_field` | Fill one managed identity field during the live conversation |
-| `request_email_capture` | Ask the managed renderer to show a contextual identity enquiry |
-| `confirm_visitor_form` | Submit the managed identity form only after host-approved per-call consent |
-| `show_book_demo_cta` | Show the configured meeting or demo-request action |
-| `host_get_page_context` | Read a compact page summary without form values |
-| `host_navigate` | Change an SPA route without unloading the document |
-| `host_scroll_to` | Scroll one safely selected element into view |
-| `host_highlight` | Temporarily highlight one safely selected element |
-| `host_extension_call` | Dispatch to one already-registered custom or MCP-backed capability |
+| `show_slide`, `show_youtube_embed` | Managed renderer; content must exist in the session's allowed catalog |
+| `set_visitor_field`, `request_email_capture`, `confirm_visitor_form` | Managed identity interface; submission needs host authorization |
+| `show_book_demo_cta` | Managed renderer using deployment settings |
+| `host_get_page_context`, `host_scroll_to`, `host_highlight` | This example's DOM tool registry |
 
-The names and parameter schemas in ElevenLabs must match the canonical catalog. The `managed-v2` preset supplies the presentation and identity callbacks; your integration supplies the page and application tools it chooses to expose. Turn on **Wait for response** when the agent must receive the result before it continues speaking.
+The download also includes optional `host_navigate` and `host_extension_call`. This quickstart does not activate them. Add them only with matching handlers and bindings. Use **Wait for response** so the model can inspect each result before claiming success.
 
-Enable the agent's `first_message` conversation override as well. Campaign mode uses it to replace the generic opener with `personalization.firstMessage`; ElevenLabs rejects the session when a disabled override is supplied. The application repository's audit/sync script checks the exact 11-tool attachment and this override together.
+Enable the agent's first-message conversation override. The managed widget supplies its selected greeting, including configured, campaign and return-visitor greetings, as a voice-start override. A saved opener and a session override have different scopes; see [prompts and first message](/guides/widget-sdk/agent-prompts).
 
 <Note>
-  A public ElevenLabs agent can be started with its `agentId`. A private agent must use a short-lived signed URL or conversation token created by your backend. Never send an ElevenLabs API key to the browser.
+  This example uses a public agent. For private agents, implement a server-issued descriptor as described in [ElevenLabs voice](/guides/widget-sdk/voice). The published `client.getVoiceCredential()` helper targets an undeployed hosted endpoint and returns `404`.
 </Note>
 
-## 3. Create the campaign session and page tools
+## 3. Add the browser module
+
+Save the [complete typed module](/examples/sdk-quickstart.ts) as `sdk-quickstart.ts` in your application. It defines the registry, permissions, session, voice controller, managed widget and cleanup in one function.
+
+Call it from your browser entry point:
 
 ```ts
-import {
-  ClientToolRegistry,
-  ConvincedClient,
-  ConvincedVoiceController,
-  mountConvincedWidget,
-  registerDomTools,
-} from '@convinced/widget-sdk'
+import { createWebsiteWidget } from './sdk-quickstart'
 
-const tools = new ClientToolRegistry()
+async function main() {
+  const integration = await createWebsiteWidget({
+    orgSlug: 'YOUR_ORG_SLUG',
+    publicAgentId: 'YOUR_PUBLIC_ELEVENLABS_AGENT_ID',
+    // widgetToken: 'YOUR_PUBLIC_WIDGET_TOKEN', // If required
+  })
 
-registerDomTools(tools, {
-  capabilities: {
-    pageContext: true,
-    navigate: true,
-    scroll: true,
-    highlight: true,
-  },
+  // Keep this owner for the lifetime of your application.
+  // Call await integration.dispose() when the application deliberately ends it.
+  return integration
+}
 
-  // Required for host_navigate. Keep the document alive so the voice tool
-  // can return its result after the route changes.
-  navigate: (url) => appRouter.navigate(url),
-
-  // Page mutations are denied unless your application approves them.
-  authorize: ({ action, target }) => {
-    if (action === 'pageContext') return true
-    return window.confirm(`Allow ${action}${target ? `: ${target}` : ''}?`)
-  },
-})
-
-const client = new ConvincedClient({
-  orgSlug: 'acme',
-  tools,
-  authorizeToolCall: ({ tool }) => {
-    if (tool.effect === 'read') return true
-    return window.confirm(`Allow ${tool.description}?`)
-  },
-})
-
-// Reads campaign attribution from the current URL by default.
-await client.initialize()
-```
-
-`initialize()` loads widget configuration, creates the session, and loads slide metadata when slides are enabled. Campaign links such as `?c=acme-logistics` work the same way as the managed loader.
-
-## 4. Connect ElevenLabs voice
-
-```ts
-const session = client.state.session
-if (!session) throw new Error('The Convinced session did not initialize.')
-
-const voice = new ConvincedVoiceController({
-  descriptor: {
-    agentId: 'agent_123', // Public agents only
-    connectionType: 'webrtc',
-    exactClientTools: {
-      host_get_page_context: 'host_get_page_context',
-      host_navigate: 'host_navigate',
-      host_scroll_to: 'host_scroll_to',
-      host_highlight: 'host_highlight',
-    },
-    // Enable this only after adding an ElevenLabs client tool named
-    // host_extension_call. The exact four tools above are enough to start.
-    genericClientTool: false,
-  },
-  tools,
-  orgSlug: client.orgSlug,
-  sessionId: () => client.state.session?.sessionId ?? null,
-  authorizeToolCall: ({ tool }) => {
-    if (tool.effect === 'read') return true
-    return window.confirm(`Allow voice to use ${tool.description}?`)
-  },
-  onConversationId: (conversationId) => {
-    client.linkElevenLabsConversation(conversationId)
-  },
+main().catch((error) => {
+  console.error('Widget initialization failed', error)
+  const message = document.createElement('p')
+  message.textContent = 'The assistant could not start. Please try again later.'
+  document.body.append(message)
 })
 ```
 
-When `managed-v2` starts voice, it automatically adds the current Convinced session ID, campaign personalization and first message, governed knowledge, page context, identity state, recent transcript, slides, and recommended videos. Client-supplied page and campaign observations are explicitly labeled as untrusted data, not instructions. Descriptor-level variables remain available for values specific to your ElevenLabs agent.
+Replace both placeholders before running. The SDK defaults to `https://app.getconvinced.ai`; this example does not require a campaign token, private application checkout, or browser-side ElevenLabs API key.
 
-A headless renderer owns the start adapter explicitly:
+The module passes authorization to both chat and voice and separately approves DOM mutations. Its confirmation dialogs are a minimal example; replace them with your application's policy and consent UI. Browser-side authorization does not replace server access checks.
 
-```ts
-import { buildManagedVoiceStartContext } from '@convinced/widget-sdk'
+## 4. Run and verify
 
-await voice.start(buildManagedVoiceStartContext(client.state, {
-  pageUrl: window.location.href,
-  pageTitle: document.title,
-}))
-```
+Start your application's development server. Expect a **Talk to us** launcher with the managed voice and chat interface.
 
-For a private agent, fetch a fresh short-lived credential on every start or reconnect:
+1. Open it and confirm configuration and session initialization succeed.
+2. Press the voice control and grant microphone access. Deployment settings may require an identity step or chat warmup first.
+3. Confirm the intended agent speaks. Ask it to describe the page, then highlight a visible heading. Approve the action and verify the page changed.
+4. Deny an action and confirm the agent reports the denial.
+5. Try chat and confirm a text reply. The hosted chat route does not implement the complete client-tool continuation protocol; this does not prove chat-driven page actions.
+6. End the session and verify the request succeeds. Check stored history separately if that is part of your launch requirements.
 
-```ts
-const voice = new ConvincedVoiceController({
-  descriptorFactory: () => client.getVoiceCredential(),
-  tools,
-  orgSlug: client.orgSlug,
-  sessionId: () => client.state.session?.sessionId ?? null,
-})
-```
+The widget registers managed voice callbacks when `widget.startVoice()` or its voice control starts the conversation. Calling `voice.start()` directly does not install the renderer's managed callbacks.
 
-`getVoiceCredential()` sends the signed Convinced session capability to the widget backend. The backend resolves the configured private agent and returns `{ conversationToken, connectionType: 'webrtc' }`; the browser cannot choose another agent. A custom backend factory may instead return `{ signedUrl, connectionType: 'websocket' }`. The browser must receive only the short-lived credential, and the factory prevents it from expiring while the launcher sits idle.
+## 5. Extend the integration
 
-## 5. Mount the default voice-first composition
+- **More pages:** Keep one owner mounted and update route context. Add navigation through your router using [host tools](/guides/widget-sdk/host-tools).
+- **Dynamic website tools:** Follow [WebMCP](/guides/widget-sdk/webmcp) for two discovery/execution callbacks. A headless WebMCP agent and the managed renderer use different callback sets.
+- **Your own interface:** Reuse the clients with [custom UI](/guides/widget-sdk/custom-ui).
+- **Saved instructions and opener:** Build an authenticated [agent editor](/guides/widget-sdk/agent-prompts).
 
-```ts
-const widget = mountConvincedWidget({
-  client,
-  voice,
-  preset: 'managed-v2',
-  placement: 'floating',
-  launcherLabel: 'Talk to Acme',
-  theme: {
-    primary: '#0f766e',
-    onPrimary: '#ffffff',
-    accent: '#ffffff',
-    background: '#f0fdfa',
-    surface: '#ffffff',
-    text: '#134e4a',
-    radius: '18px',
-  },
-})
-```
-
-The preset renders the configured first message, campaign pills, voice and chat controls, typed media, identity form, welcome card, rules-owned engagement offers, safe meeting CTA, and configured launcher, callout, ticker, position, and theme treatments. It honors the deployment's voice-mode and mode-toggle configuration and reduced-motion preferences.
-
-Microphone access starts only after the visitor presses the voice control. You can also start and end it from your own buttons:
-
-```ts
-startButton.addEventListener('click', async () => {
-  const result = await widget.startVoice()
-  // 'started' | 'identity_required' | 'already_connected'
-  // identity_required applies to smart_gate/email_gate. always_voice and
-  // voice_only connect first, then collect identity in conversation.
-  console.log(result)
-})
-endButton.addEventListener('click', () => widget.endVoice())
-```
-
-## 6. Keep SPA context and end the session
-
-```ts
-appRouter.onChange(async ({ url, title }) => {
-  await client.updatePage({ url, title })
-
-  if (voice.state.status === 'connected') {
-    voice.sendContextualUpdate(
-      `The visitor moved to ${title}: ${url}`,
-      'current-page',
-    )
-  }
-})
-
-finishButton.addEventListener('click', async () => {
-  await widget.endSession()
-})
-```
-
-Call `widget.endSession()` from a reliable application teardown or explicit close action. The mounted widget ends ElevenLabs and persists the linked conversation IDs, merged chat and voice transcript, captured identity, and slide filenames actually shown by the renderer. Avoid relying on `beforeunload` or `pagehide`; browsers do not guarantee that an asynchronous request finishes there.
-
-In a headless integration, keep your own ordered voice transcript and shown-slide set, then provide them as `clientMessages` and `slidesViewed` to `client.endSession()`.
-
-## What the default preset is, and is not
-
-`managed-v2` is the SDK's functional default: it composes the same session, voice adapter, campaign data, identity, media, engagement, launcher, and lifecycle APIs. It is not a pixel-for-pixel copy of every historical hosted animation and mobile transition.
-
-Use the [managed iframe](/guides/widget-sdk/managed-iframe) when you need the exact hosted widget appearance. Use [custom UI and themes](/guides/widget-sdk/custom-ui) when the client wants a novel visual system or interaction model.
-
-## Run the repository examples
-
-The SDK repository includes five no-framework reference applications:
-
-| Example | What it proves |
-| --- | --- |
-| `examples/vanilla` | Demonstrates the smallest browser integration with the supplied renderer |
-| `examples/managed-parity` | Demonstrates the default `managed-v2` composition with campaign greeting, pills, voice, chat, identity, and media |
-| `examples/voice-spa` | Demonstrates History API routes at `/home`, `/pricing`, and `/case-study` with voice-driven navigation, scroll, highlight, and page context |
-| `examples/custom-brand` | Demonstrates headless session and voice clients inside a completely novel visual and identity flow |
-| `examples/real-org-lab` | Exercises a real campaign, private ElevenLabs voice, PostHog replay, identity/history, SPA tools, MCP, and a real slide |
-
-```bash
-cd /path/to/convinced-widget-sdk
-bun run build
-bun run examples/voice-spa/server.ts
-```
-
-The voice SPA uses a deterministic ElevenLabs-compatible mock by default so page tools can be tested without a live call. To exercise a public live agent configured with the matching client tools:
-
-```bash
-ELEVENLABS_AGENT_ID=agent_123 bun run examples/voice-spa/server.ts
-```
-
-Open the printed `/home?voice=real` URL and grant microphone access from the voice control. A private production agent should use the signed descriptor flow instead of putting a key in this example.
-
-## Next steps
-
-To let customer administrators edit saved ElevenLabs instructions and the opening message, use [Prompts and first message](/guides/widget-sdk/agent-prompts). The visitor widget never receives management credentials.
-
-<CardGroup cols={2}>
-  <Card title="Build with a coding agent" icon="wand-magic-sparkles" href="/guides/widget-sdk/build-with-an-agent">
-    Give an AI coding agent one reviewed implementation and acceptance prompt.
-  </Card>
-  <Card title="ElevenLabs voice" icon="microphone-lines" href="/guides/widget-sdk/voice">
-    Private-agent credentials, voice controls, tool bindings, and continuity.
-  </Card>
-  <Card title="Campaign sessions" icon="bullseye-arrow" href="/guides/widget-sdk/campaigns">
-    Attribution precedence and every personalized field returned to the SDK.
-  </Card>
-  <Card title="Host tools and MCP" icon="screwdriver-wrench" href="/guides/widget-sdk/host-tools">
-    Add SPA navigation, scrolling, highlighting, and bounded application tools.
-  </Card>
-  <Card title="Page-aware guides" icon="compass" href="/guides/widget-sdk/page-aware-guides">
-    Map semantic page objects to discovery tools, bounded actions, and observed UI receipts.
-  </Card>
-  <Card title="Migration and parity" icon="arrow-right-arrow-left" href="/guides/widget-sdk/migration">
-    Choose the iframe, default preset, or headless client feature by feature.
-  </Card>
-  <Card title="Analytics and real-browser testing" icon="chart-user" href="/guides/widget-sdk/analytics-and-testing">
-    Correlate PostHog replay and run the real ElevenLabs acceptance page.
-  </Card>
-</CardGroup>
+Use the [implementation checklist](/guides/widget-sdk/client-handoff) to verify your website and real voice flow before launch.

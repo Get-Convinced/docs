@@ -17,12 +17,30 @@ import {
 export async function openAgentEditor(options: ConvincedAgentAdminOptions) {
   const admin = new ConvincedAgentAdmin(options)
   let current = await admin.getPrompt()
+  let busy = false
+  let reloadRequired = false
   return {
     get current() { return current },
-    async reload() { current = await admin.getPrompt(); return current },
+    async reload() {
+      if (busy) throw new Error('An editor request is already in progress')
+      busy = true
+      try {
+        current = await admin.getPrompt()
+        reloadRequired = false
+        return current
+      } finally { busy = false }
+    },
     async save(changes: Omit<UpdateAgentPromptInput, 'expectedRevision'>) {
-      current = await admin.updatePrompt({ ...changes, expectedRevision: current.revision })
-      return current
+      if (busy) throw new Error('An editor request is already in progress')
+      if (reloadRequired) throw new Error('Reload saved settings before attempting another save')
+      busy = true
+      try {
+        current = await admin.updatePrompt({ ...changes, expectedRevision: current.revision })
+        return current
+      } catch (error) {
+        reloadRequired = true
+        throw error
+      } finally { busy = false }
     },
   }
 }
@@ -49,6 +67,7 @@ export async function publishPageTools(options: {
 export function createWebsiteVoice(options: {
   orgSlug: string
   publicAgentId: string
+  argumentEncoding?: 'json-string' | 'object'
   authorize: (tool: WebMcpRegisteredTool, input: JsonObject) => boolean | Promise<boolean>
 }) {
   const modelContext = getWebMcpModelContext()
@@ -56,19 +75,25 @@ export function createWebsiteVoice(options: {
   const bridge = createWebMcpBridge({
     modelContext,
     origin: window.location.origin,
-    argumentEncoding: 'json-string',
+    argumentEncoding: options.argumentEncoding ?? 'json-string',
     authorize: options.authorize,
   })
-  const voice = new ConvincedVoiceController({
-    orgSlug: options.orgSlug,
-    tools: new ClientToolRegistry(bridge.tools),
-    descriptor: {
-      agentId: options.publicAgentId,
-      connectionType: 'webrtc',
-      exactClientTools: WEBMCP_VOICE_BINDINGS,
-      genericClientTool: false,
-    },
-  })
+  let voice: ConvincedVoiceController
+  try {
+    voice = new ConvincedVoiceController({
+      orgSlug: options.orgSlug,
+      tools: new ClientToolRegistry(bridge.tools),
+      descriptor: {
+        agentId: options.publicAgentId,
+        connectionType: 'webrtc',
+        exactClientTools: WEBMCP_VOICE_BINDINGS,
+        genericClientTool: false,
+      },
+    })
+  } catch (error) {
+    bridge.dispose()
+    throw error
+  }
   return {
     voice,
     bridge,

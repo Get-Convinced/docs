@@ -1,114 +1,66 @@
 ---
-title: 'Client implementation handoff'
-description: 'Use the published SDK and Convinced backend to build more pages, expose website actions, and manage your agent.'
+title: 'Implementation checklist'
+description: 'Verify your website integration, agent configuration and actual task outcomes before launch.'
 icon: 'clipboard-check'
 ---
 
-Use this guide as the implementation order for your engineering team. The published SDK is `@convinced/widget-sdk@0.1.1-webmcp.2`, and the matching Convinced management API is deployed. Your team owns the website, its pages and its deployment. Reuse the SDK and hosted backend as you add pages.
+Start with the [SDK overview](/guides/widget-sdk/overview), then use this checklist to release your own website integration. These instructions apply to any customer website; your team owns its pages, repository and deployment.
 
-## Production release: 14 September 2026
-
-- SDK: `@convinced/widget-sdk@0.1.1-webmcp.2` is published under `next`; stable `latest` remains `0.1.0`.
-- Convinced management API: deployed at `https://app.getconvinced.ai`. Enmovil's authenticated administrator read returned `200`; a no-op save returned `200` with both fields unchanged; a stale revision returned `409`. Unauthenticated access returned `401`.
-- Documentation: live at [convinced.mintlify.app](https://convinced.mintlify.app).
-- Enmovil website integration: delivered in [PR #50](https://github.com/ensomarketing/enmovil-website/pull/50). The client team reviews, tests, merges and deploys this change using its own repository and Vercel access. The website is not deployed by the Convinced handoff.
-
-The production check preserved Enmovil's instructions and opener. Actual persisted changes were tested separately on temporary ElevenLabs agents. WebMCP remains experimental and opt-in; the four page-outcome failures below still need acceptance work.
-
-## What to hand over
-
-| Deliverable | Purpose |
-| --- | --- |
-| Pinned npm version or SDK tarball, plus lockfile | Reproducible browser package: `@convinced/widget-sdk@0.1.1-webmcp.2` |
-| SDK source patch and base commit | Review or extend the browser integration |
-| Backend source patch and base commit | Reference implementation of the already-deployed management API; no backend redeployment is needed for each new page |
-| Mintlify source and documentation patch | Keep implementation guides and API reference with the release |
-| ElevenLabs tool JSON and generic prompt | Configure the two WebMCP callbacks on the intended agent |
-| Test reports | Distinguish browser transport, page outcomes, provider persistence and remaining live acceptance |
-
-No provider credentials belong in this bundle. Configure them through your approved server environment.
-
-## Responsibilities
+## Agree on responsibilities
 
 | Owner | Work |
 | --- | --- |
-| Convinced backend team | Operate the management API, hold the server's ElevenLabs key, verify organization ADMIN access, and provision ownership when a new SDK agent is added |
-| Customer website team | Review and deploy the website PR, install the SDK, build pages, own UI and route lifecycle, expose permitted actions, provide current page context, and handle errors and teardown |
-| Agent configuration owner | Configure the intended live branch, client-tool schemas, generic instructions, opener and any session-override permissions |
-| Customer administrators | Edit the system prompt and first message through their authenticated editor |
+| Convinced operator | Provision the organization, widget configuration, allowed origins and agent ownership; operate hosted services and management authentication |
+| Website team | Install the SDK, own UI and route lifecycle, expose permitted page actions, handle errors and deploy the website |
+| Voice configuration owner | Configure the intended ElevenLabs agent, live branch, matching tools, general instructions, opener and override permissions |
+| Customer administrator | Review and save prompt or opener changes through an authenticated management interface |
 
-The SDK agent may be different from the organization's default widget agent. Match the voice descriptor's agent ID to the management binding. Do not overwrite the production widget's binding to grant a separate SDK agent access.
+The voice agent can differ from the organization's default widget agent. Match the descriptor's agent ID to the intended management binding. A public widget token or Campaign API key does not grant prompt-editing access.
 
-## Implementation sequence
+## Prepare the implementation
 
-<Steps>
-  <Step title="Install and identify the release">
-    Install the exact npm version or supplied `.tgz`, commit the lockfile, and record the matching backend and docs revision. See [SDK overview](/guides/widget-sdk/overview).
-  </Step>
-  <Step title="Provision management access">
-    Use the deployed Convinced management API and verify the authenticated customer ADMIN can access their registered agent. Convinced holds the ElevenLabs key server-side. A customer-domain editor needs an authenticated proxy; partner API keys are not accepted by these endpoints.
-  </Step>
-  <Step title="Connect a conversation">
-    Set the organization and agent identity. Start a public agent directly or fetch a fresh private credential on each start. Verify microphone access, speech and reconnect using [ElevenLabs voice](/guides/widget-sdk/voice).
-  </Step>
-  <Step title="Expose one useful website action">
-    Begin with one read and one visible action, each with input validation and an observed result. Use the existing application controllers. Follow [WebMCP](/guides/widget-sdk/webmcp) or [host tools](/guides/widget-sdk/host-tools).
-  </Step>
-  <Step title="Configure discovery instructions">
-    Attach the exported two-tool WebMCP contract to an isolated agent. Teach it to discover current tools and schemas, use observed IDs, and acknowledge failures. Remove assumptions about a particular Transformation route from generic instructions.
-  </Step>
-  <Step title="Build the customer editor">
-    Load `systemPrompt`, `firstMessage` and `revision`; save either field or both through `ConvincedAgentAdmin`. Show success only after provider read-back. See [prompt administration](/guides/widget-sdk/agent-prompts).
-  </Step>
-  <Step title="Test a second website">
-    Keep the SDK bridge and generic instructions the same. Change the site's tool registrations and page context. Confirm that discovery, authorization, visible outcomes and route cleanup work without static per-tool mappings.
-  </Step>
-  <Step title="Verify the full customer flow">
-    Test the customer's real login, ownership binding, live agent branch, changed opener in a new conversation, supported browsers, session history and relevant analytics. Keep the previous integration available during rollout.
-  </Step>
-</Steps>
+1. Install `@convinced/widget-sdk@0.1.1-webmcp.2` and commit the lockfile. Use the [quickstart module](/examples/sdk-quickstart.ts) or [reviewed coding-agent prompt](/examples/sdk-implementation-prompt.txt).
+2. Select the supplied widget, headless UI or hosted iframe. The hosted loader does not expose the SDK's page-tool bridge.
+3. Confirm your Convinced organization, allowed origin and any required widget token. Test a generic session before adding optional campaign attribution.
+4. Configure the actual ElevenLabs agent. Use the [managed callback definitions](/examples/elevenlabs-managed-tools.json) or [WebMCP callbacks](/examples/elevenlabs-webmcp-tools.json), matching only the capabilities your integration activates.
+5. Connect a public agent directly, or implement a private credential service on your own authenticated backend. The hosted `client.getVoiceCredential()` endpoint is not deployed.
+6. Keep one SDK owner across SPA routes. Expose page context and meaningful actions through application controllers; validate inputs and permissions at execution time.
+7. For a saved prompt editor, first verify Convinced ADMIN authentication and the exact agent's ownership. A customer-domain proxy needs a supported authentication integration, not just an API URL.
 
-## Add more pages with the same SDK
+See [current availability](/guides/widget-sdk/overview#current-availability) before depending on a hosted backend feature. In particular, do not assume signed session capabilities, complete chat-tool continuation or idempotent lead submission are deployed.
 
-You do not need a new SDK build or a new Convinced endpoint for each page. Your website supplies the capabilities and current page context; the shared agent discovers and uses them.
+## Add another page
 
-1. Install the pinned SDK once in your application and manage its lifecycle through your application's route changes. Follow [page-aware guides](/guides/widget-sdk/page-aware-guides) for context and navigation.
-2. Register each page's useful reads and actions with input schemas, host authorization and real application handlers. Use [WebMCP](/guides/widget-sdk/webmcp) where supported, and retain [host tools](/guides/widget-sdk/host-tools) as your tested fallback.
-3. Reuse the generic discovery instructions and two WebMCP callbacks. Replace Transformation-specific instructions on the intended agent before using it as a general guide; adding the SDK to a page does not rewrite the agent's saved prompt.
-4. Update tool registrations and page context when routes change, and dispose of stale registrations. The agent can act on capabilities the website exposes; it does not automatically gain control of every new page.
-5. Verify one read and one visible action on each page, then test navigation between pages, errors, authorization and the browsers your visitors use.
+Register the new page's useful reads and actions, supply current context and remove stale registrations when the route leaves. Keep route names, product IDs and factual page content in tool observations rather than hardcoding them into general instructions.
 
-The same registered agent can serve multiple pages. If you choose a separate agent for a new experience, ask Convinced to provision that agent's ownership once. Use [prompt administration](/guides/widget-sdk/agent-prompts) to build an authenticated editor for its saved system prompt and first message.
+With WebMCP, reuse the same two discovery/execution callbacks and [generic instructions](/examples/webmcp-agent-prompt.txt). The website still needs to expose its own actions and the browser must support the tested API shape. Adding the SDK does not rewrite a Transformation-specific prompt already saved on an agent.
 
-WebMCP is still an opt-in integration. Complete the remaining page-action and real-voice acceptance checks before making it the default experience for visitors.
+A new page normally needs no new SDK version or Convinced endpoint. A new protected backend operation still needs its own implementation and access checks. A separate voice agent needs its ownership and provider configuration provisioned once.
 
-## WebMCP study path
+## Test before launch
 
-Read these in order:
-
-1. [Chrome WebMCP overview](https://developer.chrome.com/docs/ai/webmcp): browser availability, enabling support and the developer model.
-2. [Imperative API guide](https://developer.chrome.com/docs/ai/webmcp/imperative-api): registration, discovery, execution and lifecycle.
-3. [GoogleChromeLabs tools and demos](https://github.com/GoogleChromeLabs/webmcp-tools): implementations to run and inspect. Try the [pizza demo](https://googlechromelabs.github.io/webmcp-tools/demos/pizza-maker/).
-4. [Convinced WebMCP integration](/guides/widget-sdk/webmcp): connect those website actions to this SDK and the two ElevenLabs callbacks.
-5. [Puppeteer WebMCP guide](https://pptr.dev/guides/webmcp) and [Chrome evaluation guide](https://developer.chrome.com/docs/ai/webmcp/evals): automate calls and distinguish transport checks from model/task evaluation.
-6. [WebMCP draft specification](https://webmachinelearning.github.io/webmcp/): exact semantics and evolving browser API details.
-
-For the voice side, use [ElevenLabs client tools](https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools), [agent updates](https://elevenlabs.io/docs/api-reference/agents/update) and [versioning](https://elevenlabs.io/docs/eleven-agents/operate/versioning). ElevenLabs' server-side MCP connector and browser WebMCP are separate interfaces.
-
-## Evidence included and remaining work
-
-| Check | Handoff evidence |
+| Area | Acceptance evidence |
 | --- | --- |
-| Native WebMCP registration, discovery and execution | Chrome 152 experiment; Enmovil, independent shop and Google pizza demo |
-| Enmovil page outcomes | 25 checks passed; four failures retained in the report |
-| Persisted system prompt | Real temporary ElevenLabs agent update and independent read-back |
-| Persisted first message | Real first-message-only, combined and empty-opener updates; temporary agent deleted afterward |
-| API authorization and failure handling | Controlled integration tests covering administrators, tenant binding, stale revisions and provider failures |
-| Customer's deployed login and ownership binding | Enmovil production administrator GET, no-op save and stale-revision rejection verified; repeat with each customer's login and agent |
-| Autonomous WebMCP voice quality and supported browser matrix | Must be tested; fake transport callback tests do not prove speech or model selection |
+| Basic setup | Configuration and session initialize successfully; errors appear when prerequisites are missing |
+| Real voice | Visitor microphone works, agent speech is audible, expected opener is used and the conversation can end and reconnect |
+| Website actions | One read and one visible action per page, plus navigation between pages without losing the owner |
+| Authorization | A denied action stays denied; tool output cannot grant new permission |
+| WebMCP | Discovery, schema retrieval, stale-handle recovery and visible outcomes in every browser you support |
+| Identity and history | Intended identity flow and persisted transcript/media history verified in your deployment |
+| Prompt management | Authorized read, one intended saved change, stale-revision rejection and a new conversation using the saved value |
+| Failure handling | Network loss, unavailable tools, invalid configuration and uncertain saves remain visible; mutations are not blindly retried |
+| UI and analytics | Mobile and desktop layouts, cleanup, consent and the analytics events you actually collect |
 
-For every customer rollout, verify an authenticated GET and a saved update against the deployed management origin. Provider persistence tests alone do not verify the customer's login, proxy, agent ownership or subsequent voice conversation.
+Retain a reversible rollout switch and record the tested package version, website revision and agent configuration. Do not mount two widget integrations for one visitor session.
 
-## Type-checked integration example
+## Release evidence and remaining acceptance
 
-The [SDK handoff example](/examples/sdk-handoff.ts) contains typed editor, tool-publisher and voice-bridge helpers. Supply your real application permissions and authenticated backend; it contains no credentials.
+The September 14, 2026 checks verified the published npm package, hosted session initialization and end, and the authenticated management API. A production admin read and no-op save preserved both prompt fields; a stale revision was rejected. Separate temporary ElevenLabs agents verified actual prompt-only, first-message-only, combined and empty-opener persistence.
+
+The WebMCP native browser experiment used Chrome 152. It passed 25 Enmovil checks and retained four page-outcome failures, and also exercised an independent shop and Google's pizza demo. Its voice callback transport was simulated. It does not establish autonomous voice task quality or support across browsers.
+
+Repeat acceptance with your actual website, customer login and live agent. Public documentation and a passing package build do not certify every deployment-dependent feature.
+
+## Study WebMCP
+
+Follow the [WebMCP integration guide](/guides/widget-sdk/webmcp), including links to Chrome's setup and imperative API documentation, demo source, evaluation guidance and the draft specification.

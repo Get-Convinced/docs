@@ -22,7 +22,7 @@ Visitor identity and customer administrator access are separate. Capturing an em
 
 The supplied `managed-v2` preset enforces this table. In voice-led modes, ElevenLabs connects before the identity enquiry. The managed `set_visitor_field` and `request_email_capture` tools let the agent fill and reveal the canonical spoken fields—email, name, phone, and company—without starting a second conversation; email remains required and the other fields are optional. Custom SDK identity forms may additionally collect the supported fields below.
 
-`set_visitor_field` and `request_email_capture` only prefill visible fields. The normal persistence path is the visitor submitting that form. `confirm_visitor_form` declares `per_call` consent and is denied unless your `ConvincedVoiceController.authorizeToolCall` callback grants that exact invocation after a real visitor confirmation. Never cache that grant as session consent: a model tool call by itself is not permission to store personal data.
+`set_visitor_field` fills a managed field; `request_email_capture` opens the identity interface. Neither submits the form. The normal persistence path is the visitor submitting that form. `confirm_visitor_form` declares `per_call` consent and is denied unless your `ConvincedVoiceController.authorizeToolCall` callback grants that exact invocation after a real visitor confirmation. Never cache that grant as session consent: a model tool call by itself is not permission to store personal data.
 
 `preset: 'minimal'` does not apply the managed voice identity gate. Use an `identityPolicy` or your own UI when you choose that preset.
 
@@ -44,9 +44,9 @@ const widget = mountConvincedWidget({
     if (assistantMessages < 2 || userMessages === 0) return false
 
     return {
-      title: 'Send this rollout plan to your inbox',
-      description: 'Share your work details and we will keep the context.',
-      submitLabel: 'Send my plan',
+      title: 'Keep the context for a follow-up',
+      description: 'Share your work details to associate them with this conversation.',
+      submitLabel: 'Save my details',
       fields: ['email', 'name', 'company', 'role'],
     }
   },
@@ -85,9 +85,9 @@ Email is inserted when omitted and is always required. Other fields are optional
 
 ```ts
 return {
-  title: 'Prepare my tailored demo',
+  title: 'Keep my details for a follow-up',
   description: 'We will use this only to keep the conversation specific.',
-  submitLabel: 'Prepare demo',
+  submitLabel: 'Save details',
   fields: ['email', 'name', 'company', 'industry', 'role'],
 }
 ```

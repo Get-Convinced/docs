@@ -11,14 +11,8 @@
   },
   "servers": [
     {
-      "url": "https://{apiHost}",
-      "description": "Public Campaign/KB MCP origin supplied for your organization; not the dashboard or a Railway internal hostname.",
-      "variables": {
-        "apiHost": {
-          "default": "your-convinced-api-host.example",
-          "description": "Replace with the host assigned to your organization."
-        }
-      }
+      "url": "https://convinced-kb-mcp-production.up.railway.app",
+      "description": "Public Campaign and Knowledge REST API. SDK prompt administration uses the separate Convinced app origin and ADMIN session authentication."
     }
   ],
   "security": [
@@ -32,12 +26,16 @@
         "summary": "Create or update a campaign",
         "description": "Campaigns group target-company rows under a stable slug. Calling this endpoint with an existing slug updates the campaign's name or description; the slug itself is immutable.",
         "operationId": "upsertCampaign",
-        "tags": ["Campaigns"],
+        "tags": [
+          "Campaigns"
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CampaignUpsertRequest" },
+              "schema": {
+                "$ref": "#/components/schemas/CampaignUpsertRequest"
+              },
               "examples": {
                 "create": {
                   "summary": "Create a new campaign",
@@ -58,36 +56,98 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": { "campaign": { "$ref": "#/components/schemas/Campaign" } }
+                  "properties": {
+                    "campaign": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  }
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "The key scope cannot manage campaigns.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Encoded request exceeds 1 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-key hourly quota exceeded. Campaign responses contain an error string without retryAfterSeconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Service operation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/api/campaigns/{campaignSlug}/targets": {
       "post": {
         "summary": "Create or update a campaign target",
-        "description": "Upsert a target company in a campaign. Two modes are supported:\n\n- **Partner-intel mode (`enrich: false`):** supply a fully-formed `intel` object. The row is widget-ready as soon as the request returns, with `enrichmentStatus: \"skipped\"`.\n- **Auto-enrich mode (`enrich: true`):** supply `rawResearch` (plain text or markdown) and optional `links`. Convinced runs the AI research pipeline asynchronously; poll the GET endpoint until `enrichmentStatus` flips from `pending` → `running` → `done` (typically 30-90s).\n\nThe `token` becomes the `?c=<token>` query string on the widget URL. Tokens are unique per organization.",
+        "description": "Replace or create one organization-scoped target. A valid supplied intel object takes precedence and skips synthesis. Without intel, enrich defaults true and triggers asynchronous enrichment; false stores a pending row without starting it. Use GET widgetReady before sharing a visitor link. Reusing a token under another campaign moves the existing target to that campaign and replaces its data; it does not return 409. Repeating an upsert can repeat enrichment and does not cancel a running worker.",
         "operationId": "upsertCampaignTarget",
-        "tags": ["Campaign Targets"],
+        "tags": [
+          "Campaign Targets"
+        ],
         "parameters": [
           {
             "name": "campaignSlug",
             "in": "path",
             "required": true,
             "description": "The campaign slug created in `POST /api/campaigns`.",
-            "schema": { "type": "string", "example": "q2-logistics-outreach" }
+            "schema": {
+              "type": "string",
+              "example": "q2-logistics-outreach"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/TargetUpsertRequest" },
+              "schema": {
+                "$ref": "#/components/schemas/TargetUpsertRequest"
+              },
               "examples": {
                 "partnerIntel": {
                   "summary": "Partner-intel mode (synchronous)",
@@ -110,10 +170,18 @@
                         "Driver utilization plateaued at 62%.",
                         "No single source of truth across TMS, OMS, and routing."
                       ],
-                      "currentStack": ["SAP TMS", "Locus routing"],
-                      "recentSignals": ["New CFO hired Q1", "Expanding into Tier-2 cities"],
+                      "currentStack": [
+                        "SAP TMS",
+                        "Locus routing"
+                      ],
+                      "recentSignals": [
+                        "New CFO hired Q1",
+                        "Expanding into Tier-2 cities"
+                      ],
                       "competitorUsage": "Evaluating FarEye for last-mile visibility.",
-                      "relevantCaseStudies": ["Enmovil"]
+                      "relevantCaseStudies": [
+                        "Enmovil"
+                      ]
                     },
                     "additionalContext": "Lead with ROI on dispatch speed."
                   }
@@ -142,22 +210,73 @@
             "description": "Target created or updated.",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/TargetUpsertResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/TargetUpsertResponse"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "The key scope cannot manage campaigns.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Campaign slug not found.",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
             }
           },
-          "409": {
-            "description": "Token is already used by another target in this organization.",
+          "413": {
+            "description": "Encoded request exceeds 1 MiB.",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-key hourly quota exceeded. Campaign responses contain an error string without retryAfterSeconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Service operation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
             }
           }
         }
@@ -166,36 +285,94 @@
     "/api/campaigns/{campaignSlug}/targets/{token}": {
       "get": {
         "summary": "Read target status",
-        "description": "Returns the current target state, including enrichment lifecycle status. Poll this endpoint after an auto-enrich upsert until `enrichmentStatus` is `done` (or `failed`, with `enrichmentError` populated).",
+        "description": "Read target state and widgetReady for either integration mode. widgetReady requires active campaign status, stored intel, and enrichmentStatus done or skipped. This endpoint does not return the full intel object. Use bounded polling and inspect failed or unfinished work before retrying a write.",
         "operationId": "getCampaignTarget",
-        "tags": ["Campaign Targets"],
+        "tags": [
+          "Campaign Targets"
+        ],
         "parameters": [
           {
             "name": "campaignSlug",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "example": "q2-logistics-outreach" }
+            "schema": {
+              "type": "string",
+              "example": "q2-logistics-outreach"
+            }
           },
           {
             "name": "token",
             "in": "path",
             "required": true,
             "description": "The target's stable widget token.",
-            "schema": { "type": "string", "example": "acme-logistics" }
+            "schema": {
+              "type": "string",
+              "example": "acme-logistics"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Target found.",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/TargetReadResponse" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetReadResponse"
+                }
+              }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "The key scope cannot manage campaigns.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Target not found in this campaign.",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-key hourly quota exceeded. Campaign responses contain an error string without retryAfterSeconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Service operation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
             }
           }
         }
@@ -207,68 +384,213 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Partner API key issued from the Convinced dashboard. API keys are organization-bound — never share a key across organizations."
+        "description": "Partner API key issued from the Convinced dashboard. API keys are organization-bound \u2014 never share a key across organizations."
       }
     },
     "schemas": {
       "CampaignUpsertRequest": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
-          "name": { "type": "string", "description": "Human-readable campaign name.", "example": "Q2 Logistics Outreach" },
-          "slug": { "type": "string", "description": "Stable campaign identifier. Lowercase letters, digits, and hyphens. If omitted, derived from `name`. Maximum 64 chars.", "example": "q2-logistics-outreach" },
-          "description": { "type": "string", "description": "Optional internal context for operators.", "example": "Outbound campaign for logistics accounts" }
+          "name": {
+            "type": "string",
+            "description": "Human-readable campaign name.",
+            "example": "Q2 Logistics Outreach"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Normalized to lowercase letters, digits, and hyphens, with repeated hyphens collapsed and output truncated to 64 characters. Derived from name when omitted or blank. Save the returned slug.",
+            "example": "q2-logistics-outreach"
+          },
+          "description": {
+            "type": "string",
+            "description": "Non-empty trimmed description; omitted or blank input preserves an existing description.",
+            "example": "Outbound campaign for logistics accounts"
+          }
         }
       },
       "Campaign": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "name": { "type": "string", "example": "Q2 Logistics Outreach" },
-          "slug": { "type": "string", "example": "q2-logistics-outreach" },
-          "description": { "type": "string", "nullable": true },
-          "status": { "type": "string", "enum": ["active", "archived"], "description": "Only campaigns with `status: \"active\"` resolve targets at the widget." },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "updatedAt": { "type": "string", "format": "date-time" }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Q2 Logistics Outreach"
+          },
+          "slug": {
+            "type": "string",
+            "example": "q2-logistics-outreach"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "Status stored on the campaign; only active campaigns are ready for personalization. This endpoint does not change status."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "TargetUpsertRequest": {
         "type": "object",
-        "required": ["companyName"],
-        "description": "Exactly one of `intel` (with `enrich: false`) or `rawResearch` (with `enrich: true` or omitted) must be present.",
+        "required": [
+          "companyName"
+        ],
+        "description": "companyName is required. For partner intel, supply intel and enrich:false. For automatic synthesis, omit intel and supply source material in rawResearch, additionalContext, or links. Valid intel takes precedence if both modes are supplied. Omitted replaceable fields are cleared on an existing target.",
         "properties": {
-          "companyName": { "type": "string", "description": "Target account or company name. Used in the agent's opening message.", "example": "Acme Logistics" },
-          "token": { "type": "string", "description": "Stable target identifier passed to the widget as `?c=<token>`. Lowercase letters, digits, and hyphens; max 64 chars. If omitted, derived from `companyName`.", "example": "acme-logistics" },
-          "enrich": { "type": "boolean", "default": true, "description": "When `true` (default), Convinced synthesizes the `intel` object from `rawResearch` + `links` asynchronously. When `false`, the partner-supplied `intel` object is used as-is." },
-          "intel": { "$ref": "#/components/schemas/CampaignIntel", "description": "Required when `enrich: false`. See the Intel schema for the exact shape." },
-          "rawResearch": { "type": "string", "description": "Rep notes, CRM excerpts, account research. Plain text or markdown. Used by the auto-enrich pipeline as the primary source of truth. Recommend keeping under 20-30k chars.", "example": "## Account notes\n- Mid-market 3PL, last-mile dispatch.\n- ~300 drivers, expanding into Tier-2.\n- Champion: Priya Rao, VP Ops." },
-          "links": { "type": "array", "items": { "type": "string", "format": "uri" }, "description": "URLs the auto-enrich pipeline will crawl for additional context. Microsite landing pages, news articles, account pages.", "example": ["https://acmelogistics.example.com/about"] },
-          "additionalContext": { "type": "string", "description": "Strategic instructions for how the agent should frame this account. Not synthesized — appended verbatim to the agent prompt.", "example": "Lead with ROI on dispatch speed." }
+          "companyName": {
+            "type": "string",
+            "description": "Non-empty target company name, used as account context. It does not authenticate a visitor or independently set a saved opening message.",
+            "example": "Acme Logistics"
+          },
+          "token": {
+            "type": "string",
+            "description": "Organization-scoped identifier, normalized and truncated to 64 characters; derived from companyName when omitted or blank. A repeated token updates and can move the existing target to this campaign.",
+            "example": "acme-logistics"
+          },
+          "enrich": {
+            "type": "boolean",
+            "default": true,
+            "description": "Expected boolean. When intel is absent, true (default) attempts asynchronous enrichment. False without intel stores a pending row without starting synthesis. Valid supplied intel always skips synthesis."
+          },
+          "intel": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CampaignIntel"
+              }
+            ],
+            "description": "Optional authoritative structured intel. When supplied, the parser validates required fields, normalizes supported fields and skips synthesis. Without it, enrich:false is accepted but leaves an unready row."
+          },
+          "rawResearch": {
+            "type": "string",
+            "description": "Optional research notes used for automatic synthesis. Keep inputs concise and the entire encoded JSON body below 1 MiB.",
+            "example": "## Account notes\n- Mid-market 3PL, last-mile dispatch.\n- ~300 drivers, expanding into Tier-2.\n- Champion: Priya Rao, VP Ops."
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Strings for link crawling. The API trims strings, discards blank and non-string entries, and retains at most 20; the crawler can process a smaller bounded subset. Input strings are not validated as reachable URLs.",
+            "example": [
+              "https://acmelogistics.example.com/about"
+            ]
+          },
+          "additionalContext": {
+            "type": "string",
+            "description": "Optional context included in auto-enrichment synthesis and research. Stored on the target, but not currently appended verbatim to live session prompts.",
+            "example": "Lead with ROI on dispatch speed."
+          }
         }
       },
       "CampaignIntel": {
         "type": "object",
-        "required": ["companySummary", "painPoints"],
-        "description": "Structured target intel. Every field maps to a specific agent behavior — partners cannot add arbitrary fields.",
+        "required": [
+          "companySummary",
+          "painPoints"
+        ],
+        "description": "Recognized structured account fields. Unknown fields are ignored, optional invalid values can be dropped, and names are normalized. This schema describes the expected partner-intel input.",
         "properties": {
-          "companySummary": { "type": "string", "description": "One or two factual sentences describing what the prospect company actually does. The agent mirrors this back early in the conversation.", "example": "Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy chains across India." },
-          "painPoints": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "Concrete problems the prospect is dealing with, ranked most-to-least relevant. Phrase as the BUYER would describe the pain — not your product or solution. Drives the discovery flow and on-screen suggestion pills. Recommend 3-6 entries.", "example": ["Dispatch decisions are manual and slow during peak windows.", "Driver utilization plateaued at 62%."] },
-          "industry": { "type": "string", "description": "Industry or vertical. Used for case-study selection and to calibrate vocabulary.", "example": "Logistics" },
-          "size": { "type": "string", "description": "Free-form headcount, revenue band, or stage. Calibrates SMB vs. mid-market vs. enterprise positioning.", "example": "200-500 employees" },
+          "companySummary": {
+            "type": "string",
+            "description": "Required non-empty company summary after trimming. Supplies company-profile context; no guarantee of exact agent wording.",
+            "example": "Mid-market 3PL focused on last-mile dispatch for grocery and pharmacy chains across India."
+          },
+          "painPoints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Required array with at least one non-empty string after normalization. Up to six entries enter session challenges. Phrase problems as account facts.",
+            "example": [
+              "Dispatch decisions are manual and slow during peak windows.",
+              "Driver utilization plateaued at 62%."
+            ]
+          },
+          "industry": {
+            "type": "string",
+            "description": "Industry or vertical. Used for case-study selection and to calibrate vocabulary.",
+            "example": "Logistics"
+          },
+          "size": {
+            "type": "string",
+            "description": "Free-form headcount, revenue band, or stage. Calibrates SMB vs. mid-market vs. enterprise positioning.",
+            "example": "200-500 employees"
+          },
           "champion": {
             "type": "object",
-            "required": ["name", "role"],
-            "description": "The primary buyer at the account — the persona the agent imagines it is talking to.",
+            "description": "Optional account champion context. Omitted entirely unless both name and role are non-empty strings. This does not establish visitor identity.",
             "properties": {
-              "name": { "type": "string", "example": "Priya Rao" },
-              "role": { "type": "string", "example": "VP Operations" },
-              "context": { "type": "string", "description": "One-line background: priorities, tenure, owned KPIs.", "example": "Owns dispatch SLA and fleet utilization KPIs." }
+              "name": {
+                "type": "string",
+                "example": "Priya Rao"
+              },
+              "role": {
+                "type": "string",
+                "example": "VP Operations"
+              },
+              "context": {
+                "type": "string",
+                "description": "One-line background: priorities, tenure, owned KPIs.",
+                "example": "Owns dispatch SLA and fleet utilization KPIs."
+              }
             }
           },
-          "currentStack": { "type": "array", "items": { "type": "string" }, "description": "Tools the prospect ALREADY USES in adjacent or related categories — broader stack, not direct competitors. The agent uses this to talk integrations and avoid suggesting things they have.", "example": ["SAP TMS", "Locus routing", "Salesforce"] },
-          "recentSignals": { "type": "array", "items": { "type": "string" }, "description": "Recent news or triggers the agent can reference: funding, leadership, launches, expansions.", "example": ["New CFO hired Q1 2026", "Expanding into Tier-2 cities per Oct earnings call"] },
-          "competitorUsage": { "type": "string", "description": "A SPECIFIC direct competitor the prospect uses today or is evaluating — i.e. someone who does what you do. Sets up switch arguments and head-to-head positioning.", "example": "Datadog (incumbent since 2022, evaluating switch due to cost)." },
-          "relevantCaseStudies": { "type": "array", "items": { "type": "string" }, "description": "Customer names you want the agent to bring up as proof points. Validated against your org's referenceable case studies. Unknown names are dropped silently and surfaced in `response.warnings.droppedCaseStudies`. Match is case-insensitive.", "example": ["Enmovil", "Bizom"] }
+          "currentStack": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tools the prospect ALREADY USES in adjacent or related categories \u2014 broader stack, not direct competitors. The agent uses this to talk integrations and avoid suggesting things they have.",
+            "example": [
+              "SAP TMS",
+              "Locus routing",
+              "Salesforce"
+            ]
+          },
+          "recentSignals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Recent news or triggers the agent can reference: funding, leadership, launches, expansions.",
+            "example": [
+              "New CFO hired Q1 2026",
+              "Expanding into Tier-2 cities per Oct earnings call"
+            ]
+          },
+          "competitorUsage": {
+            "type": "string",
+            "description": "A SPECIFIC direct competitor the prospect uses today or is evaluating \u2014 i.e. someone who does what you do. Sets up switch arguments and head-to-head positioning.",
+            "example": "Datadog (incumbent since 2022, evaluating switch due to cost)."
+          },
+          "relevantCaseStudies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Customer names you want the agent to bring up as proof points. Validated against your org's referenceable case studies. Unknown names are dropped silently and surfaced in `response.warnings.droppedCaseStudies`. Match is case-insensitive.",
+            "example": [
+              "Enmovil",
+              "Bizom"
+            ]
+          }
         }
       },
       "TargetUpsertResponse": {
@@ -277,26 +599,75 @@
           "target": {
             "type": "object",
             "properties": {
-              "id": { "type": "string", "format": "uuid" },
-              "campaignId": { "type": "string", "format": "uuid" },
-              "companyName": { "type": "string", "example": "Acme Logistics" },
-              "token": { "type": "string", "example": "acme-logistics" },
-              "enrichedAt": { "type": "string", "format": "date-time", "nullable": true, "description": "Set when synthesis completed (auto-enrich) or at insertion (partner-intel)." },
-              "enrichmentStatus": { "$ref": "#/components/schemas/EnrichmentStatus" },
-              "createdAt": { "type": "string", "format": "date-time" },
-              "updatedAt": { "type": "string", "format": "date-time" }
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "campaignId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "companyName": {
+                "type": "string",
+                "example": "Acme Logistics"
+              },
+              "token": {
+                "type": "string",
+                "example": "acme-logistics"
+              },
+              "enrichedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "Set when synthesis completed (auto-enrich) or at insertion (partner-intel)."
+              },
+              "enrichmentStatus": {
+                "$ref": "#/components/schemas/EnrichmentStatus"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
             }
           },
-          "targetId": { "type": "string", "format": "uuid" },
-          "widgetToken": { "type": "string", "description": "The token to pass into the widget.", "example": "acme-logistics" },
-          "widgetParam": { "type": "string", "description": "The query parameter name the widget reads from.", "example": "c" },
-          "widgetQuery": { "type": "string", "description": "Ready-to-use query string (URL-encoded prefix included).", "example": "?c=acme-logistics" },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "widgetToken": {
+            "type": "string",
+            "description": "The token to pass into the widget.",
+            "example": "acme-logistics"
+          },
+          "widgetParam": {
+            "type": "string",
+            "description": "The query parameter name the widget reads from.",
+            "example": "c"
+          },
+          "widgetQuery": {
+            "type": "string",
+            "description": "Query string containing the normalized target token, for example ?c=acme-logistics.",
+            "example": "?c=acme-logistics"
+          },
           "warnings": {
             "type": "object",
             "description": "Present when one or more `relevantCaseStudies` names were dropped because they don't match referenceable customers.",
             "properties": {
-              "droppedCaseStudies": { "type": "array", "items": { "type": "string" } },
-              "reason": { "type": "string" }
+              "droppedCaseStudies": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reason": {
+                "type": "string"
+              }
             }
           }
         }
@@ -307,47 +678,128 @@
           "target": {
             "type": "object",
             "properties": {
-              "id": { "type": "string", "format": "uuid" },
-              "campaignId": { "type": "string", "format": "uuid" },
-              "campaignName": { "type": "string" },
-              "campaignSlug": { "type": "string" },
-              "campaignStatus": { "type": "string", "enum": ["active", "archived"] },
-              "companyName": { "type": "string" },
-              "token": { "type": "string" },
-              "enrichedAt": { "type": "string", "format": "date-time", "nullable": true },
-              "enrichmentStatus": { "$ref": "#/components/schemas/EnrichmentStatus" },
-              "enrichmentError": { "type": "string", "nullable": true, "description": "Populated when `enrichmentStatus = \"failed\"`. Truncated to 500 chars." },
-              "enrichmentStartedAt": { "type": "string", "format": "date-time", "nullable": true, "description": "Set when enrichment began. Useful for detecting stuck jobs." },
-              "hasIntel": { "type": "boolean", "description": "True when the `intel` object is present on the row." },
-              "widgetReady": { "type": "boolean", "description": "True when the campaign is active, intel is present, and `enrichmentStatus` is `done` or `skipped`. Send the visitor to the widget once this flips to `true`." },
-              "updatedAt": { "type": "string", "format": "date-time" }
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "campaignId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "campaignName": {
+                "type": "string"
+              },
+              "campaignSlug": {
+                "type": "string"
+              },
+              "campaignStatus": {
+                "type": "string",
+                "description": "Stored campaign status; only active can produce widgetReady:true."
+              },
+              "companyName": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "enrichedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "enrichmentStatus": {
+                "$ref": "#/components/schemas/EnrichmentStatus"
+              },
+              "enrichmentError": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Populated when `enrichmentStatus = \"failed\"`. Truncated to 500 chars."
+              },
+              "enrichmentStartedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "Set when enrichment began. Useful for detecting stuck jobs."
+              },
+              "hasIntel": {
+                "type": "boolean",
+                "description": "True when the `intel` object is present on the row."
+              },
+              "widgetReady": {
+                "type": "boolean",
+                "description": "True when the campaign is active, intel is present, and `enrichmentStatus` is `done` or `skipped`. Send the visitor to the widget once this flips to `true`."
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
             }
           },
-          "targetId": { "type": "string", "format": "uuid" },
-          "widgetToken": { "type": "string" },
-          "widgetParam": { "type": "string" },
-          "widgetQuery": { "type": "string" }
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "widgetToken": {
+            "type": "string"
+          },
+          "widgetParam": {
+            "type": "string"
+          },
+          "widgetQuery": {
+            "type": "string"
+          }
         }
       },
       "EnrichmentStatus": {
         "type": "string",
-        "enum": ["pending", "running", "done", "failed", "skipped"],
+        "enum": [
+          "pending",
+          "running",
+          "done",
+          "failed",
+          "skipped"
+        ],
         "description": "Lifecycle state of the auto-enrich pipeline. `pending` (queued), `running` (synthesis in flight), `done` (intel ready), `failed` (synthesis errored), `skipped` (partner-intel mode, no synthesis needed)."
       },
       "Error": {
         "type": "object",
-        "properties": { "error": { "type": "string", "description": "Human-readable error message." } },
-        "required": ["error"]
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Explanatory error text; do not parse as a stable machine-readable error code."
+          }
+        },
+        "required": [
+          "error"
+        ]
       }
     },
     "responses": {
       "BadRequest": {
         "description": "Validation error.",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       },
       "Unauthorized": {
         "description": "API key missing or invalid.",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       }
     }
   }

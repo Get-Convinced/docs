@@ -7,11 +7,11 @@ description: 'Read the live ElevenLabs system prompt and first message for an au
 GET /api/org/{orgSlug}/sdk-agents/{agentId}/prompt
 ```
 
-Use the Convinced app origin serving the matching management backend. This endpoint is included in the experimental SDK handoff; it must be deployed before use.
+Use `https://app.getconvinced.ai`. This management endpoint is deployed. The SDK administrator helper is available in `@convinced/widget-sdk@0.1.1-webmcp.2`.
 
 ## Authorization
 
-Requires an authenticated Convinced organization `ADMIN` session. The server verifies the selected agent's organization ownership binding. Public widget credentials and Campaign API partner keys are not accepted. The server holds the ElevenLabs key.
+Requires an authenticated Convinced organization `ADMIN` session. The server verifies the selected agent's organization ownership binding. The agent must be registered to that organization by Convinced; an arbitrary provider ID is not sufficient. Public widget credentials and Campaign API partner keys are not accepted. The server holds the ElevenLabs key.
 
 ## Parameters
 
@@ -23,6 +23,7 @@ Requires an authenticated Convinced organization `ADMIN` session. The server ver
 ## SDK request
 
 ```ts
+// Use the admin instance configured by the authenticated editor setup.
 const current = await admin.getPrompt()
 ```
 
@@ -55,6 +56,6 @@ The server reads the sole branch receiving 100% of live traffic. It does not ret
 | `404` | No ownership binding for this organization and agent |
 | `409` | Shared agent or ambiguous live traffic |
 | `502` | Provider/configuration read could not be completed |
-| `503` | Server ElevenLabs management key is not configured |
+| `503` | Server provider key or ownership configuration is missing or invalid |
 
 See [update agent prompt](/api-reference/endpoint/update-agent-prompt) and [editor setup](/guides/widget-sdk/agent-prompts).

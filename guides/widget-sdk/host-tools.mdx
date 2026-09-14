@@ -6,7 +6,7 @@ icon: 'screwdriver-wrench'
 
 Host tools are explicit capabilities that run in the page containing the SDK. They let the agent observe or act, return a structured result, and continue the same voice or chat turn.
 
-Use one `ClientToolRegistry` for both channels. The Convinced runtime remains the owner of conversation behavior; your page remains the owner of DOM access, application state, consent, and MCP connectivity.
+The same `ClientToolRegistry` can supply voice callbacks and the SDK chat-continuation protocol. Voice callbacks execute directly in the browser; chat requires a compatible backend, as described below. The Convinced runtime remains the owner of conversation behavior; your page remains the owner of DOM access, application state, consent, and MCP connectivity.
 
 <Tip>
   Building a guide that understands named products, roles, or sections? Use [Build a page-aware guide](/guides/widget-sdk/page-aware-guides) for the semantic manifest, discovery-first tool pattern, observed receipts, and visitor-wins arbitration.
@@ -94,6 +94,7 @@ const voice = new ConvincedVoiceController({
     if (tool.effect === 'read') return true
     return window.confirm(`Allow voice to use ${tool.description}?`)
   },
+  onConversationId: (id) => client.linkElevenLabsConversation(id),
 })
 ```
 
@@ -215,7 +216,9 @@ An ElevenLabs agent can reach an adapted tool through `host_extension_call`:
 
 ## Chat continuation
 
-For SDK chat, the client advertises the registry manifest with the turn. When the runtime requests a tool, it pauses the stream with an opaque signed capability. The SDK executes the approved handlers, returns their results with the capability unchanged, and resumes the same turn.
+The published SDK implements a chat host-tool continuation protocol, but the current hosted chat route does not implement it. Use ElevenLabs voice callbacks for page actions on the hosted service today.
+
+With a compatible backend, the client advertises the registry manifest with the turn. When the runtime requests a tool, it pauses the stream with an opaque signed capability. The SDK executes the approved handlers, returns their results with the capability unchanged, and resumes the same turn.
 
 Do not persist, inspect, construct, or replay that capability. If a resume was claimed and its network response is lost, start a new chat turn instead of retrying the mutation.
 
@@ -233,8 +236,10 @@ Do not persist, inspect, construct, or replay that capability. If a resume was c
 | Individual schema and constraints | 12 KiB, depth 8 |
 | Tool timeout | Up to 30 seconds |
 
+These are SDK protocol limits; they do not imply that every hosted backend implements chat continuation.
+
 The supported schema subset includes primitive, object, and array types; properties and required fields; additional properties; enums and constants; uniform or tuple items; length, count, and numeric bounds; and `anyOf`, `oneOf`, and `allOf`. Unsupported keywords such as `$ref`, `format`, `pattern`, and custom annotations are rejected.
 
 ## Managed iframe equivalent
 
-The managed loader has a separate cross-origin bridge for the same page-context, navigation, scroll, highlight, and extension actions. See [Managed iframe loader](/guides/widget-sdk/managed-iframe#enable-parent-page-tools).
+The current production loader does not expose page-tool registration, a router callback, or cross-origin WebMCP discovery. Use the SDK in the host document when the agent needs these actions. See [Managed iframe loader](/guides/widget-sdk/managed-iframe#add-page-actions-with-the-sdk).

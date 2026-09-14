@@ -25,15 +25,41 @@ const descriptor = {
 }
 ```
 
-```ts Private agent
-const descriptorFactory = () => client.getVoiceCredential()
-```
-
 <Warning>
-  Never put an ElevenLabs API key in the descriptor, in a public environment variable, or in a bundled MCP client. The controller rejects descriptor objects that contain API-key-shaped fields. Mint signed URLs or conversation tokens on your backend.
+  Never put an ElevenLabs API key in a browser descriptor, public environment variable, or bundled MCP client. The controller rejects descriptor objects that contain API-key-shaped fields.
 </Warning>
 
-`client.getVoiceCredential()` calls the Convinced widget backend with the current signed session capability. The backend chooses the configured agent and mints a short-lived WebRTC token; the browser cannot override the agent ID. See the ElevenLabs documentation for [JavaScript sessions](https://elevenlabs.io/docs/eleven-agents/libraries/java-script) and [client tools](https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools).
+For a private agent, your application must implement an authenticated backend endpoint that selects an approved agent and returns `{ conversationToken: string }`. The following complete factory assumes you implement **`POST /api/voice-session` on your application's origin**. It is an example of your endpoint contract, not an existing Convinced route:
+
+```ts
+import type { ElevenLabsVoiceDescriptorFactory } from '@convinced/widget-sdk'
+
+const descriptorFactory: ElevenLabsVoiceDescriptorFactory = async ({ signal }) => {
+  const response = await fetch('/api/voice-session', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+    cache: 'no-store',
+    redirect: 'error',
+    signal,
+  })
+  if (!response.ok) throw new Error(`Voice credentials unavailable (${response.status})`)
+  const data: unknown = await response.json()
+  if (
+    !data || typeof data !== 'object' ||
+    !('conversationToken' in data) ||
+    typeof data.conversationToken !== 'string' ||
+    !data.conversationToken.trim()
+  ) throw new Error('Voice endpoint returned an invalid credential')
+
+  return { conversationToken: data.conversationToken, connectionType: 'webrtc' }
+}
+```
+
+Pass this factory as `descriptorFactory` in `ConvincedVoiceController` instead of the public `descriptor`. Your server must authenticate and authorize the visitor, enforce request limits, select the permitted agent server-side, and mint the token with its server-held provider key. Keep the token out of logs and analytics. See ElevenLabs' [JavaScript sessions](https://elevenlabs.io/docs/eleven-agents/libraries/java-script) and [client tools](https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools).
+
+`client.getVoiceCredential()` is a separate SDK helper for a session-scoped Convinced credential endpoint. That endpoint is **not deployed on the current hosted service** and returns `404`. Use the public-agent path or your own authenticated factory above until that backend capability is explicitly enabled.
 
 ## Pass campaign and page context
 
@@ -51,7 +77,9 @@ await voice.start(buildManagedVoiceStartContext(client.state, {
 
 Dynamic-variable names are part of your ElevenLabs agent contract. Configure the same names in the agent prompt before relying on them.
 
-ElevenLabs first-message overrides are disabled by default. Enable **First message** under the agent's security settings before passing `overrides.agent.firstMessage`; otherwise, put a dynamic variable such as `{{FIRST_MESSAGE}}` in the configured first message and pass its value in `dynamicVariables`.
+Enable **First message** in the ElevenLabs agent's conversation-override settings before using the managed renderer. It passes an override for any resolved nonempty greeting, including a return-visitor greeting, campaign opener, or configured welcome message. This requirement applies to generic sessions as well as campaigns.
+
+A headless interface that does not enable first-message overrides can instead put a variable such as `{{FIRST_MESSAGE}}` in the agent's saved opener and pass it in `dynamicVariables`. In that case, omit `overrides.agent.firstMessage`; the managed renderer supplies its own resolved override automatically.
 
 Campaign research, host-page observations, and browser transcript fields are labeled as untrusted data inside this context. They can ground a reply but cannot override the agent prompt, grant tool authority, or change consent policy. Descriptor-level `dynamicVariables` and `overrides` are merged with the per-start context when a custom agent needs additional fields.
 
@@ -115,24 +143,15 @@ genericClientTool: false
 
 Exact bindings plus the generic gateway are capped at 16 callbacks. Disable the gateway when the ElevenLabs agent does not define it or when you need all 16 slots for exact bindings.
 
-## Audit or provision the canonical tools
+## Configure the provider tools
 
-This script targets the canonical managed tool contract. A dedicated WebMCP agent uses the two exported WebMCP schemas instead.
+Use the [downloadable managed tool definitions](/examples/elevenlabs-managed-tools.json) when configuring your ElevenLabs agent. Enable **Wait for response** for each tool whose observed result should affect the next reply. Register only callbacks your page can execute.
 
-The Convinced application repository includes a safe sync script for all 11 canonical presentation, identity, page, and extension tools. Audit is the default; mutation requires both an explicit agent ID and `--apply`:
+`managed-v2` supplies six callbacks when voice starts: `show_slide`, `show_youtube_embed`, `set_visitor_field`, `request_email_capture`, `show_book_demo_cta`, and `confirm_visitor_form`. These are voice-runtime tools; they do not appear in the shared page registry. A descriptor's explicit mapping takes precedence over a managed callback with the same name.
 
-```bash Audit only
-pnpm --dir frontend exec tsx scripts/sync-elevenlabs-voice-tools.ts \
-  --agent-id=<agent-id>
-```
+The four `host_*` DOM callbacks require `registerDomTools()` and exact bindings. `host_extension_call` requires a configured gateway and the underlying registered tools. `confirm_visitor_form` additionally requires fresh authorization for the particular invocation; visitor submission of the visible form is the default identity-confirmation path.
 
-```bash Apply and verify
-pnpm --dir frontend exec tsx scripts/sync-elevenlabs-voice-tools.ts \
-  --agent-id=<agent-id> \
-  --apply
-```
-
-Run it only from a trusted development environment with `ELEVEN_API_KEY` or `ELEVENLABS_API_KEY` set server-side. It preserves non-Convinced tools, paginates the provider catalog, creates missing canonical tools, attaches the exact catalog, enables the campaign `first_message` override, and verifies both after an apply.
+A dedicated WebMCP agent uses the [two WebMCP tool definitions](/examples/elevenlabs-webmcp-tools.json) instead. The browser SDK does not create or update the provider's tool catalog.
 
 ## Start from a visitor gesture
 
@@ -241,4 +260,4 @@ router.onChange(async ({ url, title }) => {
   ElevenLabs' text simulation is useful for testing prompt and tool selection, but it does not prove microphone input, synthesized audio, or DOM execution. Test those paths in a real browser before launch.
 </Note>
 
-Use the [real organization lab](/guides/widget-sdk/analytics-and-testing) to exercise private WebRTC voice, fake-microphone speech recognition, output audio, SPA tools, MCP, identity, slides, PostHog, and final session persistence in one acceptance run.
+Use the [browser acceptance checklist](/guides/widget-sdk/analytics-and-testing) to verify speech recognition, audible output, page tools, identity, media, analytics, and final session persistence in your own application.

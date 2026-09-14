@@ -1,318 +1,90 @@
 ---
-title: "Quickstart"
-description: "Go from zero to a personalized widget session in under 5 minutes."
-icon: "rocket"
+title: 'Campaign quickstart'
+description: 'Create account context and a personalized widget link with the Campaign API.'
+icon: 'rocket'
 ---
 
-<Note>
-  Replace `YOUR_CONVINCED_API_HOST` with the public HTTPS Campaign/KB MCP origin supplied for your organization. The Railway internal hostname is private-network only and is not a customer-facing base URL. The dashboard and SDK management API use a different origin.
-</Note>
-
-This walkthrough takes you from "I have a partner API key" to "the visitor sees a widget grounded in their account intel" using **auto-enrich mode** — the lowest-friction path. You hand Convinced rep notes and a few links; the AI research pipeline synthesizes the structured intel for you.
-
-<Tip>
-  If you already have structured account intel from your CRM, jump to [partner-intel mode](/guides/campaigns/partner-intel) — it's synchronous and the widget is ready as soon as the request returns.
-</Tip>
+For a website SDK implementation, start with [SDK overview](/guides/widget-sdk/overview). This quickstart adds optional account personalization through the Campaign API.
 
 ## Prerequisites
 
-- A Convinced organization. If you don't have one yet, contact [hi@getconvinced.ai](mailto:hi@getconvinced.ai).
-- A partner API key (we'll create one in step 1).
-- A terminal with `curl` and `jq`.
+- A Convinced organization and an enabled widget deployment.
+- A partner API key from [Settings → API Keys](/guides/getting-started/api-keys).
+- A terminal with `curl` and `jq`, or a server-side integration.
 
-## The 5-minute path
+```bash
+export CONVINCED_API_BASE="https://convinced-kb-mcp-production.up.railway.app"
+export CONVINCED_API_KEY="<your-partner-api-key>"
+```
 
-<Steps>
-  <Step title="Create a partner API key">
-    In the [dashboard](https://app.getconvinced.ai), open **Settings → API Keys** under your org:
+Keep the key outside the browser. The public Campaign API is a separate service from `app.getconvinced.ai`.
 
-    ```
-    https://app.getconvinced.ai/org/<your-org-slug>/settings/api-keys
-    ```
+## Create a campaign
 
-    Click **New key**, name it (for example `partner-outbound-pipeline`), and copy the key once — it's only shown to you at creation time.
+```bash
+curl --fail-with-body "$CONVINCED_API_BASE/api/campaigns" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Logistics outreach","slug":"logistics-outreach"}'
+```
 
-    <Warning>
-      API keys are organization-bound. Never share a key across organizations, and never commit one to a public repo or expose it in client-side code.
-    </Warning>
-  </Step>
+Save the returned `campaign.slug`. Repeating a slug updates that campaign. The campaign response uses `created_at` and `updated_at`; target responses use camelCase timestamps.
 
-  <Step title="Set environment variables">
-    Set the API base and your key in your shell. The base host is the KB MCP service (not the dashboard URL).
+## Save a target
 
-    <CodeGroup>
-    ```bash bash
-    export CONVINCED_API_BASE="https://YOUR_CONVINCED_API_HOST"
-    export CONVINCED_API_KEY="<your-partner-api-key>"
-    ```
+Use structured intel for a synchronous first integration:
 
-    ```fish fish
-    set -x CONVINCED_API_BASE "https://YOUR_CONVINCED_API_HOST"
-    set -x CONVINCED_API_KEY "<your-partner-api-key>"
-    ```
-    </CodeGroup>
-
-    Every request sends `Authorization: Bearer $CONVINCED_API_KEY`.
-  </Step>
-
-  <Step title="Create a campaign">
-    Campaigns group target accounts under a stable `slug`. Calling this endpoint again with the same slug updates the campaign's name or description; the slug itself is immutable.
-
-    <CodeGroup>
-    ```bash curl
-    curl -X POST "$CONVINCED_API_BASE/api/campaigns" \
-      -H "Authorization: Bearer $CONVINCED_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "name": "Q2 Logistics Outreach",
-        "slug": "q2-logistics-outreach",
-        "description": "Outbound campaign for logistics accounts"
-      }'
-    ```
-
-    ```json response
-    {
-      "campaign": {
-        "id": "11111111-1111-1111-1111-111111111111",
-        "name": "Q2 Logistics Outreach",
-        "slug": "q2-logistics-outreach",
-        "description": "Outbound campaign for logistics accounts",
-        "status": "active",
-        "createdAt": "2026-05-04T10:00:00.000Z",
-        "updatedAt": "2026-05-04T10:00:00.000Z"
-      }
+```bash
+curl --fail-with-body "$CONVINCED_API_BASE/api/campaigns/logistics-outreach/targets" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "companyName":"Acme Logistics",
+    "token":"acme-logistics",
+    "enrich":false,
+    "intel":{
+      "companySummary":"A logistics company coordinating last-mile deliveries.",
+      "painPoints":["Dispatchers spend too much time updating delivery plans."]
     }
-    ```
-    </CodeGroup>
+  }'
+```
 
-    <Note>
-      Only campaigns with `status: "active"` resolve targets at the widget. Campaigns are created active by default.
-    </Note>
-  </Step>
+The response contains `widgetToken`, `widgetQuery`, and `target.enrichmentStatus: "skipped"`. It does not contain `widgetReady`; obtain that from GET below.
 
-  <Step title="Push a target with auto-enrich">
-    Send rep notes (`rawResearch`, plain text or markdown), optional landing-page URLs (`links`), and `enrich: true`. Convinced runs web research, KB matching, and LLM synthesis in the background and writes a structured `intel` object back to the row. The `token` becomes the `?c=<token>` query string for the widget.
+<Warning>
+  A token identifies one target across the entire organization. Reusing it under a different campaign moves the existing target into that campaign and replaces its data. Use a distinct token for each distinct account record.
+</Warning>
 
-    <CodeGroup>
-    ```bash curl
-    curl -X POST "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets" \
-      -H "Authorization: Bearer $CONVINCED_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "companyName": "Acme Logistics",
-        "token": "acme-logistics",
-        "enrich": true,
-        "rawResearch": "## Account notes\n- Mid-market 3PL, last-mile dispatch for grocery + pharmacy.\n- ~300 drivers, expanding into Tier-2.\n- Champion: Priya Rao, VP Ops. Cares about dispatch SLA + fleet utilization.\n- Currently on SAP TMS + Locus, evaluating FarEye for visibility.",
-        "links": [
-          "https://acmelogistics.example.com/about",
-          "https://acmelogistics.example.com/news/series-b"
-        ],
-        "additionalContext": "Lead with ROI on dispatch speed; this account misses peak-window SLAs."
-      }'
-    ```
+## Check readiness
 
-    ```json response
-    {
-      "target": {
-        "id": "22222222-2222-2222-2222-222222222222",
-        "campaignId": "11111111-1111-1111-1111-111111111111",
-        "companyName": "Acme Logistics",
-        "token": "acme-logistics",
-        "enrichedAt": null,
-        "enrichmentStatus": "pending",
-        "createdAt": "2026-05-04T10:00:01.000Z",
-        "updatedAt": "2026-05-04T10:00:01.000Z"
-      },
-      "targetId": "22222222-2222-2222-2222-222222222222",
-      "widgetToken": "acme-logistics",
-      "widgetParam": "c",
-      "widgetQuery": "?c=acme-logistics"
-    }
-    ```
-    </CodeGroup>
+```bash
+curl --fail-with-body "$CONVINCED_API_BASE/api/campaigns/logistics-outreach/targets/acme-logistics" \
+  -H "Authorization: Bearer $CONVINCED_API_KEY" | jq '.target.widgetReady'
+```
 
-    <Tip>
-      `token` is optional — if you omit it, Convinced derives one from `companyName` (lowercase, hyphenated, max 64 chars). Setting it explicitly is recommended so your outbound links stay stable.
-    </Tip>
-  </Step>
+Proceed when `widgetReady` is true. It combines active campaign status, stored intel, and a `done` or `skipped` enrichment state.
 
-  <Step title="Poll until enrichment is done">
-    The auto-enrich pipeline runs asynchronously. Poll `GET /api/campaigns/{slug}/targets/{token}` until `enrichmentStatus` flips to `done`. Typical end-to-end time is 30–90 seconds.
+If you only have research notes, use [auto-enrich](/guides/campaigns/auto-enrich): send `rawResearch`, optional `links`, and `enrich: true`; then poll GET with a bounded timeout. Enrichment is asynchronous and its completion time varies.
 
-    <CodeGroup>
-    ```bash one-shot
-    curl "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets/acme-logistics" \
-      -H "Authorization: Bearer $CONVINCED_API_KEY"
-    ```
+## Open the personalized widget
 
-    ```bash polling-loop
-    # Polls up to 36 times, with five seconds between attempts.
-    enrichment_status="pending"
-    for ((attempt=1; attempt<=36; attempt++)); do
-      enrichment_status=$(curl -fsS \
-        "$CONVINCED_API_BASE/api/campaigns/q2-logistics-outreach/targets/acme-logistics" \
-        -H "Authorization: Bearer $CONVINCED_API_KEY" | jq -r '.target.enrichmentStatus')
-      if [[ "$enrichment_status" == "done" || "$enrichment_status" == "failed" || "$enrichment_status" == "skipped" ]]; then
-        break
-      fi
-      if ((attempt < 36)); then sleep 5; fi
-    done
-    echo "Last observed status: $enrichment_status"
-    # A pending status after the final attempt is still pending, not success.
-    ```
+For a hosted widget:
 
-    ```json response
-    {
-      "target": {
-        "id": "22222222-2222-2222-2222-222222222222",
-        "campaignId": "11111111-1111-1111-1111-111111111111",
-        "campaignName": "Q2 Logistics Outreach",
-        "campaignSlug": "q2-logistics-outreach",
-        "campaignStatus": "active",
-        "companyName": "Acme Logistics",
-        "token": "acme-logistics",
-        "enrichedAt": "2026-05-04T10:01:14.000Z",
-        "enrichmentStatus": "done",
-        "enrichmentError": null,
-        "enrichmentStartedAt": "2026-05-04T10:00:05.000Z",
-        "hasIntel": true,
-        "widgetReady": true,
-        "updatedAt": "2026-05-04T10:01:14.000Z"
-      },
-      "targetId": "22222222-2222-2222-2222-222222222222",
-      "widgetToken": "acme-logistics",
-      "widgetParam": "c",
-      "widgetQuery": "?c=acme-logistics"
-    }
-    ```
-    </CodeGroup>
+```text
+https://app.getconvinced.ai/widget/v2/<your-org-slug>?c=acme-logistics
+```
 
-    <Note>
-      `enrichmentStatus` lifecycle: `pending` → `running` → `done` (or `failed`, with `enrichmentError` populated). When it's `done` and `widgetReady: true`, send the visitor in.
-    </Note>
-  </Step>
+To embed the managed widget on your site:
 
-  <Step title="Open the widget">
-    The visitor needs to land on a page where the widget can resolve the campaign token. Pick whichever option fits your channel — your `<org-slug>` is the slug shown in the dashboard URL (e.g. `/org/convinced/...` → `convinced`).
+```html
+<script
+  src="https://app.getconvinced.ai/widget/loader.js"
+  data-org="<your-org-slug>"
+  data-c="acme-logistics"
+  async
+></script>
+```
 
-    <Tabs>
-      <Tab title="Embed + URL token">
-        Drop the loader on your own page and send visitors to a URL with `?c=<token>`. Best when you already have a marketing page and want to A/B test landings.
+A campaign token selects account context; it does not grant knowledge API access or let a visitor edit your agent. Treat campaign context as information that anyone with a working visitor link may encounter.
 
-        ```html
-        <script
-          src="https://app.getconvinced.ai/widget/loader.js"
-          data-org="<org-slug>"
-          async
-        ></script>
-        ```
-
-        Outbound link: `https://yourcompany.com/demo?c=acme-logistics`
-      </Tab>
-
-      <Tab title="Embed + hard-pinned token">
-        Use when one page is dedicated to a single account.
-
-        ```html
-        <script
-          src="https://app.getconvinced.ai/widget/loader.js"
-          data-org="<org-slug>"
-          data-c="acme-logistics"
-          async
-        ></script>
-        ```
-      </Tab>
-
-      <Tab title="Pretty URL">
-        The loader picks up the token from the path segment automatically — clean for email and SMS.
-
-        ```
-        https://yourcompany.com/for/acme-logistics/
-        ```
-      </Tab>
-
-      <Tab title="JavaScript SDK — voice first">
-        Use the SDK when ElevenLabs voice is the primary path and your page needs a custom theme, headless UI, identity policy, media, or host tools.
-
-        ```ts
-        import {
-          ConvincedClient,
-          ConvincedVoiceController,
-          mountConvincedWidget,
-        } from '@convinced/widget-sdk'
-
-        const client = new ConvincedClient({ orgSlug: '<org-slug>' })
-
-        await client.initialize({
-          session: { c: 'acme-logistics' },
-        })
-
-        const voice = new ConvincedVoiceController({
-          descriptor: {
-            agentId: '<public-elevenlabs-agent-id>',
-            genericClientTool: false,
-          },
-          tools: client.tools,
-          orgSlug: client.orgSlug,
-          sessionId: () => client.state.session?.sessionId ?? null,
-          onConversationId: (id) => client.linkElevenLabsConversation(id),
-        })
-
-        mountConvincedWidget({
-          client,
-          voice,
-          preset: 'managed-v2',
-        })
-        ```
-
-        Install the public `@convinced/widget-sdk` package. Follow the [voice-first SDK quickstart](/guides/widget-sdk/quickstart) for setup, private-agent credentials, and tool configuration.
-      </Tab>
-
-      <Tab title="Hosted full-page">
-        No embed needed. Send the visitor straight to Convinced — best for cold outbound where you don't have a landing page yet.
-
-        ```
-        https://app.getconvinced.ai/widget/v2/<org-slug>?c=acme-logistics
-        ```
-      </Tab>
-    </Tabs>
-
-    Once the visitor opens the link, the widget pulls the intel for `acme-logistics` and the agent runs the session grounded in the account's pain points, champion, current stack, and competitor situation.
-  </Step>
-</Steps>
-
-## What happens behind the scenes
-
-When you call the auto-enrich endpoint, Convinced:
-
-1. **Crawls** the URLs in `links` and pulls clean text.
-2. **Researches** the company on the public web for industry, size, and recent signals.
-3. **Matches** the account to your knowledge base — referenceable customers, competitor data, product modules.
-4. **Synthesizes** a structured `intel` object via LLM, validating it against the schema.
-5. **Writes** the intel back to the target row and flips `enrichmentStatus` to `done`.
-
-Read [auto-enrich mode](/guides/campaigns/auto-enrich) for the full pipeline and how to write `rawResearch` that produces good intel.
-
-## Next steps
-
-<CardGroup cols={2}>
-  <Card title="Intel schema reference" icon="list-tree" href="/guides/campaigns/intel-schema">
-    Every field the agent uses — what it drives, and how to phrase it.
-  </Card>
-  <Card title="Partner-intel mode" icon="upload" href="/guides/campaigns/partner-intel">
-    Skip the wait — push fully-formed intel directly from your CRM.
-  </Card>
-  <Card title="Widget embedding" icon="code-pull-request" href="/guides/campaigns/widget-embedding">
-    Compare the iframe loader, pretty URLs, hosted widget, and JavaScript SDK.
-  </Card>
-  <Card title="Widget SDK" icon="code" href="/guides/widget-sdk/quickstart">
-    Build a voice-first browser experience with the supplied or headless interface.
-  </Card>
-  <Card title="Full API reference" icon="code" href="/api-reference/introduction">
-    Endpoint specs, request/response schemas, and error codes.
-  </Card>
-</CardGroup>
-
-<Note>
-  Stuck? Email [hi@getconvinced.ai](mailto:hi@getconvinced.ai) — we'll help you debug your first campaign.
-</Note>
+Continue with [SDK overview](/guides/widget-sdk/overview) for a custom page integration, [widget embedding](/guides/campaigns/widget-embedding) for loader options, or the [Campaign API reference](/api-reference/introduction).

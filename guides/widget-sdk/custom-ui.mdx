@@ -7,7 +7,7 @@ icon: 'paintbrush'
 The SDK separates the Convinced session and ElevenLabs voice controller from presentation. You can use the supplied Shadow DOM renderer, customize its tokens, or skip it and render the full experience in your application.
 
 <Tip>
-  To have a coding agent build the integration in your application, copy [`AGENT_BUILD_PROMPT.txt`](https://raw.githubusercontent.com/Get-Convinced/convinced-widget-sdk/main/AGENT_BUILD_PROMPT.txt). The [coding-agent guide](/guides/widget-sdk/build-with-an-agent) explains which placeholders and access to provide.
+  To have a coding agent build the integration in your application, copy the [reviewed implementation prompt](/examples/sdk-implementation-prompt.txt). The [coding-agent guide](/guides/widget-sdk/build-with-an-agent) explains which placeholders and access to provide.
 </Tip>
 
 ## Choose a presentation level
@@ -124,14 +124,19 @@ const request = await client.submitDemoRequest({
   context: 'Interested in an enterprise rollout',
 })
 
-console.log(request.requestId, request.visitorId, request.alreadySubmitted)
+if (request.requestId) {
+  console.log('Request reference:', request.requestId)
+}
+showRequestReceived() // Your application acknowledges the accepted request.
 ```
 
-The backend stores the request, links the session to the organization-scoped visitor, and creates its audit event in one transaction. It returns opaque `requestId` and `visitorId` values. An exact signed backend retry—after normalization, every submitted field is unchanged—returns the original correlation with `alreadySubmitted: true` instead of creating a second lead. Within one SDK client, identical concurrent and completed calls are coalesced onto the first response, so they do not create another network mutation.
+`submitDemoRequest()` submits a follow-up enquiry and synchronizes visitor identity. Within one SDK client, identical concurrent and completed calls share the first response. Keep the form and retry control visible if submission or identity synchronization fails.
 
-The first accepted request emits `identity` before the successful `demo_request` event, so the current UI, voice gate, and consented PostHog bridge see the linked identity immediately. An idempotent replay returns correlation only; it does not apply the retry's form values to SDK identity or PostHog. A second same-session submission whose name, email, phone, company, or context differs is rejected with `409 demo_request_conflict`. Do not treat that conflict as a new identity, call `identify()` with the replacement values, or relabel the existing lead—start a new Convinced session when a different person needs to submit.
+The current hosted endpoint returns `ok` and `submittedAt`; it does not return `requestId`, `visitorId`, or an idempotency guarantee. The SDK uses the identity endpoint when the response lacks `visitorId`. The response types also support a newer backend contract with opaque correlation and `alreadySubmitted`, but do not assume those optional fields exist on every deployment.
 
-The SDK also supports an older backend that does not return `visitorId` by calling the canonical identity endpoint before reporting a first accepted request as successful. Keep the form values and retry action visible when submission or identity synchronization fails.
+<Warning>
+  SDK coalescing is local to one client instance. The current hosted endpoint can overwrite a previous same-session request on a later network call. Do not automatically retry an ambiguous submission or promise exactly-once lead creation. Confirm its status with the operator before resubmitting.
+</Warning>
 
 <Note>
   This fallback creates a request for team follow-up; it does not reserve a calendar time. Configure `meetingCtaUrl` when the CTA should open a real scheduler.
@@ -243,10 +248,11 @@ The headless client returns all inputs the default preset uses:
 const session = client.state.session
 const config = client.state.config
 
+// This custom UI chooses the campaign opener first.
+// Return-visitor presentation is a separate product decision below.
 const greeting =
   session?.personalization?.firstMessage ||
-  (session?.returnVisitor ? config?.returnVisitorGreeting : '') ||
-  config?.firstMessageText ||
+  (config?.firstMessageEnabled !== false ? config?.firstMessageText : '') ||
   config?.welcomeMessage ||
   config?.greetingMessage
 
@@ -255,13 +261,21 @@ const campaignPills = config?.pillsConfig?.enabled
   : []
 ```
 
+The supplied `managed-v2` renderer instead prioritizes an enabled, in-window return-visitor greeting before the campaign opener. It applies `returnVisitorDays` and formats the `{topic}` and `{name}` placeholders. Headless UIs should explicitly choose and test their own return-visitor policy rather than displaying a raw template.
+
 When a visitor presses a pill, send its `prompt`, not its short `label`:
 
 ```ts
 pillButton.addEventListener('click', () => {
-  void client.sendMessage(pill.prompt)
+  if (voice.state.status === 'connected') {
+    voice.sendUserMessage(pill.prompt)
+  } else {
+    void client.sendMessage(pill.prompt).catch(showError)
+  }
 })
 ```
+
+Here `showError` is your application's visible error handler. Routing typed input into an already-live voice conversation keeps the same ElevenLabs context; sending it to `client.sendMessage()` would start a separate SDK chat turn.
 
 Headless interfaces receive the same configuration fields and can replace any supplied surface while keeping the same session, voice, campaign, and lifecycle clients.
 
@@ -290,19 +304,30 @@ Headless interfaces listen for `profile_gate` on the client's `activity` event a
 
 ## Clean up one owner
 
-Choose one component to own teardown:
+Choose one component to own teardown. For a supplied widget:
 
 ```ts
-stopClient()
-stopVoiceState()
-stopVoiceMessages()
-
 await widget.endSession()
+widget.destroy()
 client.destroy()
 ```
 
-For a mounted interface, `widget.endSession()` is the complete public teardown: it ends the attached ElevenLabs conversation, merges the SDK chat and voice transcript in time order, includes the exact slide filenames shown by the renderer, and persists the result to the current Convinced session. It de-duplicates matching transcript rows and applies the session history limits before sending.
+For a mounted interface, `widget.endSession()` ends the attached ElevenLabs conversation, merges the SDK chat and voice transcript in time order, includes the exact slide filenames shown by the renderer, and persists the result to the current Convinced session. It de-duplicates matching transcript rows and applies the session history limits before sending. `widget.destroy()` then removes its DOM and subscriptions; ending the session alone does not unmount the interface.
 
 In a headless interface, collect voice `message` events and shown slide filenames yourself, then pass them as `clientMessages` and `slidesViewed` to `client.endSession()`. The client-only default contains SDK chat messages; it cannot infer which custom voice transcript rows or media your renderer displayed.
+
+```ts
+await voice.end()
+await client.endSession({
+  clientMessages: mergedChatAndVoiceHistory,
+  slidesViewed: shownSlideFilenames,
+})
+stopClient()
+stopVoiceState()
+stopVoiceMessages()
+client.destroy()
+```
+
+The transcript and slide arrays above belong to your renderer. Show persistence errors and keep the session available for retry before destroying its owner.
 
 `widget.destroy()` removes the supplied interface and unsubscribes its listeners. When a voice controller is attached, it also attempts to end voice and persist the same merged history. Explicitly awaiting `widget.endSession()` is easier to observe and retry when delivery matters.

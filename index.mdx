@@ -1,61 +1,38 @@
 ---
-title: "Convinced docs"
-description: "Personalized B2B sales agent for your highest-intent accounts."
-icon: "star"
+title: 'Convinced documentation'
+description: 'Add a website agent with the Widget SDK, configure its behavior, and connect account or knowledge data.'
+icon: 'star'
 ---
 
-Convinced is a personalized, voice-first B2B sales widget with chat as a fallback. Partners push target-account intel through the campaign API, and the widget loads with `?c=<token>` to ground the conversation in that intel — opener, discovery questions, case studies, and competitive positioning all keyed off the account in front of it.
+Use Convinced to add a conversational agent to your website. The Widget SDK connects the agent, your interface, and the actions your application makes available.
 
-This site covers how to integrate the campaign API, what intel the agent uses, and how to add the managed widget or build a custom experience with the Widget SDK.
+## Start with the SDK overview
 
-## SDK implementation and client handoff
-
-Start with [SDK overview](/guides/widget-sdk/overview) to choose the integration. The experimental handoff adds [WebMCP website discovery](/guides/widget-sdk/webmcp) and [customer-managed ElevenLabs prompts and opening messages](/guides/widget-sdk/agent-prompts). Use the [client handoff guide](/guides/widget-sdk/client-handoff) for implementation order, study links, backend prerequisites and tested limitations.
-
-## Get started
-
-<Card
-  title="5-minute campaign quickstart"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Create a campaign, push your first target with auto-enrich, and open the personalized widget.
+<Card title="SDK overview" icon="layer-group" href="/guides/widget-sdk/overview" horizontal>
+  Start here to add an agent to your website. Choose an integration, understand the architecture, and follow the implementation steps for your first page and subsequent pages.
 </Card>
 
-## Learn more
+The overview is the entry point to share with your development team. Continue to [WebMCP website tools](/guides/widget-sdk/webmcp) when you want the site to expose actions through WebMCP. WebMCP support is experimental and opt-in; validate the actions and browser you intend to ship.
+
+## Integration guides
 
 <CardGroup cols={2}>
-  <Card title="Campaigns overview" icon="bullseye-arrow" href="/guides/campaigns/overview">
-    How campaigns, targets, tokens, and the widget fit together.
+  <Card title="SDK quickstart" icon="rocket" href="/guides/widget-sdk/quickstart">
+    Set up the SDK and understand its current runtime requirements.
   </Card>
-  <Card title="Auto-enrich walkthrough" icon="wand-magic-sparkles" href="/guides/campaigns/auto-enrich">
-    Send rep notes and links — Convinced synthesizes the intel object for you.
+  <Card title="Agent prompts and first message" icon="pen" href="/guides/widget-sdk/agent-prompts">
+    Read and update the saved ElevenLabs configuration using authorized administration.
   </Card>
-  <Card title="Intel schema reference" icon="list-tree" href="/guides/campaigns/intel-schema">
-    Every field the agent uses, what it drives, and how to phrase it.
+  <Card title="Campaign API" icon="bullseye-arrow" href="/guides/campaigns/overview">
+    Prepare account-specific context and personalized visitor links.
   </Card>
-  <Card title="API reference" icon="code" href="/api-reference/introduction">
-    Endpoints, request/response shapes, and lifecycle states.
-  </Card>
-  <Card title="Widget SDK" icon="code" href="/guides/widget-sdk/quickstart">
-    Lead with ElevenLabs voice, keep chat as fallback, or build a completely custom interface.
+  <Card title="Knowledge API" icon="circle-nodes" href="/guides/mcp/overview">
+    Query your organization's knowledge from your backend.
   </Card>
 </CardGroup>
 
-## What is campaign mode?
+## Credentials and API reference
 
-A **campaign** groups target companies under a stable slug. For each target you upsert a row carrying either a fully-formed `intel` object (partner-intel mode) or rep notes for Convinced to synthesize (auto-enrich mode). Each target gets a `widgetToken` that you embed in your outbound link as `?c=<token>`. When the visitor lands, the widget resolves the token, loads the intel, and the agent runs the conversation grounded in that account's context — not a generic pitch.
+The browser SDK, Campaign/Knowledge APIs, and agent administration use different authentication. A partner API key belongs on your backend; prompt editing requires a Convinced organization ADMIN session. See the [API overview](/api-reference/introduction) before choosing credentials.
 
-<CardGroup cols={2}>
-  <Card title="Partner-intel mode" icon="upload" href="/guides/campaigns/partner-intel">
-    Synchronous. Send a structured intel object, widget is ready immediately.
-  </Card>
-  <Card title="Embed the widget" icon="code-pull-request" href="/guides/campaigns/widget-embedding">
-    Compare the managed iframe, hosted widget, and JavaScript SDK.
-  </Card>
-</CardGroup>
-
-<Note>
-  Need help? Email [hi@getconvinced.ai](mailto:hi@getconvinced.ai) or open the [dashboard](https://app.getconvinced.ai).
-</Note>
+For launch checks, use the [implementation checklist](/guides/widget-sdk/client-handoff). For help, contact [Convinced support](mailto:hi@getconvinced.ai).

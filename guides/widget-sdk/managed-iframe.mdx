@@ -1,6 +1,6 @@
 ---
 title: 'Managed iframe loader'
-description: 'Install the hosted voice-first widget and optionally let it request bounded actions in the parent page.'
+description: 'Install the hosted widget, use its public loader API, and choose the SDK when the agent needs page actions.'
 icon: 'window-maximize'
 ---
 
@@ -36,7 +36,6 @@ See [Campaign sessions](/guides/widget-sdk/campaigns) for the exact precedence.
 | `data-token` | Optional public embed token for organizations that require one |
 | `data-c` | Explicit campaign target token; overrides URL-derived campaign values |
 | `data-pid` | Explicit personalized-link ID |
-| `data-host-tools` | Comma-separated opt-in for parent-page tools |
 | `data-launcher` | Preview override for a configured launcher style |
 | `data-bottom-offset` | Safe CSS length that raises launcher-anchored states |
 | `data-test="true"` | Request widget test mode |
@@ -47,11 +46,11 @@ See [Campaign sessions](/guides/widget-sdk/campaigns) for the exact precedence.
 
 ## Call the public loader API
 
-The parent bridge and experimental [WebMCP adapter](/guides/widget-sdk/webmcp) are separate implementations. This handoff does not add native cross-origin WebMCP discovery to the hosted iframe. [Prompt administration](/guides/widget-sdk/agent-prompts) belongs in an authenticated admin application, not the public loader API.
+The current production loader does not expose a host-tool registration API or native cross-origin WebMCP discovery. [Prompt administration](/guides/widget-sdk/agent-prompts) belongs in an authenticated admin application, not the public loader API.
 
-After the script loads, the loader exposes:
+After the loader fetches configuration and creates the widget, it exposes these browser methods. Use the queue below when initialization may still be in progress:
 
-```ts
+```js
 Convinced.openConvinced()
 Convinced.closeConvinced()
 Convinced.sendEvent('pricing_plan_opened', { plan: 'enterprise' })
@@ -82,108 +81,13 @@ Queue calls before an async loader has finished:
 ></script>
 ```
 
-## Enable parent-page tools
+## Add page actions with the SDK
 
-The iframe cannot read or modify the parent document by default. Opt in to only the built-ins you need:
+The production loader exposes `openConvinced()`, `closeConvinced()`, `sendEvent()`, and `setIdentity()`. It does not implement `data-host-tools`, `setNavigationHandler()`, `setHostToolAuthorizer()`, or `registerHostTool()`. Adding those names to the queue does not enable them.
 
-```html
-<script
-  src="https://app.getconvinced.ai/widget/loader.js"
-  data-org="acme"
-  data-host-tools="page-context,navigate,scroll,highlight"
-  async
-></script>
-```
+For an agent that can read the page, highlight a section, follow an SPA route, or call application functions, use the [SDK quickstart](/guides/widget-sdk/quickstart) in the parent page. Register bounded actions through [Host tools and MCP](/guides/widget-sdk/host-tools), or use the experimental [WebMCP adapter](/guides/widget-sdk/webmcp).
 
-`data-host-tools="all"` is an alias for those four built-ins. It does not enable custom extensions.
-
-| Opt-in value | Voice client tool | What runs in the parent page |
-| --- | --- | --- |
-| `page-context` | `host_get_page_context` | Reads URL, title, description, headings, and a compact interactive-element list; omits form values |
-| `navigate` | `host_navigate` | Changes a same-origin SPA route |
-| `scroll` | `host_scroll_to` | Scrolls one safe selector into view |
-| `highlight` | `host_highlight` | Applies and then restores a temporary outline on one safe selector |
-
-These callbacks are available to the managed ElevenLabs client-tool configuration. The exact tool names and schemas must also exist on the ElevenLabs agent.
-
-## Connect navigation to your SPA router
-
-The loader can update `history` and dispatch `popstate`, but framework routers should own their route transition:
-
-```html
-<script>
-  window.Convinced = window.Convinced || { _q: [] }
-
-  window.Convinced._q.push([
-    'setNavigationHandler',
-    async (url, { replace }) => {
-      if (replace) appRouter.replace(url)
-      else appRouter.navigate(url)
-    },
-  ])
-</script>
-```
-
-Navigation stays on the parent page's origin. The handler must keep the document alive so the iframe can receive the tool result and the voice agent can continue the same turn.
-
-## Authorize individual requests
-
-Opting into a capability advertises that it may be requested. Read-only page context can run once enabled; navigation, scrolling, highlighting, and custom extensions remain denied until an authorizer approves the individual request. Add the policy before launch:
-
-```html
-<script>
-  window.Convinced = window.Convinced || { _q: [] }
-
-  window.Convinced._q.push([
-    'setHostToolAuthorizer',
-    async ({ name, arguments: args }) => {
-      if (name === 'host_get_page_context') return true
-
-      return window.confirm(
-        `Allow the assistant to use ${name} with ${JSON.stringify(args)}?`,
-      )
-    },
-  ])
-</script>
-```
-
-The loader validates the message source, expected origin, protocol version, request ID, tool name, argument size, result size, authorization decision, and timeout before returning a correlated response to the iframe. Omitting `setHostToolAuthorizer` therefore leaves every mutating action unavailable even when its name appears in `data-host-tools`.
-
-## Register custom page logic
-
-Register a namespaced function in the parent page:
-
-```html
-<script>
-  window.Convinced = window.Convinced || { _q: [] }
-
-  window.Convinced._q.push([
-    'registerHostTool',
-    'host_open_pricing_panel',
-    async ({ plan }) => {
-      pricingPanel.open(plan)
-      return { opened: true, plan }
-    },
-  ])
-</script>
-```
-
-The managed ElevenLabs agent reaches registered extensions through `host_extension_call`:
-
-```json
-{
-  "name": "host_open_pricing_panel",
-  "arguments_json": "{\"plan\":\"enterprise\"}"
-}
-```
-
-`arguments_json` is the canonical ElevenLabs parameter: a JSON object encoded as a string. The managed bridge decodes it before calling the registered parent-page handler.
-
-Custom names must start with `host_` and use lowercase letters, numbers, and underscores. Built-ins cannot be replaced. At most 16 custom extensions may be registered.
-
-<Warning>
-  Do not register arbitrary script evaluation, unrestricted DOM access, or a generic fetch proxy. Every extension should represent one bounded product action with a small JSON result.
-</Warning>
+The SDK must execute in the same document as the page actions. A cross-origin iframe does not gain access to the parent's tools merely because both surfaces use Convinced.
 
 ## Original appearance versus SDK composition
 

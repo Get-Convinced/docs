@@ -12,6 +12,8 @@ There are three supported presentation paths around the same Convinced conversat
 
 ## Capability matrix
 
+Page tools below run through browser voice callbacks or explicit local SDK execution. The current hosted chat route does not implement SDK client-tool continuation; a shared registry does not enable chat-driven page actions there.
+
 | Capability | Managed iframe | SDK `managed-v2` preset | Headless SDK |
 | --- | --- | --- | --- |
 | ElevenLabs voice as primary path | Built in | Supply `ConvincedVoiceController`; preset renders voice, mute, push-to-talk, and transcript | Supply controller and render your own controls |
@@ -24,14 +26,17 @@ There are three supported presentation paths around the same Convinced conversat
 | Voice modes and mode toggle | Full hosted flow | Honors `text_only`, `smart_gate`, `email_gate`, `always_voice`, `voice_only`, and `allowModeToggle` | Your UI enforces deployment policy |
 | Identity | Hosted profile and voice gates | Managed gated modes plus in-conversation voice-led identity tools and `identityPolicy` | `captureIdentity()`, `identify()`, and `profile_gate` events |
 | Meeting CTA, engagement offers, and welcome card | Built in | Built in; `rules` and `both` render deterministic offers while `ai_decides` stays agent-owned | Render from `meetingCta*`, `engagementTriggers`, and `pillsConfig.welcomeCard` |
-| SPA navigation, page context, scroll, highlight | Explicit `data-host-tools` parent bridge | Direct `registerDomTools()` registry | Same registry |
-| Custom page functions | `registerHostTool()` plus `host_extension_call` | Custom registry tools and generic gateway | Same registry |
-| MCP adapter | Expose one bounded parent extension or trusted backend action | `createMcpTools()` for a caller-managed client | Same adapter |
+| SPA navigation, page context, scroll, highlight | Not exposed by the current production loader | Direct `registerDomTools()` registry | Same registry |
+| Custom page functions | Not exposed by the current production loader | Custom registry tools and generic gateway | Same registry |
+| MCP adapter | No parent-page MCP API in the current loader | `createMcpTools()` for a caller-managed client | Same adapter |
 | Lifecycle and analytics | `sendEvent()`, `setIdentity()`, open, and close | `track()`, `identify()`, `updatePage()`, voice linking, and `endSession()` | Same APIs |
 | Hosted launcher, callout, ticker, and theme variants | Exact source of truth | Functional config-driven style, position, v2 theme, callout, pulse, ticker bar, intro, and lux treatments | Unlimited custom presentation |
 | Mobile keyboard and hosted geometry behavior | Built in | Responsive supplied panel | Your application owns it |
 | Style isolation | Cross-origin iframe | Shadow DOM | Your application's styling model |
-| Availability today | Hosted production loader | Public `@convinced/widget-sdk` npm package | Public `@convinced/widget-sdk` npm package |
+| Private voice credentials | Confirm the hosted deployment's provider configuration with its operator | Supply your own authenticated descriptor factory; hosted `getVoiceCredential()` is unavailable | Same credential requirement |
+| WebMCP | No cross-origin discovery API | Experimental same-origin bridge; managed callbacks remain additional tools | Experimental bridge with two callbacks when configured alone |
+| Saved agent prompt and opener | Separate authenticated administration surface | `ConvincedAgentAdmin` requires a Convinced organization ADMIN session and agent binding | Same management client and authentication |
+| Availability today | Hosted production loader | Public `@convinced/widget-sdk@0.1.1-webmcp.2` prerelease | Same pinned package |
 
 ## Can the original widget be built through the SDK?
 
@@ -49,18 +54,23 @@ The managed preset's automatic text-only recovery is limited to microphone, medi
 | `data-token` | `widgetToken` client option |
 | `data-c` | `browserSessionInput({ c })` or `initialize({ session: { c } })` |
 | `data-pid` | `browserSessionInput({ pid })` |
-| `data-host-tools` | `registerDomTools()` capabilities |
 | `Convinced.openConvinced()` | `widget.open()` |
 | `Convinced.closeConvinced()` | `widget.close()` |
 | `Convinced.sendEvent()` | `client.sendEvent()` or `client.track()` |
 | `Convinced.setIdentity()` | `client.setIdentity()` or `client.identify()` |
-| `Convinced.setNavigationHandler()` | `registerDomTools({ navigate })` |
-| `Convinced.registerHostTool()` | `client.registerTool()` |
 | Hosted UI configuration | `preset`, `theme`, or a headless renderer |
+
+The current hosted loader has no page-tool registration or router API. Add those capabilities directly through `registerDomTools(tools, options)` and `client.registerTool()` after migrating.
 
 ## Migrate an existing embed
 
-For the `0.1.1-webmcp.2` handoff, install the supplied tarball and deploy its matching management backend before using `ConvincedAgentAdmin`. WebMCP migration is optional: publish existing handlers, configure the two generic provider callbacks on an isolated agent, then test discovery and visible outcomes. See [WebMCP](/guides/widget-sdk/webmcp) and [client handoff](/guides/widget-sdk/client-handoff).
+Pin the package version used by these guides:
+
+```bash
+npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.2
+```
+
+WebMCP migration is optional: publish existing handlers, configure the two generic provider callbacks on a separate agent, then test discovery and visible outcomes. See [WebMCP](/guides/widget-sdk/webmcp) and [Prompts and first message](/guides/widget-sdk/agent-prompts) for their setup requirements.
 
 <Steps>
   <Step title="Inventory the hosted deployment">
@@ -82,7 +92,7 @@ For the `0.1.1-webmcp.2` handoff, install the supplied tarball and deploy its ma
     Start with `preset: 'managed-v2'` to compare behavior. Move to headless only for visual or interaction requirements the preset does not cover.
   </Step>
   <Step title="Link and close the session">
-    Call `linkElevenLabsConversation()` from `onConversationId`, track SPA route changes, and await `voice.end()` plus `client.endSession()` from a reliable teardown path.
+    Call `linkElevenLabsConversation()` from `onConversationId` and track SPA route changes. For a mounted widget, await `widget.endSession()` so its voice transcript and shown slides are included. Headless interfaces await `voice.end()` and pass their owned transcript and media history to `client.endSession()`.
   </Step>
   <Step title="Run parity tests">
     Test campaign and generic sessions, each configured voice mode, chat fallback, real microphone and audio, exact ElevenLabs tool callbacks, SPA navigation, scroll, highlight, identity, slides, videos, welcome card, engagement modes, meeting CTA, configured launcher treatments, reconnect or second voice session, lifecycle events, and mobile layouts.
@@ -105,13 +115,11 @@ Do not mount both for the same visitor session. They would create separate brows
 
 ## Browser script migration
 
-Sites without a bundler can self-host the built IIFE or use the exact versioned CDN asset with Subresource Integrity:
+Sites without a bundler can self-host the IIFE from the installed package:
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/@convinced/widget-sdk@0.1.0/dist/convinced-widget.global.js"
-  integrity="sha384-g8AYpyuu5oqMRGjIrOtLRdzIcRBENgwn+mwfJ6gTyzZFIrUIEwUa+J0YunulT8VS"
-  crossorigin="anonymous"
+  src="/vendor/convinced-widget-sdk-0.1.1-webmcp.2.global.js"
 ></script>
 <script>
   const SDK = window.ConvincedWidgetSDK
@@ -121,7 +129,7 @@ Sites without a bundler can self-host the built IIFE or use the exact versioned 
 </script>
 ```
 
-Pin the deployed asset to a reviewed package version. Recalculate the SRI value whenever you upgrade; never fetch an unversioned development build in production.
+Copy `node_modules/@convinced/widget-sdk/dist/convinced-widget.global.js` to the versioned URL above as part of your site's build. If using a CDN, pin the exact package version and calculate Subresource Integrity from those exact bytes; never reuse a hash from another release.
 
 ## Evidence to keep before removing the iframe
 

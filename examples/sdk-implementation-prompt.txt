@@ -1,0 +1,21 @@
+Build a Convinced Widget SDK integration for this application's own pages.
+
+Read https://convinced.mintlify.app/guides/widget-sdk/overview first, then quickstart, voice, host-tools, security and the implementation checklist. Use the current-availability table as a constraint; package APIs are not proof of backend deployment.
+
+Install and pin @convinced/widget-sdk@0.1.1-webmcp.2, commit the lockfile, use Node.js >=22.14 and the existing application framework. Use the documented complete sdk-quickstart.ts module as the starting point, or explain why the application needs a headless interface. Do not depend on private Convinced source repositories.
+
+Identify real prerequisites: Convinced organization slug, allowed origin, any widget token, intended ElevenLabs agent, public/private connection mode and provider tool configuration. Do not invent credentials, organization settings, or unsupported API endpoints. Keep provider management keys server-side.
+
+The hosted private voice-token endpoint is absent (getVoiceCredential returns 404), the hosted iframe loader has no public parent-page tools, and hosted chat routes do not implement the complete signed client-tool continuation protocol. Use a public ElevenLabs agent or an integrator-owned authenticated private credential service. Test actual deployment capabilities instead of promising unavailable contracts, idempotency or webhook guarantees.
+
+Configure only the callbacks activated by the integration. Managed-v2 contributes six managed voice callbacks when widget.startVoice runs. Explicit page actions need matching SDK registry entries and ElevenLabs schemas. Disable host_extension_call if it is not configured. Enable first-message conversation override for nonempty managed greetings. Pass authorization separately to voice, chat and DOM policies as required.
+
+Make the agent reusable across pages. Keep one owner mounted during SPA navigation, update page context, register meaningful permitted operations using existing application controllers, and remove stale tools. Use schema validation, server authorization for protected data and observable success/failure results. Do not embed Transformation-specific page instructions into a general agent.
+
+For experimental WebMCP, use the documented discovery/execution callbacks and downloadable schemas. Feature-detect native support; select the tested argument encoding deliberately, preserve ordinary interaction when unsupported, enforce authorization per underlying action and test real outcomes. Do not equate transport success with a completed action or claim cross-browser/autonomous voice acceptance from mocked tests.
+
+Saved system prompt and first message edits must use ConvincedAgentAdmin on an authenticated management surface with Convinced ADMIN access and a server-owned agent binding. Customer-domain login needs an agreed backend authentication integration; a proxy or API key assumption is insufficient. Display provider-confirmed success, preserve omitted fields and require reload on a stale revision or uncertain write.
+
+Handle initialization/start/end failures visibly. Start voice from a visitor gesture. Keep subscriptions scoped, end sessions from reliable application actions, preserve retry paths on failed persistence, and dispose only when the owner is finished. Test identity, media, analytics consent and saved history where used.
+
+Deliver a reviewable website PR. Include actual commands and test results for initialization, real microphone/audio, correct opener, read/action/denial on at least two pages, route continuity, browser support, cleanup and relevant admin persistence. Clearly label checks that were simulated, inferred or blocked. The website owner reviews, merges and deploys their repository.
