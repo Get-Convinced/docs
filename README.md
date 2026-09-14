@@ -1,6 +1,6 @@
 # Convinced docs
 
-Public documentation for the Convinced campaign API, managed voice-first widget, and JavaScript Widget SDK. The site is built with [Mintlify](https://mintlify.com) and deployed at [docs.getconvinced.ai](https://docs.getconvinced.ai).
+Public documentation for the Convinced campaign API, managed voice-first widget, and JavaScript Widget SDK. The site is built with [Mintlify](https://mintlify.com) and deployed at [convinced.mintlify.app](https://convinced.mintlify.app).
 
 ## Local development
 
@@ -52,6 +52,6 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). Run `mint dev` locally before opening 
 
 ## SDK client handoff
 
-The Widget SDK guides cover the published 0.1.0 baseline and the unpublished `0.1.1-webmcp.2` handoff. The latter includes WebMCP and authenticated management of the actual ElevenLabs system prompt and first message. Start at `guides/widget-sdk/overview.mdx`, then `client-handoff.mdx`; study links are included there. Management endpoint pages are deliberately separate from the Campaign OpenAPI because they use authenticated ADMIN sessions, not Campaign partner keys.
+The Widget SDK guides cover the published 0.1.0 baseline and the published `0.1.1-webmcp.2` prerelease (`next`). The latter includes WebMCP and authenticated management of the actual ElevenLabs system prompt and first message. Start at `guides/widget-sdk/overview.mdx`, then `client-handoff.mdx`; study links are included there. Management endpoint pages are deliberately separate from the Campaign OpenAPI because they use authenticated ADMIN sessions, not Campaign partner keys.
 
 The customer must receive the matching SDK tarball/backend patch and have the backend deployed with the exact agent ownership binding. Publishing docs alone does not enable the API. Campaign/MCP examples use a named public-host placeholder: supply the customer deployment origin during onboarding; never use a Railway internal hostname from an external client.
