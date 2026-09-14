@@ -47,6 +47,8 @@ See [Campaign sessions](/guides/widget-sdk/campaigns) for the exact precedence.
 
 ## Call the public loader API
 
+The parent bridge and experimental [WebMCP adapter](/guides/widget-sdk/webmcp) are separate implementations. This handoff does not add native cross-origin WebMCP discovery to the hosted iframe. [Prompt administration](/guides/widget-sdk/agent-prompts) belongs in an authenticated admin application, not the public loader API.
+
 After the script loads, the loader exposes:
 
 ```ts

@@ -1,0 +1,59 @@
+---
+title: 'Get agent prompt'
+description: 'Read the live ElevenLabs system prompt and first message for an authorized SDK agent.'
+---
+
+```http
+GET /api/org/{orgSlug}/sdk-agents/{agentId}/prompt
+```
+
+Use the Convinced app origin serving the matching management backend. This endpoint is included in the experimental SDK handoff; it must be deployed before use.
+
+## Authorization
+
+Requires an authenticated Convinced organization `ADMIN` session. The server verifies the selected agent's organization ownership binding. Public widget credentials and Campaign API partner keys are not accepted. The server holds the ElevenLabs key.
+
+## Parameters
+
+| Path field | Meaning |
+| --- | --- |
+| `orgSlug` | The administrator's organization slug |
+| `agentId` | The exact ElevenLabs agent ID used by the SDK |
+
+## SDK request
+
+```ts
+const current = await admin.getPrompt()
+```
+
+## Response
+
+```json
+{
+  "source": "elevenlabs",
+  "agentId": "agent_123",
+  "systemPrompt": "Help visitors understand this website using its available tools.",
+  "firstMessage": "Hi! What would you like to explore?",
+  "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "branchId": "agtbrch_live",
+  "versionId": "agtvrsn_current",
+  "trafficPercentage": 100
+}
+```
+
+`revision` is an opaque hash from the actual response; the example value is illustrative. Include the received value in your next PATCH. Responses use `Cache-Control: private, no-store`.
+
+The server reads the sole branch receiving 100% of live traffic. It does not return a cached Convinced prompt or assume Main is live. Split traffic and incomplete branch discovery return `409 agent_traffic_conflict`.
+
+## Errors
+
+| HTTP | Meaning |
+| --- | --- |
+| `400` | Invalid agent identifier |
+| `403` | Missing organization access or ADMIN role |
+| `404` | No ownership binding for this organization and agent |
+| `409` | Shared agent or ambiguous live traffic |
+| `502` | Provider/configuration read could not be completed |
+| `503` | Server ElevenLabs management key is not configured |
+
+See [update agent prompt](/api-reference/endpoint/update-agent-prompt) and [editor setup](/guides/widget-sdk/agent-prompts).

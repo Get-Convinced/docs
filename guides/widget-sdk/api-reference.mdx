@@ -1,0 +1,79 @@
+---
+title: 'SDK API map'
+description: 'Find the public SDK classes, methods, tool adapters and lifecycle helpers.'
+icon: 'code'
+---
+
+Import public APIs from `@convinced/widget-sdk`. The installed package's TypeScript declarations are the exact signature reference; this page groups them by the work they perform.
+
+## Session and chat
+
+`ConvincedClient({ orgSlug, apiBase?, widgetToken?, tools?, fetch?, authorizeToolCall?, ... })` owns widget session and chat state.
+
+| Operation | Methods |
+| --- | --- |
+| Initialize and read configuration | `initialize()`, `getConfig()`, `createSession()`, `state` |
+| Converse | `sendMessage()`, `cancelActiveTurn()` |
+| Identity and enrichment | `captureIdentity()`, `identify()`, `setIdentity()`, `getVisitorIntel()` |
+| Voice association | `getVoiceCredential()`, `markVoiceUpgrade()`, `linkElevenLabsConversation()` |
+| Media | `getSlides()`, `getSlideMetadata()` |
+| Site and session context | `updatePage()`, `updateSessionContext()` |
+| Lifecycle events | `track()`, `sendEvent()`, `on()`, `once()`, `off()` |
+| Application tools | `registerTool()`, `tools` |
+| Lead handoff | `reportDemoRequestOpened()`, `submitDemoRequest()` |
+| Teardown | `endSession()`, `destroy()` |
+
+Use `browserSessionInput()` and `resolveWidgetSessionAttribution()` to prepare attribution. `forgetBrowserVisitorKey()` clears the SDK continuity key for privacy controls. See [campaigns](/guides/widget-sdk/campaigns), [identity](/guides/widget-sdk/identity) and [events](/guides/widget-sdk/events).
+
+## ElevenLabs conversation
+
+`ConvincedVoiceController` accepts either a browser-safe `descriptor` or a fresh `descriptorFactory`, plus tools and optional session linkage.
+
+| Operation | Methods or fields |
+| --- | --- |
+| Connect or end | `start(context?)`, `end()` |
+| Observe | `state`, `subscribe()`, `on()`, `once()`, `off()` |
+| Input and context | `sendUserMessage()`, `sendContextualUpdate()`, `sendUserActivity()` |
+| Audio | `setMuted()`, `setVolume()`, `startPushToTalk()`, `stopPushToTalk()` |
+| Voice tool contract | Descriptor `exactClientTools` and `genericClientTool` |
+
+`buildManagedVoiceStartContext()` assembles the managed session, campaign and page context for a headless start. `buildVoiceOutreachContext()` prepares outreach data. These are conversation inputs; they do not persist agent settings. See [voice](/guides/widget-sdk/voice).
+
+## Saved agent configuration
+
+Available in the experimental handoff build:
+
+```ts
+const admin = new ConvincedAgentAdmin({ orgSlug, agentId, apiBase })
+const current = await admin.getPrompt()
+const saved = await admin.updatePrompt({
+  systemPrompt: 'Your agent instructions',
+  firstMessage: 'Your opening message',
+  expectedRevision: current.revision,
+})
+```
+
+Both methods return `AgentPrompt`. `UpdateAgentPromptInput` accepts either field or both, with `expectedRevision` required. Use this only through authenticated management access. See [prompts and first message](/guides/widget-sdk/agent-prompts).
+
+## Tool adapters
+
+| API | Role |
+| --- | --- |
+| `ClientToolRegistry` | Register, list, validate and execute explicit client tools |
+| `createDomTools()` / `registerDomTools()` | Opt-in page context, SPA navigation, scrolling and highlighting |
+| `createMcpTools()` | Adapt tools from an already-connected caller-owned MCP client |
+| `getWebMcpModelContext()` | Detect the optional browser model context |
+| `publishRegistryToWebMcp()` | Publish existing registry handlers; returns `ready` and `dispose()` |
+| `createWebMcpBridge()` | Discover browser tools; returns two registry tools plus `listTools()`, `executeTool()` and `dispose()` |
+| `WEBMCP_VOICE_BINDINGS` | The two fixed ElevenLabs-to-SDK callback mappings |
+
+The WebMCP helpers require the prerelease and a compatible browser implementation. Ordinary registry limits remain in place; the bridge uses two entries to access a discovered catalog. See [host tools](/guides/widget-sdk/host-tools) and [WebMCP](/guides/widget-sdk/webmcp).
+
+## Rendering and analytics
+
+- `mountConvincedWidget()` returns the mounted UI owner, including `open()`, `close()`, `startVoice()`, `endVoice()`, `endSession()`, `destroy()` and `host`.
+- `parseAssistantContent()`, `stripAssistantDirectives()` and `toSafeVideoEmbedUrl()` support safe custom media rendering.
+- `createPostHogBridge()` / `ConvincedPostHogBridge` correlate consented analytics with SDK sessions.
+- `ConvincedApiError` carries HTTP status, API code and response details; `ConvincedSdkError` represents SDK-level failures.
+
+The mounted renderer owns its transcript/media bookkeeping. A headless renderer must retain the voice rows and shown slide filenames needed by `client.endSession()`.

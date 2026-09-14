@@ -34,19 +34,25 @@
           {
             "group": "Widget SDK",
             "pages": [
+              "guides/widget-sdk/overview",
               "guides/widget-sdk/quickstart",
               "guides/widget-sdk/build-with-an-agent",
               "guides/widget-sdk/voice",
+              "guides/widget-sdk/agent-prompts",
+              "guides/widget-sdk/webmcp",
               "guides/widget-sdk/campaigns",
               "guides/widget-sdk/managed-iframe",
               "guides/widget-sdk/custom-ui",
               "guides/widget-sdk/identity",
               "guides/widget-sdk/media",
               "guides/widget-sdk/host-tools",
+              "guides/widget-sdk/page-aware-guides",
               "guides/widget-sdk/events",
               "guides/widget-sdk/analytics-and-testing",
               "guides/widget-sdk/security",
-              "guides/widget-sdk/migration"
+              "guides/widget-sdk/migration",
+              "guides/widget-sdk/api-reference",
+              "guides/widget-sdk/client-handoff"
             ]
           },
           {
@@ -75,14 +81,17 @@
               "api-reference/endpoint/upsert-target",
               "api-reference/endpoint/get-target"
             ]
+          },
+          {
+            "group": "SDK agent management",
+            "pages": [
+              "api-reference/endpoint/get-agent-prompt",
+              "api-reference/endpoint/update-agent-prompt"
+            ]
           }
         ]
       }
     ]
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
   },
   "navbar": {
     "links": [

@@ -1,0 +1,91 @@
+---
+title: 'Client implementation handoff'
+description: 'Install the reviewed SDK, provision the backend and agent, and verify the website before rollout.'
+icon: 'clipboard-check'
+---
+
+Use this guide as the implementation order for your engineering team. The handoff build is `@convinced/widget-sdk@0.1.1-webmcp.2`; WebMCP and prompt administration require this prerelease and the accompanying backend changes.
+
+## What to hand over
+
+| Deliverable | Purpose |
+| --- | --- |
+| Pinned npm version or SDK tarball, plus lockfile | Reproducible browser package: `@convinced/widget-sdk@0.1.1-webmcp.2` |
+| SDK source patch and base commit | Review or extend the browser integration |
+| Backend source patch and base commit | Install authenticated prompt GET/PATCH routes and the ElevenLabs adapter |
+| Mintlify source and documentation patch | Keep implementation guides and API reference with the release |
+| ElevenLabs tool JSON and generic prompt | Configure the two WebMCP callbacks on the intended agent |
+| Test reports | Distinguish browser transport, page outcomes, provider persistence and remaining live acceptance |
+
+No provider credentials belong in this bundle. Configure them through your approved server environment.
+
+## Responsibilities
+
+| Owner | Work |
+| --- | --- |
+| Convinced backend team | Deploy management routes, configure the server's ElevenLabs key, verify organization ADMIN access, and provision the exact SDK agent ownership binding |
+| Customer website team | Install the SDK, own UI and route lifecycle, expose permitted actions, provide current page context, and handle errors and teardown |
+| Agent configuration owner | Configure the intended live branch, client-tool schemas, generic instructions, opener and any session-override permissions |
+| Customer administrators | Edit the system prompt and first message through their authenticated editor |
+
+The SDK agent may be different from the organization's default widget agent. Match the voice descriptor's agent ID to the management binding. Do not overwrite the production widget's binding to grant a separate SDK agent access.
+
+## Implementation sequence
+
+<Steps>
+  <Step title="Install and identify the release">
+    Install the exact npm version or supplied `.tgz`, commit the lockfile, and record the matching backend and docs revision. See [SDK overview](/guides/widget-sdk/overview).
+  </Step>
+  <Step title="Provision management access">
+    Deploy the GET/PATCH API, configure the ElevenLabs key server-side, and verify the authenticated customer ADMIN can access only their registered agent. A customer-domain editor needs an authenticated proxy; partner API keys are not accepted by these endpoints.
+  </Step>
+  <Step title="Connect a conversation">
+    Set the organization and agent identity. Start a public agent directly or fetch a fresh private credential on each start. Verify microphone access, speech and reconnect using [ElevenLabs voice](/guides/widget-sdk/voice).
+  </Step>
+  <Step title="Expose one useful website action">
+    Begin with one read and one visible action, each with input validation and an observed result. Use the existing application controllers. Follow [WebMCP](/guides/widget-sdk/webmcp) or [host tools](/guides/widget-sdk/host-tools).
+  </Step>
+  <Step title="Configure discovery instructions">
+    Attach the exported two-tool WebMCP contract to an isolated agent. Teach it to discover current tools and schemas, use observed IDs, and acknowledge failures. Remove assumptions about a particular Transformation route from generic instructions.
+  </Step>
+  <Step title="Build the customer editor">
+    Load `systemPrompt`, `firstMessage` and `revision`; save either field or both through `ConvincedAgentAdmin`. Show success only after provider read-back. See [prompt administration](/guides/widget-sdk/agent-prompts).
+  </Step>
+  <Step title="Test a second website">
+    Keep the SDK bridge and generic instructions the same. Change the site's tool registrations and page context. Confirm that discovery, authorization, visible outcomes and route cleanup work without static per-tool mappings.
+  </Step>
+  <Step title="Verify the full customer flow">
+    Test the customer's real login, ownership binding, live agent branch, changed opener in a new conversation, supported browsers, session history and relevant analytics. Keep the previous integration available during rollout.
+  </Step>
+</Steps>
+
+## WebMCP study path
+
+Read these in order:
+
+1. [Chrome WebMCP overview](https://developer.chrome.com/docs/ai/webmcp): browser availability, enabling support and the developer model.
+2. [Imperative API guide](https://developer.chrome.com/docs/ai/webmcp/imperative-api): registration, discovery, execution and lifecycle.
+3. [GoogleChromeLabs tools and demos](https://github.com/GoogleChromeLabs/webmcp-tools): implementations to run and inspect. Try the [pizza demo](https://googlechromelabs.github.io/webmcp-tools/demos/pizza-maker/).
+4. [Convinced WebMCP integration](/guides/widget-sdk/webmcp): connect those website actions to this SDK and the two ElevenLabs callbacks.
+5. [Puppeteer WebMCP guide](https://pptr.dev/guides/webmcp) and [Chrome evaluation guide](https://developer.chrome.com/docs/ai/webmcp/evals): automate calls and distinguish transport checks from model/task evaluation.
+6. [WebMCP draft specification](https://webmachinelearning.github.io/webmcp/): exact semantics and evolving browser API details.
+
+For the voice side, use [ElevenLabs client tools](https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools), [agent updates](https://elevenlabs.io/docs/api-reference/agents/update) and [versioning](https://elevenlabs.io/docs/eleven-agents/operate/versioning). ElevenLabs' server-side MCP connector and browser WebMCP are separate interfaces.
+
+## Evidence included and remaining work
+
+| Check | Handoff evidence |
+| --- | --- |
+| Native WebMCP registration, discovery and execution | Chrome 152 experiment; Enmovil, independent shop and Google pizza demo |
+| Enmovil page outcomes | 25 checks passed; four failures retained in the report |
+| Persisted system prompt | Real temporary ElevenLabs agent update and independent read-back |
+| Persisted first message | Real first-message-only, combined and empty-opener updates; temporary agent deleted afterward |
+| API authorization and failure handling | Controlled integration tests covering administrators, tenant binding, stale revisions and provider failures |
+| Customer's deployed login and ownership binding | Must be verified during rollout; the local ownership database was unavailable |
+| Autonomous WebMCP voice quality and supported browser matrix | Must be tested; fake transport callback tests do not prove speech or model selection |
+
+For every customer rollout, verify an authenticated GET and a saved update against the deployed management origin. Provider persistence tests alone do not verify the customer's login, proxy, agent ownership or subsequent voice conversation.
+
+## Type-checked integration example
+
+The [SDK handoff example](/examples/sdk-handoff.ts) contains typed editor, tool-publisher and voice-bridge helpers. Supply your real application permissions and authenticated backend; it contains no credentials.

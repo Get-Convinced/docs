@@ -17,6 +17,8 @@ Use the SDK's plain-text build prompt when an AI coding agent is implementing yo
 
 ## Use the prompt
 
+For this prerelease, use `AGENT_BUILD_PROMPT.txt` from the handoff package or reviewed checkout. The public `main` link can lag unpublished changes. Give the coding agent the [client handoff](/guides/widget-sdk/client-handoff), [WebMCP guide](/guides/widget-sdk/webmcp), [prompt editor guide](/guides/widget-sdk/agent-prompts), exact SDK tarball and matching backend source.
+
 1. Open your web application in the coding agent's workspace.
 2. Open [`AGENT_BUILD_PROMPT.txt`](https://raw.githubusercontent.com/Get-Convinced/convinced-widget-sdk/main/AGENT_BUILD_PROMPT.txt).
 3. Copy and paste the entire file into the agent.
@@ -27,13 +29,13 @@ Use the SDK's plain-text build prompt when an AI coding agent is implementing yo
   Do not paste ElevenLabs API keys, PostHog personal API keys, MCP bearer tokens, Convinced partner keys, database credentials, or personal data into the prompt. The browser should receive only public configuration and short-lived session credentials.
 </Warning>
 
-The prompt tells the agent to install the public package:
+For the published baseline, install:
 
 ```bash
 npm install @convinced/widget-sdk
 ```
 
-It also tells the agent to use the repository's existing package manager, framework, router, design system, consent flow, analytics setup, and test tools.
+For WebMCP and saved prompt administration, install `./vendor/convinced-widget-sdk-0.1.1-webmcp.2.tgz` instead. The prompt also tells the agent to use the repository's existing package manager, framework, router, design system, consent flow, analytics setup, and test tools.
 
 ## Choose the presentation before you start
 

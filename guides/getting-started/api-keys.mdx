@@ -4,6 +4,10 @@ description: 'Generate, scope, rotate, and revoke partner API keys for the Convi
 icon: 'key'
 ---
 
+<Note>
+  Replace `YOUR_CONVINCED_API_HOST` with the public HTTPS Campaign/KB MCP origin supplied for your organization. The Railway internal hostname is private-network only and is not a customer-facing base URL. The dashboard and SDK management API use a different origin.
+</Note>
+
 A Convinced API key is the single credential that authenticates your integration against **both** the [Campaign API](/guides/campaigns/overview) and the [KB MCP server](/guides/mcp/overview). One key, one organization, both surfaces.
 
 This page covers everything you need: where to generate keys, what each expiry preset means, how to send the key on every transport, when to rotate, and how to revoke.
@@ -96,12 +100,12 @@ Default to **6 months** for production keys and **1 week** for CI / staging. Tre
 
 ## Use the key
 
-The same `Bearer` header works on every Convinced surface. Set it once in your environment:
+The same `Bearer` header works on the Campaign API and KB MCP surfaces. It does not authorize [SDK prompt administration](/guides/widget-sdk/agent-prompts), which requires an authenticated organization ADMIN session. Set it once in your environment:
 
 <CodeGroup>
 ```bash Shell
 export CONVINCED_API_KEY="ck_live_…"
-export CONVINCED_API_BASE="http://convinced-kb-mcp.railway.internal"
+export CONVINCED_API_BASE="https://YOUR_CONVINCED_API_HOST"
 ```
 
 ```typescript Node
@@ -146,7 +150,7 @@ The SSE handshake reads the same `Authorization` header. From a Claude Desktop /
 {
   "mcpServers": {
     "convinced": {
-      "url": "http://convinced-kb-mcp.railway.internal/sse",
+      "url": "https://YOUR_CONVINCED_API_HOST/sse",
       "headers": {
         "Authorization": "Bearer ck_live_…"
       }
@@ -163,7 +167,7 @@ The server also accepts the legacy `x-api-key: <key>` header (no `Bearer` prefix
 
 ## Revoke a key
 
-Revocation is **immediate and permanent**. The next call against the key returns `401 API key is disabled`.
+Revocation is permanent. After the service reloads the revoked key, requests return `401 API key is disabled`. The MCP validation cache can delay enforcement by up to five minutes, as described below.
 
 <Steps>
   <Step title="Open Settings → API Keys">

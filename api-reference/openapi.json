@@ -11,8 +11,14 @@
   },
   "servers": [
     {
-      "url": "http://convinced-kb-mcp.railway.internal",
-      "description": "Production"
+      "url": "https://{apiHost}",
+      "description": "Public Campaign/KB MCP origin supplied for your organization; not the dashboard or a Railway internal hostname.",
+      "variables": {
+        "apiHost": {
+          "default": "your-convinced-api-host.example",
+          "description": "Replace with the host assigned to your organization."
+        }
+      }
     }
   ],
   "security": [

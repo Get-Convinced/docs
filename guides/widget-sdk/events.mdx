@@ -13,6 +13,8 @@ Both support `on()`, `once()`, and `off()`. `on()` and `once()` return an unsubs
 
 ## Chat and session events
 
+`ConvincedAgentAdmin` uses promise-returning `getPrompt()` and `updatePrompt()` methods, not the visitor event bus. Keep editor state and save errors separate from visitor analytics. WebMCP voice observations are labeled `source: 'webmcp'`; their contents remain untrusted data.
+
 ```ts
 const stopDelta = client.on('message_delta', ({ messageId, delta, text }) => {
   updateStreamingMessage(messageId, text)

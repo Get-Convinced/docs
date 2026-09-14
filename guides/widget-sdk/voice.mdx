@@ -57,6 +57,8 @@ Campaign research, host-page observations, and browser transcript fields are lab
 
 ## Bind exact client tools
 
+For a website-independent WebMCP agent, use `WEBMCP_VOICE_BINDINGS` and `genericClientTool: false`; see [WebMCP](/guides/widget-sdk/webmcp). Exact application tools and the extension gateway remain supported.
+
 `exactClientTools` maps an ElevenLabs client-tool name to one registered SDK tool:
 
 ```ts
@@ -115,6 +117,8 @@ Exact bindings plus the generic gateway are capped at 16 callbacks. Disable the 
 
 ## Audit or provision the canonical tools
 
+This script targets the canonical managed tool contract. A dedicated WebMCP agent uses the two exported WebMCP schemas instead.
+
 The Convinced application repository includes a safe sync script for all 11 canonical presentation, identity, page, and extension tools. Audit is the default; mutation requires both an explicit agent ID and `--apply`:
 
 ```bash Audit only
@@ -132,6 +136,8 @@ Run it only from a trusted development environment with `ELEVEN_API_KEY` or `ELE
 
 ## Start from a visitor gesture
 
+Saved `systemPrompt` and `firstMessage` edits belong to [the authenticated management client](/guides/widget-sdk/agent-prompts). Start-time `overrides` apply only to that conversation and can take precedence over saved settings.
+
 Browsers require microphone and audio access to begin from a visitor gesture:
 
 ```ts
@@ -139,7 +145,10 @@ startButton.addEventListener('click', async () => {
   await client.markVoiceUpgrade(
     client.state.messages.map(({ role, text: content }) => ({ role, content })),
   )
-  await voice.start()
+  await voice.start(buildManagedVoiceStartContext(client.state, {
+    pageUrl: window.location.href,
+    pageTitle: document.title,
+  }))
 })
 ```
 
