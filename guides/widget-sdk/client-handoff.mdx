@@ -9,7 +9,7 @@ Use this guide as the implementation order for your engineering team. The handof
 ## Production release: 14 September 2026
 
 - SDK: `@convinced/widget-sdk@0.1.1-webmcp.2` is published under `next`; stable `latest` remains `0.1.0`.
-- Convinced management API: deployed at `https://app.getconvinced.ai`. Enmovil's authenticated administrator read returned `200`; a no-op save returned `200` with both fields unchanged; a stale revision returned `409`. Unauthenticated access returned `403`.
+- Convinced management API: deployed at `https://app.getconvinced.ai`. Enmovil's authenticated administrator read returned `200`; a no-op save returned `200` with both fields unchanged; a stale revision returned `409`. Unauthenticated access returned `401`.
 - Documentation: live at [convinced.mintlify.app](https://convinced.mintlify.app).
 - Enmovil website integration: prepared in [PR #50](https://github.com/ensomarketing/enmovil-website/pull/50), but not deployed. Its Vercel team must grant the Git author access before deployment can proceed.
 
