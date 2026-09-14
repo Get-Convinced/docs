@@ -43,6 +43,7 @@ Saved settings affect subsequent unpinned conversations. Per-session overrides a
 | HTTP / code | Meaning |
 | --- | --- |
 | `400 invalid_prompt_update` / `invalid_json` | Correct the request fields or JSON |
+| `401` | Sign in; the authentication middleware rejected the request |
 | `403` / `admin_required` / `origin_not_allowed` | Use authorized same-origin administrator access |
 | `404 agent_not_found` | The exact SDK agent needs a server-side ownership binding |
 | `409 prompt_conflict` | The editor is stale; reload before saving |

@@ -50,6 +50,7 @@ The server reads the sole branch receiving 100% of live traffic. It does not ret
 | HTTP | Meaning |
 | --- | --- |
 | `400` | Invalid agent identifier |
+| `401` | Sign in; the authentication middleware rejected the request |
 | `403` | Missing organization access or ADMIN role |
 | `404` | No ownership binding for this organization and agent |
 | `409` | Shared agent or ambiguous live traffic |

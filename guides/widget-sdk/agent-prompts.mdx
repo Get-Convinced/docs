@@ -115,6 +115,7 @@ Revision checking detects stale edits but is not an atomic provider lock. Simult
 
 | Status or code | What to do |
 | --- | --- |
+| `401` | Sign in; the authentication middleware rejected the request |
 | `403`, `admin_required` | Sign in with an organization administrator account |
 | `404`, `agent_not_found` | Confirm the exact SDK agent has a server-side ownership binding |
 | `409`, `prompt_conflict` | Reload and reconcile the edit |
