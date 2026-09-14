@@ -21,6 +21,7 @@ The authorization and path parameters match [GET agent prompt](/api-reference/en
 Unknown fields and `null` prompt values are rejected. Omitted fields are preserved. The encoded request body is capped at 700,000 bytes to bound escaped JSON input as well as decoded text.
 
 ```ts
+// Use the admin instance configured by the authenticated editor setup.
 const current = await admin.getPrompt()
 const saved = await admin.updatePrompt({
   firstMessage: 'Hi! How can I help?',
@@ -50,7 +51,7 @@ Saved settings affect subsequent unpinned conversations. Per-session overrides a
 | `409 agent_traffic_conflict` / `shared_agent` | Resolve live traffic or ownership separately |
 | `413 request_too_large` | Encoded body exceeds the limit |
 | `415 invalid_content_type` | Send `application/json` |
-| `503 provider_not_configured` | Configure the backend's provider key |
+| `503 provider_not_configured` / `ownership_not_configured` | Convinced must correct the server provider key or ownership configuration |
 | `502 provider_update_unconfirmed` | Provider write outcome is unknown |
 | `502 provider_verification_failed` | Provider accepted the write, but verification failed |
 | `502 prompt_management_failed` / `provider_request_failed` | The operation could not be completed |

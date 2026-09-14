@@ -4,10 +4,10 @@ description: 'Give your coding agent one reviewed prompt for a secure, voice-fir
 icon: 'wand-magic-sparkles'
 ---
 
-Use the SDK's plain-text build prompt when an AI coding agent is implementing your widget. It covers the complete iframe-free path: ElevenLabs voice, chat fallback, campaigns, progressive identity, session history, PostHog, page tools, MCP, slides, video, custom themes, consent, security, and testing.
+Give your coding agent the reviewed implementation prompt below. It starts from the deployed SDK path, separates optional backend capabilities, and adds page tools, WebMCP, or custom UI only when your application needs them.
 
 <CardGroup cols={2}>
-  <Card title="Open the agent build prompt" icon="file-lines" href="https://raw.githubusercontent.com/Get-Convinced/convinced-widget-sdk/main/AGENT_BUILD_PROMPT.txt">
+  <Card title="Open the agent build prompt" icon="file-lines" href="/examples/sdk-implementation-prompt.txt">
     Open the plain-text file, then copy its entire contents into your coding agent.
   </Card>
   <Card title="View the SDK repository" icon="github" href="https://github.com/Get-Convinced/convinced-widget-sdk">
@@ -17,25 +17,25 @@ Use the SDK's plain-text build prompt when an AI coding agent is implementing yo
 
 ## Use the prompt
 
-Use `AGENT_BUILD_PROMPT.txt` from the installed package or the [exact release tag](https://github.com/Get-Convinced/convinced-widget-sdk/blob/v0.1.1-webmcp.2/AGENT_BUILD_PROMPT.txt). Give the coding agent the [client handoff](/guides/widget-sdk/client-handoff), [WebMCP guide](/guides/widget-sdk/webmcp), [prompt editor guide](/guides/widget-sdk/agent-prompts), pinned SDK version and matching backend source.
+Use the [reviewed implementation prompt](/examples/sdk-implementation-prompt.txt). The older `AGENT_BUILD_PROMPT.txt` inside the package contains backend and internal-lab assumptions that do not all match the hosted service; do not use it as an unconditional production checklist. Give the coding agent the [SDK overview](/guides/widget-sdk/overview), [WebMCP guide](/guides/widget-sdk/webmcp), [prompt editor guide](/guides/widget-sdk/agent-prompts), pinned SDK version, organization slug, and the enabled backend capabilities. Clients do not need Convinced's private application source to integrate the SDK.
 
 1. Open your web application in the coding agent's workspace.
-2. Open [`AGENT_BUILD_PROMPT.txt`](https://raw.githubusercontent.com/Get-Convinced/convinced-widget-sdk/main/AGENT_BUILD_PROMPT.txt).
+2. Open [the implementation prompt](/examples/sdk-implementation-prompt.txt).
 3. Copy and paste the entire file into the agent.
-4. Replace the placeholders you know, especially `<CONVINCED_ORG_SLUG>`, the desired presentation, router, allowed routes, brand reference, and test commands.
-5. Leave unknown placeholders unchanged. Ask the agent to inspect the application first and request only values that block implementation.
+4. Supply your organization slug, approved agent configuration, desired presentation, router, allowed routes, brand reference, and test commands.
+5. Ask the agent to inspect the application first and request only missing values that block implementation.
 
 <Warning>
   Do not paste ElevenLabs API keys, PostHog personal API keys, MCP bearer tokens, Convinced partner keys, database credentials, or personal data into the prompt. The browser should receive only public configuration and short-lived session credentials.
 </Warning>
 
-For the published baseline, install:
+Install the version used by these guides:
 
 ```bash
-npm install @convinced/widget-sdk
+npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.2
 ```
 
-For WebMCP and saved prompt administration, install `./vendor/convinced-widget-sdk-0.1.1-webmcp.2.tgz` instead. The prompt also tells the agent to use the repository's existing package manager, framework, router, design system, consent flow, analytics setup, and test tools.
+WebMCP is experimental and opt-in in this release. The prompt tells the agent to use the repository's existing package manager, framework, router, design system, consent flow, analytics setup, and test tools. Keep the package lockfile and deployed backend capabilities aligned with these instructions.
 
 ## Choose the presentation before you start
 
@@ -59,13 +59,13 @@ The coding agent should have access to:
 - Its consent and privacy requirements.
 - Its unit and browser-test setup.
 - A non-production Convinced organization or campaign for acceptance testing.
-- An approved private ElevenLabs agent for the final microphone test.
+- An approved public ElevenLabs agent, or an authenticated private credential endpoint, for the final microphone test.
 
 Keep production secrets in backend environment variables. When an external credential or dashboard check is unavailable, the agent should report that test as blocked instead of replacing it with a mock and claiming completion.
 
 ## Require evidence before launch
 
-The prompt requires both automated checks and real-browser evidence. Final acceptance includes recognized microphone speech, audible ElevenLabs output, campaign personalization, SPA navigation, scroll and highlight, allowed and denied tools, slides/video, progressive identity, durable session history, PostHog ingestion and queryability, the matching Convinced dashboard session, and security fallbacks.
+Require automated checks and real-browser evidence for the features you actually enable: recognized microphone speech and audible output for voice, visible outcomes for page actions, campaign and media correctness when used, identity and session persistence, and mobile behavior. Add PostHog ingestion and query checks only when analytics is part of the integration. A browser package alone does not enable private credential issuance, server idempotency, or SDK chat-tool continuation.
 
 An ElevenLabs text simulation does not prove microphone input, synthesized audio, DOM execution, PostHog delivery, or durable Convinced history. Use the [real-browser testing guide](/guides/widget-sdk/analytics-and-testing) for the complete acceptance path.
 

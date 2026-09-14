@@ -11,6 +11,55 @@
   "navigation": {
     "tabs": [
       {
+        "tab": "Widget SDK",
+        "groups": [
+          {
+            "group": "Start here",
+            "pages": [
+              "guides/widget-sdk/overview",
+              "guides/widget-sdk/quickstart",
+              "guides/widget-sdk/build-with-an-agent"
+            ]
+          },
+          {
+            "group": "Voice and website actions",
+            "pages": [
+              "guides/widget-sdk/voice",
+              "guides/widget-sdk/webmcp",
+              "guides/widget-sdk/host-tools",
+              "guides/widget-sdk/page-aware-guides"
+            ]
+          },
+          {
+            "group": "Interface and sessions",
+            "pages": [
+              "guides/widget-sdk/custom-ui",
+              "guides/widget-sdk/managed-iframe",
+              "guides/widget-sdk/campaigns",
+              "guides/widget-sdk/identity",
+              "guides/widget-sdk/media"
+            ]
+          },
+          {
+            "group": "Administration and operations",
+            "pages": [
+              "guides/widget-sdk/agent-prompts",
+              "guides/widget-sdk/events",
+              "guides/widget-sdk/analytics-and-testing",
+              "guides/widget-sdk/security"
+            ]
+          },
+          {
+            "group": "Reference and launch",
+            "pages": [
+              "guides/widget-sdk/api-reference",
+              "guides/widget-sdk/migration",
+              "guides/widget-sdk/client-handoff"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Guides",
         "groups": [
           {
@@ -29,30 +78,6 @@
               "guides/campaigns/auto-enrich",
               "guides/campaigns/intel-schema",
               "guides/campaigns/widget-embedding"
-            ]
-          },
-          {
-            "group": "Widget SDK",
-            "pages": [
-              "guides/widget-sdk/overview",
-              "guides/widget-sdk/quickstart",
-              "guides/widget-sdk/build-with-an-agent",
-              "guides/widget-sdk/voice",
-              "guides/widget-sdk/agent-prompts",
-              "guides/widget-sdk/webmcp",
-              "guides/widget-sdk/campaigns",
-              "guides/widget-sdk/managed-iframe",
-              "guides/widget-sdk/custom-ui",
-              "guides/widget-sdk/identity",
-              "guides/widget-sdk/media",
-              "guides/widget-sdk/host-tools",
-              "guides/widget-sdk/page-aware-guides",
-              "guides/widget-sdk/events",
-              "guides/widget-sdk/analytics-and-testing",
-              "guides/widget-sdk/security",
-              "guides/widget-sdk/migration",
-              "guides/widget-sdk/api-reference",
-              "guides/widget-sdk/client-handoff"
             ]
           },
           {

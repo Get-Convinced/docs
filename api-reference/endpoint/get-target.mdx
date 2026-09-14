@@ -5,7 +5,7 @@ openapi: 'GET /api/campaigns/{campaignSlug}/targets/{token}'
 
 Read the current state of a campaign target. This is the endpoint you poll after an auto-enrich upsert to watch the synthesis lifecycle and confirm the row is ready to serve a personalized widget session.
 
-For partner-intel rows, you generally don't need to call this — the upsert response already tells you everything. For auto-enrich rows, this is essential.
+Use GET for both partner-intel and auto-enriched rows before sharing a link. Only GET includes `widgetReady`; the upsert response does not confirm that the campaign is active.
 
 <Note>
   This endpoint is read-only and idempotent. Safe to poll repeatedly while a
@@ -74,7 +74,7 @@ print(body["target"]["enrichmentStatus"], body["target"]["widgetReady"])
 
 ## The polling pattern
 
-For auto-enrich rows, the canonical pattern is: **poll every 5-10 seconds, give up after 5 minutes, treat `failed` as a retry signal.**
+For auto-enrich rows, the canonical pattern is: **poll every 5-10 seconds with a five-minute timeout, then inspect failed or unfinished work before retrying a write.**
 
 <CodeGroup>
 ```typescript TypeScript
@@ -88,7 +88,7 @@ async function waitForWidgetReady(
   while (Date.now() < deadline) {
     const response = await fetch(
       `${CONVINCED_API_BASE}/api/campaigns/${campaignSlug}/targets/${token}`,
-      { headers: { Authorization: `Bearer ${CONVINCED_API_KEY}` } },
+      { headers: { Authorization: `Bearer ${CONVINCED_API_KEY}` }, signal: AbortSignal.timeout(10_000) },
     )
 
     if (!response.ok) {
@@ -173,8 +173,8 @@ TOKEN="acme-logistics"
 DEADLINE=$(( SECONDS + 300 ))  # 5 minutes
 
 while [ $SECONDS -lt $DEADLINE ]; do
-  RESPONSE=$(curl -s "$CONVINCED_API_BASE/api/campaigns/$SLUG/targets/$TOKEN" \
-    -H "Authorization: Bearer $CONVINCED_API_KEY")
+  RESPONSE=$(curl --fail-with-body --silent --show-error --max-time 10 "$CONVINCED_API_BASE/api/campaigns/$SLUG/targets/$TOKEN" \
+    -H "Authorization: Bearer $CONVINCED_API_KEY") || exit 1
   STATUS=$(echo "$RESPONSE" | jq -r '.target.enrichmentStatus')
   READY=$(echo "$RESPONSE" | jq -r '.target.widgetReady')
 
@@ -304,7 +304,7 @@ exit 1
         "token": "acme-logistics",
         "enrichedAt": null,
         "enrichmentStatus": "failed",
-        "enrichmentError": "All link crawls returned 403; rawResearch was empty.",
+        "enrichmentError": "Synthesis missing companySummary",
         "enrichmentStartedAt": "2026-04-15T09:14:05.221Z",
         "hasIntel": false,
         "widgetReady": false,
@@ -374,8 +374,7 @@ exit 1
 
 <ResponseField name="target.enrichmentError" type="string | null">
   Populated only when `enrichmentStatus === "failed"`. Truncated to 500 chars.
-  Surface this to your operator — the most common failure modes are inaccessible
-  links and empty `rawResearch`.
+  Surface this to your operator. Synthesis errors or missing usable source material can fail a row; link and search failures can be nonfatal.
 </ResponseField>
 
 <ResponseField name="target.enrichmentStartedAt" type="string | null">
@@ -385,8 +384,7 @@ exit 1
 </ResponseField>
 
 <ResponseField name="target.campaignStatus" type="string">
-  `"active"` or `"archived"`. Archived campaigns force `widgetReady: false`
-  even if intel is fully synthesized.
+  The stored campaign status. Any value other than `"active"` forces `widgetReady: false`, even if intel is present.
 </ResponseField>
 
 ## Common errors
@@ -394,7 +392,7 @@ exit 1
 <AccordionGroup>
   <Accordion title="404 Not Found">
     ```json
-    { "error": "Target not found in this campaign." }
+    { "error": "Target not found" }
     ```
 
     Either the campaign slug doesn't exist for your org, or the token doesn't
@@ -403,7 +401,7 @@ exit 1
   </Accordion>
   <Accordion title="401 Unauthorized">
     ```json
-    { "error": "API key missing or invalid." }
+    { "error": "No API key provided" }
     ```
   </Accordion>
 </AccordionGroup>
@@ -416,4 +414,8 @@ Once `widgetReady` is `true`, send the visitor to the widget. The simplest path 
 https://app.getconvinced.ai/widget/v2/<org-slug>?c=<widgetToken>
 ```
 
-Or embed on your own page using the loader script — see the [partner-intel guide](/guides/campaigns/partner-intel) and [auto-enrich guide](/guides/campaigns/auto-enrich) for end-to-end embedding examples.
+Or use [Widget embedding](/guides/campaigns/widget-embedding) or the [SDK overview](/guides/widget-sdk/overview).
+
+## Request limits
+
+GET calls share the partner key quota with campaign writes and Knowledge REST calls: 2,000 requests/hour per process by default. A `429` response contains an `error` string without a numeric retry delay. Keep polling bounded. A client timeout does not cancel an enrichment worker.

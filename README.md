@@ -29,9 +29,10 @@ If the dev server misbehaves, run `mint update` to grab the latest CLI before fi
 
 ## Content structure
 
-Navigation is defined in `docs.json`. Two top-level tabs:
+Navigation is defined in `docs.json`. Three top-level tabs:
 
-- **Guides** — campaign, Widget SDK, managed iframe, voice, MCP, security, and migration pages.
+- **Widget SDK** — overview, quickstart, voice, page actions, UI, administration and launch reference.
+- **Guides** — campaign setup, API keys and MCP.
 - **API reference** — pages under `api-reference/` plus `api-reference/openapi.json` (the spec drives the interactive endpoint pages).
 
 Static assets (logos, favicon, screenshots) live in `logo/`, `favicon.svg`, and `images/`. Reusable MDX fragments live in `snippets/`.
@@ -50,8 +51,10 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). Run `mint dev` locally before opening 
 - Integration questions? Email [hi@getconvinced.ai](mailto:hi@getconvinced.ai).
 - Dashboard: [app.getconvinced.ai](https://app.getconvinced.ai).
 
-## SDK client handoff
+## SDK client entry point
 
-The Widget SDK guides cover the published 0.1.0 baseline and the published `0.1.1-webmcp.2` prerelease (`next`). The latter includes WebMCP and authenticated management of the actual ElevenLabs system prompt and first message. Start at `guides/widget-sdk/overview.mdx`, then `client-handoff.mdx`; study links are included there. Management endpoint pages are deliberately separate from the Campaign OpenAPI because they use authenticated ADMIN sessions, not Campaign partner keys.
+Share [SDK overview](https://convinced.mintlify.app/guides/widget-sdk/overview). The SDK tab groups setup, voice and actions, interface and sessions, administration and operations, and reference. The implementation checklist is a launch reference, not the first page.
 
-The customer must receive the matching SDK tarball/backend patch and have the backend deployed with the exact agent ownership binding. Publishing docs alone does not enable the API. Campaign/MCP examples use a named public-host placeholder: supply the customer deployment origin during onboarding; never use a Railway internal hostname from an external client.
+The guides target published npm `0.1.1-webmcp.2`. The overview records verified hosted availability, including missing private voice credentials and chat-tool protocol gaps. Prompt endpoints use authenticated organization ADMIN sessions; Campaign partner keys are a separate credential.
+
+Downloadable examples in `examples/` contain the complete quickstart module, editor, WebMCP helpers, matching provider schemas and reviewed implementation instructions. Validate these against the pinned published SDK when changing examples. Do not include private backend source or credentials in public documentation.

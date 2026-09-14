@@ -1,341 +1,94 @@
 ---
-title: 'Sending visitors to the widget'
-description: 'Choose the managed iframe or Widget SDK, then route each visitor into the right personalized session.'
-icon: 'link'
+title: 'Widget embedding for campaigns'
+description: 'Pass an account token to the hosted widget, managed loader, or SDK.'
+icon: 'code-pull-request'
 ---
 
-You have a campaign target with `widgetReady: true`. Now you need to actually send a visitor to a page where the Convinced widget will load in **campaign mode** with the right token.
-
-This guide covers the four routing options, the loader script's attributes, and the conventions that keep attribution clean across email, SMS, ads, and embedded surfaces.
-
-<Note>
-The token in `?c=<token>` is the **target token** — the value returned as `widgetToken` from `POST /api/campaigns/{slug}/targets`. Not the campaign slug. See [Campaign mode overview](/guides/campaigns/overview#campaign-vs-target) for the distinction.
-</Note>
-
-## Choose the iframe or SDK
-
-Both integrations use the same Convinced conversation runtime and campaign tokens. Choose the surface based on how much control your page needs.
-
-| | Managed iframe | Widget SDK |
-| --- | --- | --- |
-| **Setup** | Add the loader script or use the hosted URL | Install `@convinced/widget-sdk` and mount it in your app |
-| **Interface** | Convinced-managed and isolated from your page | Use the supplied UI or render a completely custom interface |
-| **Host-page actions** | Explicit `data-host-tools` bridge into the parent page | Direct bounded registry for SPA navigation, scrolling, highlighting, page logic, and MCP adapters |
-| **Best for** | Exact hosted launchers, mobile behavior, and minimal maintenance | Product-native styling, voice-first custom behavior, and tool-enabled experiences |
-
-Start with the iframe when the managed experience meets your needs. Use the [Widget SDK quickstart](/guides/widget-sdk/quickstart) when you need direct control over rendering, identity collection, events, or host tools.
+A campaign token selects account context; the widget's organization selects the tenant. Use the same token with the managed widget or the SDK. For a general website integration, start with [SDK overview](/guides/widget-sdk/overview).
 
 ## The widgetReady gate
 
-Before driving any traffic, confirm the target is ready to serve a personalized session. Use the **`widgetReady`** boolean on the GET response — it bundles all three preconditions into one check:
-
-1. The campaign is `status: "active"`.
-2. Intel is present on the row (`hasIntel: true`).
-3. `enrichmentStatus` is `done` or `skipped`.
+Before sharing a link, read [GET target status](/api-reference/endpoint/get-target) from your backend and confirm `target.widgetReady === true`. The boolean requires an active campaign, stored intel, and a `done` or `skipped` enrichment state.
 
 ```ts
-const res = await fetch(
-  `${process.env.CONVINCED_API_BASE}/api/campaigns/${slug}/targets/${token}`,
-  { headers: { Authorization: `Bearer ${process.env.CONVINCED_API_KEY}` } }
+const response = await fetch(
+  `${process.env.CONVINCED_API_BASE}/api/campaigns/${encodeURIComponent(slug)}/targets/${encodeURIComponent(token)}`,
+  { headers: { Authorization: `Bearer ${process.env.CONVINCED_API_KEY}` } },
 )
-const { target } = await res.json()
-if (!target.widgetReady) {
-  // Don't send the visitor yet — they'd get a generic session, not campaign mode.
-  return
-}
+if (!response.ok) throw new Error(`Target read failed: ${response.status}`)
+const { target } = await response.json()
+if (!target.widgetReady) throw new Error('Campaign target is not ready')
 ```
 
-<Warning>
-If you send a visitor before `widgetReady: true`, the widget falls back to a **generic** session. The visitor won't see an error — they'll just have an unpersonalized conversation, and your campaign attribution will look broken. Always gate.
-</Warning>
+This code runs on your server. The partner API key must never be included in a browser bundle. Upsert responses do not contain `widgetReady`.
 
-For the polling loop pattern, see [Auto-enrich → Step 2: Poll until ready](/guides/campaigns/auto-enrich#step-2-poll-until-ready).
-
-## Iframe routing options
-
-| Option | Where the widget lives | Where the token comes from | Best for |
-| --- | --- | --- | --- |
-| **A — Embed, token from URL** | Your page | `?c=<token>` query string | Any-channel landing pages |
-| **B — Embed, token hard-pinned** | Your page | `data-c="..."` attribute | Per-account dedicated pages |
-| **C — Pretty path** | Your page | `/for/<token>/` URL segment | Email/SMS where pretty URLs matter |
-| **D — Hosted full-page** | Convinced | Query string on Convinced URL | Cold outbound, no landing page |
-
-### Option A — Embed on your page, token from URL
-
-The general-purpose option. Drop the loader on a page; visitors land at `yourcompany.com/demo?c=<token>` and the widget reads the token from the query string.
+## Managed loader
 
 ```html
 <script
   src="https://app.getconvinced.ai/widget/loader.js"
-  data-org="<org-slug>"
+  data-org="<your-org-slug>"
   async
 ></script>
 ```
 
-**Visitor URL:** `https://yourcompany.com/demo?c=acme-logistics`
+Send a visitor to `https://your-site.example/demo?c=acme-logistics`. Alternatively, set `data-c="acme-logistics"` to pin a page to one target.
 
-**Use this when:**
+The loader resolves the campaign token in this order:
 
-- One landing page serves many target accounts.
-- You drive traffic from email, ads, or organic.
-- You want the same page to also be reachable without a token (it falls back to a generic widget session).
+1. Explicit `data-c`.
+2. The page's `?c=` query parameter.
+3. A `/for/<token>/` path segment.
+4. `?utm_campaign=` as a legacy fallback.
 
-**Don't use this when:**
+Prefer explicit `c` or `data-c`; a marketing campaign label is not necessarily a valid target token. A resolving personal link (`pid`) takes precedence over campaign personalization on the backend.
 
-- Your channel mangles query strings (some legacy email clients do).
-- You need the URL to look "clean" — see Option C.
+### Pretty paths
 
-### Option B — Embed, token hard-pinned
-
-Same loader, but the token is baked into the script tag. The widget ignores `?c=` in the URL and uses `data-c` instead.
-
-```html
-<script
-  src="https://app.getconvinced.ai/widget/loader.js"
-  data-org="<org-slug>"
-  data-c="acme-logistics"
-  async
-></script>
+```text
+https://your-site.example/for/acme-logistics/
 ```
 
-**Visitor URL:** `https://yourcompany.com/demos/acme/`
+Your website must route that path to the page containing the loader. The loader extracts the token; it does not create pages or configure your router.
 
-**Use this when:**
+### Loader attributes
 
-- One page is dedicated to a single target account (e.g. a 1:1 microsite).
-- You control the page's HTML and can publish a per-account variant.
-- You don't want the token visible in the URL.
-
-**Don't use this when:**
-
-- One page serves many accounts — Option A scales better.
-- You want UTM-style attribution from the URL.
-
-### Option C — Pretty path on your page
-
-Use a URL segment instead of a query string. Server-side, you read the segment, redirect to the embedded page, or set `data-c` dynamically.
-
-```
-https://yourcompany.com/for/acme-logistics/
-```
-
-The Convinced loader picks up the token from the path automatically when the URL matches the pattern `*/for/<token>/...`.
-
-**Use this when:**
-
-- The URL goes into email or SMS where appearance matters.
-- You want shareable links that look intentional, not query-stringy.
-- You can route `/for/*` server-side on your site.
-
-**Don't use this when:**
-
-- You can't add a URL pattern (static site without rewrites).
-- You're already using `/for/*` for something else.
-
-### Option D — Hosted full-page widget
-
-Skip the embed. Convinced hosts a full-page widget at `app.getconvinced.ai`; you send the visitor straight there.
-
-```
-https://app.getconvinced.ai/widget/v2/<org-slug>?c=acme-logistics
-```
-
-**Use this when:**
-
-- You're running cold outbound and don't have a landing page set up yet.
-- You want zero implementation work — just a URL.
-- You want Convinced to handle the entire experience surface.
-
-**Don't use this when:**
-
-- You want the visitor to see your branding before the conversation.
-- Your sales motion needs the visitor to land on your site (for analytics, retargeting pixels, etc.).
-
-## The loader script
-
-The loader script tag is a single line; the attributes are what make it adaptive.
-
-```html
-<script
-  src="https://app.getconvinced.ai/widget/loader.js"
-  data-org="<org-slug>"
-  data-c="<token>"
-  async
-></script>
-```
-
-### Attributes
-
-<ParamField path="src" type="string" required>
-Always `https://app.getconvinced.ai/widget/loader.js`. The loader handles widget version selection — you don't pin a version.
-</ParamField>
-
-<ParamField path="data-org" type="string" required>
-Your org slug — visible in the dashboard URL. For example, the path `/org/convinced/...` means your org slug is `convinced`. The loader uses this to route widget API calls to the right tenant.
-</ParamField>
-
-<ParamField path="data-c" type="string">
-Hard-pin the campaign target token to this page. When set, the widget ignores `?c=` in the URL. Use for per-account dedicated pages (Option B). Omit for general-purpose embeds (Option A).
-</ParamField>
-
-<ParamField path="data-pid" type="string">
-Hard-pin a personalized-link ID. An explicit `data-pid` wins over `?pid=` and the backwards-compatible `?cid=` alias.
-</ParamField>
-
-<ParamField path="data-token" type="string">
-Optional public embed token for organizations that require one. This is not a Campaign API key and not an ElevenLabs API key.
-</ParamField>
-
-<ParamField path="data-host-tools" type="string">
-Comma-separated parent-page capabilities: `page-context`, `navigate`, `scroll`, and `highlight`. All are disabled by default. See [Managed iframe loader](/guides/widget-sdk/managed-iframe#enable-parent-page-tools).
-</ParamField>
-
-<ParamField path="data-launcher" type="string">
-Preview override for a configured launcher style. Use for QA rather than as the long-term source of tenant configuration.
-</ParamField>
-
-<ParamField path="data-bottom-offset" type="string">
-Safe CSS length that raises launcher-anchored states without rewriting iframe styles.
-</ParamField>
-
-<ParamField path="data-test" type="boolean">
-Set to `true` to request widget test mode.
-</ParamField>
-
-<ParamField path="data-debug" type="boolean">
-Set to `true` to request the widget debug surface.
-</ParamField>
-
-<ParamField path="async" type="boolean">
-Standard async loading. Always include — the loader is non-blocking and doesn't need to run before page render.
-</ParamField>
-
-### Where to put it
-
-The loader can go anywhere in `<head>` or `<body>`. Recommendation: at the end of `<body>`, after critical content has loaded. The widget UI mounts on its own — you don't need a placeholder element.
-
-The loader also exposes `openConvinced()`, `closeConvinced()`, `sendEvent()`, `setIdentity()`, `setNavigationHandler()`, `setHostToolAuthorizer()`, and `registerHostTool()` on `window.Convinced`. See [Managed iframe loader](/guides/widget-sdk/managed-iframe#call-the-public-loader-api).
-
-## Decision table
-
-Quick reference for picking an option:
-
-| If your situation is... | Pick |
+| Attribute | Meaning |
 | --- | --- |
-| One landing page, many target accounts | **Option A** |
-| One dedicated page per target (1:1 microsite) | **Option B** |
-| Pretty URLs for email/SMS | **Option C** |
-| No landing page at all, just a URL to share | **Option D** |
-| Running both an embedded and hosted variant | **A or D** — same token works in both |
+| `data-org` | Required organization slug |
+| `data-c` | Explicit campaign target token |
+| `data-pid` | Explicit personal-link identifier |
+| `data-token` | Public embed credential if required by your widget configuration; never a partner or ElevenLabs key |
+| `data-launcher` | Launcher preview override |
+| `data-bottom-offset` | Supported CSS offset for launcher placement |
+| `data-test="true"` | Request test mode |
+| `data-debug="true"` | Request the debug surface |
+
+The deployed loader exposes `openConvinced`, `closeConvinced`, `sendEvent`, and `setIdentity` on `window.Convinced`. It does not currently implement a parent-page host-tool bridge. For website actions, use the direct SDK integration described in [WebMCP website tools](/guides/widget-sdk/webmcp), subject to that guide's runtime limitations.
+
+## Hosted full-page widget
+
+```text
+https://app.getconvinced.ai/widget/v2/<your-org-slug>?c=acme-logistics
+```
+
+Use this when you do not need a custom landing page. The organization needs an enabled widget configuration. A usable token must belong to that organization.
+
+## SDK integration
+
+Use [Campaign sessions in the SDK](/guides/widget-sdk/campaigns) to pass the token and apply returned session personalization. Initializing the SDK with account data does not automatically rewrite a saved provider agent or guarantee that a custom voice start applies the context.
+
+For additional pages, follow [SDK overview](/guides/widget-sdk/overview) and expose each page's own actions. Campaigns are optional account personalization; WebMCP is the interface for page actions.
 
 ## Tracking and attribution
 
-The widget reads UTM parameters from the page URL and includes them in the session record. This is the standard hook for attributing conversions back to the campaign.
-
-### UTM passthrough
-
-When a visitor arrives at a page like:
-
-```
-https://yourcompany.com/demo?c=acme-logistics&utm_source=email&utm_campaign=q2-logistics&utm_medium=outbound
-```
-
-The widget captures the five supported UTM fields at session start: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, and `utm_term`. Conversions logged from that session carry the UTM tags forward, which lets you slice analytics by source, medium, and campaign in your downstream tooling.
-
-<Tip>
-Standardize your UTM scheme **before** you start firing campaigns. The `utm_campaign` value should match (or be derivable from) the campaign slug — for example `utm_campaign=q2-logistics-outreach` mirrors `slug: "q2-logistics-outreach"`. That way your funnel reports stay aligned with campaign rollups.
-</Tip>
-
-### Conversion attribution
-
-How you attribute depends on the option you chose:
-
-- **Options A, B, C** — the visitor lands on **your** page, so your existing analytics (GA4, Segment, server-side tracking) fire normally. Add UTM tags to the inbound URL and you have the standard funnel.
-- **Option D** — the visitor lands on `app.getconvinced.ai`, so your site analytics don't fire. You can still pass UTM tags on the URL — Convinced will record them on the session — but you'll consume those analytics through Convinced's reporting rather than your own.
-
-If you need first-party attribution, prefer A/B/C over D.
-
-### Same token in multiple channels
-
-Tokens are stable per-target — the same `acme-logistics` token works in every channel. You can send one prospect a personalized email link (Option C, with UTMs `?utm_source=email`), follow up with an SMS (Option D, `?utm_source=sms`), and run a retargeting ad (Option A, `?utm_source=ad`). All three sessions land on the same campaign target; the agent sees the same intel, and your UTM segmentation tells you which channel the prospect actually responded to.
-
-## End-to-end example
-
-Putting it together for a hypothetical Acme Logistics campaign with [Priya Rao](/guides/campaigns/intel-schema#worked-example) as the champion.
-
-<Steps>
-  <Step title="Create the campaign + target">
-    Either [partner-intel](/guides/campaigns/partner-intel) or [auto-enrich](/guides/campaigns/auto-enrich). At the end you have `widgetToken: "acme-logistics"` and `widgetReady: true`.
-  </Step>
-  <Step title="Pick a routing option">
-    For an outbound email push, Option C (pretty path) reads best. Set up `https://yourcompany.com/for/<token>/` to render the embed page.
-  </Step>
-  <Step title="Embed the loader on the destination page">
-    ```html
-    <script
-      src="https://app.getconvinced.ai/widget/loader.js"
-      data-org="acme-corp"
-      async
-    ></script>
-    ```
-    No `data-c` here — the loader picks up the token from `/for/acme-logistics/`.
-  </Step>
-  <Step title="Send the email with UTMs">
-    The link in the email:
-    ```
-    https://yourcompany.com/for/acme-logistics/?utm_source=email&utm_medium=outbound&utm_campaign=q2-logistics-outreach
-    ```
-  </Step>
-  <Step title="(Optional) Retargeting ad">
-    Use Option A so your ad clicks land on `yourcompany.com/demo?c=acme-logistics&utm_source=ad&utm_campaign=q2-logistics-outreach`.
-  </Step>
-  <Step title="Track conversions">
-    Your site analytics see the UTM tags on the inbound URL. Conversions roll up by `utm_campaign`, which mirrors your Convinced campaign slug.
-  </Step>
-</Steps>
+The managed loader forwards `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, and `utm_term` from the parent URL to the hosted widget. Keep your own website analytics for first-party page visits and conversions. Verify the attribution fields your integration actually consumes rather than assuming that every downstream conversion automatically contains these tags.
 
 ## Common pitfalls
 
-<AccordionGroup>
-  <Accordion title="Visitors land on the widget but get a generic session">
-    Most common cause: you sent traffic before `widgetReady: true`. Recheck the GET endpoint — `enrichmentStatus` may still be `pending` or `running`, or the campaign may have been archived since you created the target. Other causes: token doesn't exist (typo), token is for a different org, or the campaign was archived.
-  </Accordion>
-  <Accordion title="Token in URL is being stripped">
-    Some email/SMS platforms rewrite URLs and strip query strings. Switch to Option C (pretty path) so the token is part of the path itself. Also worth checking: link shorteners that strip query parameters by default.
-  </Accordion>
-  <Accordion title="data-c and ?c= disagree on the same page">
-    `data-c` wins. The hard-pin attribute is intentional — when a single page is dedicated to one target, you don't want a stray `?c=` in the URL to override it.
-  </Accordion>
-  <Accordion title="Wrong widget version loading">
-    The loader script handles version selection. If you're loading a different URL or pinning an older `loader-v1.js`, switch back to `loader.js` — version pinning isn't supported and will eventually break.
-  </Accordion>
-  <Accordion title="UTMs not appearing in conversions">
-    The widget captures UTMs from `window.location.search` at session start. If your site rewrites the URL after page load (e.g. SPA route changes that strip query strings), the UTMs are lost. Capture them server-side on the inbound request and pass them into the page some other way.
-  </Accordion>
-  <Accordion title="Different prospects keep getting the same person-specific conversation">
-    A campaign target token represents the target record you created. Reuse one token when account-level personalization is intentional. Create a person-specific target or personalized link when the opener, role, rep notes, or proof should differ for each recipient.
-  </Accordion>
-</AccordionGroup>
+- A generic session can mean the token is missing, belongs to another organization, has no usable intel, or is in an inactive campaign.
+- `data-c` overrides `?c=`. Remove the explicit attribute when one page must serve many targets.
+- A campaign token represents an account record, not the identity of whoever opens it. Avoid placing private personal details in public-link context.
+- Reusing a token in a different campaign moves the same target record. Use distinct tokens for records that must remain separate.
 
-## Cross-org and security notes
-
-- **Tokens are scoped per organization.** A token from Org A's API key doesn't resolve in Org B's widget. Cross-org token sharing is impossible by design.
-- **`data-org` must match the API key's organization.** If you embed Org B's loader (`data-org="org-b"`) but pass a token Org A created, the widget can't resolve it — wrong tenant.
-- **API keys never go in client code.** The loader uses public, org-scoped endpoints. Your partner API key (the bearer token for `POST /api/campaigns/...`) stays server-side.
-
-## Next steps
-
-<CardGroup cols={2}>
-  <Card title="Partner-intel mode" icon="lock" href="/guides/campaigns/partner-intel">
-    Push a structured intel object synchronously.
-  </Card>
-  <Card title="Auto-enrich mode" icon="sparkles" href="/guides/campaigns/auto-enrich">
-    Have Convinced synthesize intel from rep notes.
-  </Card>
-  <Card title="Intel schema reference" icon="list" href="/guides/campaigns/intel-schema">
-    The structured shape that powers the personalized session.
-  </Card>
-  <Card title="Campaign mode overview" icon="bullseye-arrow" href="/guides/campaigns/overview">
-    What campaign mode is and how `?c=<token>` works.
-  </Card>
-</CardGroup>
+Continue with [Campaign quickstart](/quickstart), [Partner-intel mode](/guides/campaigns/partner-intel), or [Auto-enrich](/guides/campaigns/auto-enrich).

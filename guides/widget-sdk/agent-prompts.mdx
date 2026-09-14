@@ -23,7 +23,7 @@ Use this client inside an authenticated Convinced admin application. Both read a
 
 The browser uses the administrator's session. The backend uses its own ElevenLabs key. A public widget token, campaign token, public agent ID, or Campaign API partner key does not grant prompt-editing access.
 
-For an editor hosted on the customer's own domain, implement an authenticated same-origin management proxy. A custom SDK `fetch` can route requests through that integration. Pointing `apiBase` at another website does not create a backend there, and the current management API does not accept cross-origin browser writes or issue external management API keys.
+For an editor hosted on the customer's own domain, arrange a supported authentication integration with the Convinced backend team before building a same-origin management proxy. The current API authenticates a Convinced administrator session; a proxy alone does not mint that session or turn customer login into Convinced ADMIN access. A custom SDK `fetch` can route requests only after that authentication integration exists. Pointing `apiBase` at another website does not create a backend there, and the current management API does not accept cross-origin browser writes or issue external management API keys.
 
 ## Provision a dedicated SDK agent
 
@@ -37,52 +37,47 @@ The keys are ElevenLabs agent IDs and values are organization slugs. This settin
 
 This lets a dedicated SDK guide use its own identity without replacing the organization's default widget agent. Customer administrators still need their organization session and `ADMIN` role; the mapping does not expose a public editing API.
 
-## Read both fields
+## Build an editor
+
+Save the complete [typed editor module](/examples/sdk-agent-editor.ts) in your authenticated application. It creates labeled inputs for both fields, loads their revision, saves to ElevenLabs and prevents a blind retry when a save cannot be confirmed.
+
+```ts
+import { mountAgentEditor } from './sdk-agent-editor'
+
+const root = document.createElement('section')
+document.body.append(root)
+const editor = await mountAgentEditor(root, {
+  orgSlug: 'YOUR_ORG_SLUG',
+  agentId: 'YOUR_ELEVENLABS_AGENT_ID',
+  apiBase: window.location.origin,
+})
+// Retain editor and call editor.destroy() when this admin view unmounts.
+```
+
+Run this on an origin that serves the authenticated management API. The example creates an editor; it does not implement login or provision agent ownership. Replace both identifiers before running.
+
+## Read and update the API directly
+
+The equivalent client calls are:
 
 ```ts
 import { ConvincedAgentAdmin } from '@convinced/widget-sdk'
 
 const agent = new ConvincedAgentAdmin({
-  orgSlug: 'acme',
-  agentId: 'agent_123', // The same agent used by the voice SDK
-  apiBase: window.location.origin, // Origin serving the authenticated API
+  orgSlug: 'YOUR_ORG_SLUG',
+  agentId: 'YOUR_ELEVENLABS_AGENT_ID',
+  apiBase: window.location.origin,
 })
-
-let current = await agent.getPrompt()
-systemPromptEditor.value = current.systemPrompt
-firstMessageEditor.value = current.firstMessage
-```
-
-Keep `current.revision` with the loaded editor state. It detects changes made after the editor loaded, including changes to the first message.
-
-## Save both fields
-
-```ts
-saveButton.addEventListener('click', async () => {
-  saveButton.disabled = true
-  try {
-    current = await agent.updatePrompt({
-      systemPrompt: systemPromptEditor.value,
-      firstMessage: firstMessageEditor.value,
-      expectedRevision: current.revision,
-    })
-    status.textContent = 'Saved to ElevenLabs'
-  } catch (error) {
-    status.textContent = 'Save could not be confirmed. Reload before retrying.'
-  } finally {
-    saveButton.disabled = false
-  }
-})
-```
-
-To change only the opener, omit `systemPrompt`:
-
-```ts
-current = await agent.updatePrompt({
+const current = await agent.getPrompt()
+// Present both current.systemPrompt and current.firstMessage in your editor.
+const saved = await agent.updatePrompt({
+  systemPrompt: 'Help visitors use the current website through its permitted tools.',
   firstMessage: 'Hi! What would you like to explore?',
   expectedRevision: current.revision,
 })
 ```
+
+The update is persistent. Run it only after the administrator submits the intended change. To change only the opener, omit `systemPrompt`; to change only the instructions, omit `firstMessage`.
 
 Omitted fields are preserved. An empty `firstMessage` is supported when the visitor should speak first. The system prompt must remain non-empty. Limits are 100,000 UTF-8 bytes for `systemPrompt` and 10,000 for `firstMessage`.
 
@@ -122,6 +117,7 @@ Revision checking detects stale edits but is not an atomic provider lock. Simult
 | `409`, `agent_traffic_conflict` | Resolve the provider traffic configuration separately |
 | `409`, `shared_agent` | Use an agent owned by one customer organization |
 | `400`, `invalid_prompt_update` | Correct fields, size limits and revision |
+| `503`, `ownership_not_configured` | Ask the operator to correct server-side ownership configuration |
 | `503`, `provider_not_configured` | Configure the ElevenLabs key on the server |
 | `502`, `provider_update_unconfirmed` | The write's outcome is unknown; reload before retrying |
 | `502`, `provider_verification_failed` | ElevenLabs accepted the write but read-back could not confirm it; reload |
@@ -132,4 +128,4 @@ See [GET agent prompt](/api-reference/endpoint/get-agent-prompt), [PATCH agent p
 
 ## Type-checked integration example
 
-The [SDK handoff example](/examples/sdk-handoff.ts) contains typed editor, tool-publisher and voice-bridge helpers. Supply your real application permissions and authenticated backend; it contains no credentials.
+The [editor module](/examples/sdk-agent-editor.ts) supplies a complete browser form. The [SDK helper module](/examples/sdk-handoff.ts) supplies an API-only editor helper. Both require your authenticated management backend and contain no credentials.
