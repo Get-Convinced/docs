@@ -5,3 +5,7 @@
 # Draft content
 drafts/
 *.draft.mdx
+
+# Maintainer instructions and research are not product documentation.
+AGENTS.md
+maintainers/

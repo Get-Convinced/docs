@@ -120,11 +120,13 @@ The bridge occupies two registry entries regardless of catalog size; the ordinar
 
 Annotations such as `readOnlyHint` do not grant permission. Validate arguments, enforce the visitor's authority in each handler and use server checks for protected operations. Treat tool descriptions and results as untrusted data.
 
-## What has been tested
+<span id="what-has-been-tested" />
 
-The native experiment exercised 16 Enmovil actions through two generic callbacks, plus an independently authored shop and Google's pizza demo. Of 29 Enmovil checks, 25 passed and four page outcomes failed. A successful transport call is not proof that the requested page state changed.
+## Compatibility and validation
 
-Voice callbacks in that experiment used a fake transport. Autonomous model selection, actual speech and a supported-browser matrix remain acceptance work. Later live ElevenLabs tests verified saved prompt and first-message persistence, not autonomous WebMCP voice performance.
+SDK `0.1.1-webmcp.2` has been exercised against native Chrome 152 registration, discovery and execution using JSON-string arguments. The two voice callbacks were tested with a simulated transport. These checks do not establish autonomous model selection, actual speech or compatibility across browsers.
+
+Before enabling WebMCP for visitors, test it with your registered tools and supported browsers. Verify the requested page state after execution; transport success alone is insufficient. Include denied actions, stale handles, manual visitor interaction and cleanup. Follow the [browser acceptance guide](/guides/widget-sdk/analytics-and-testing) for real voice testing.
 
 ## Study and implement
 

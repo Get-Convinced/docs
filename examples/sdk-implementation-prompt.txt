@@ -10,7 +10,7 @@ The hosted private voice-token endpoint is absent (getVoiceCredential returns 40
 
 Configure only the callbacks activated by the integration. Managed-v2 contributes six managed voice callbacks when widget.startVoice runs. Explicit page actions need matching SDK registry entries and ElevenLabs schemas. Disable host_extension_call if it is not configured. Enable first-message conversation override for nonempty managed greetings. Pass authorization separately to voice, chat and DOM policies as required.
 
-Make the agent reusable across pages. Keep one owner mounted during SPA navigation, update page context, register meaningful permitted operations using existing application controllers, and remove stale tools. Use schema validation, server authorization for protected data and observable success/failure results. Do not embed Transformation-specific page instructions into a general agent.
+Make the agent reusable across pages. Keep one owner mounted during SPA navigation, update page context, register meaningful permitted operations using existing application controllers, and remove stale tools. Use schema validation, server authorization for protected data and observable success/failure results. Keep page-specific instructions and customer-specific implementation details out of shared SDK guidance and general agent instructions.
 
 For experimental WebMCP, use the documented discovery/execution callbacks and downloadable schemas. Feature-detect native support; select the tested argument encoding deliberately, preserve ordinary interaction when unsupported, enforce authorization per underlying action and test real outcomes. Do not equate transport success with a completed action or claim cross-browser/autonomous voice acceptance from mocked tests.
 

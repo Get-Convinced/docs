@@ -33,7 +33,7 @@ See [current availability](/guides/widget-sdk/overview#current-availability) bef
 
 Register the new page's useful reads and actions, supply current context and remove stale registrations when the route leaves. Keep route names, product IDs and factual page content in tool observations rather than hardcoding them into general instructions.
 
-With WebMCP, reuse the same two discovery/execution callbacks and [generic instructions](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/webmcp-agent-prompt.txt). The website still needs to expose its own actions and the browser must support the tested API shape. Adding the SDK does not rewrite a Transformation-specific prompt already saved on an agent.
+With WebMCP, reuse the same two discovery/execution callbacks and [generic instructions](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/webmcp-agent-prompt.txt). The website still needs to expose its own actions and the browser must support the tested API shape. Adding the SDK does not rewrite a page-specific prompt already saved on an agent.
 
 A new page normally needs no new SDK version or Convinced endpoint. A new protected backend operation still needs its own implementation and access checks. A separate voice agent needs its ownership and provider configuration provisioned once.
 
@@ -53,13 +53,11 @@ A new page normally needs no new SDK version or Convinced endpoint. A new protec
 
 Retain a reversible rollout switch and record the tested package version, website revision and agent configuration. Do not mount two widget integrations for one visitor session.
 
-## Release evidence and remaining acceptance
+## Record your acceptance results
 
-The September 14, 2026 checks verified the published npm package, hosted session initialization and end, and the authenticated management API. A production admin read and no-op save preserved both prompt fields; a stale revision was rejected. Separate temporary ElevenLabs agents verified actual prompt-only, first-message-only, combined and empty-opener persistence.
+Record the package version, backend deployment, agent configuration and browser versions used for your launch. Verify the features your application enables, including real speech, visible page outcomes and saved state. Simulated callbacks and successful transport requests do not establish end-to-end task success.
 
-The WebMCP native browser experiment used Chrome 152. It passed 25 Enmovil checks and retained four page-outcome failures, and also exercised an independent shop and Google's pizza demo. Its voice callback transport was simulated. It does not establish autonomous voice task quality or support across browsers.
-
-Repeat acceptance with your actual website, customer login and live agent. Public documentation and a passing package build do not certify every deployment-dependent feature.
+Use the [availability table](/guides/widget-sdk/overview#current-availability) to identify deployment requirements and the [WebMCP compatibility notes](/guides/widget-sdk/webmcp#compatibility-and-validation) for the experimental browser adapter. Keep customer acceptance reports with the customer implementation records.
 
 ## Study WebMCP
 

@@ -15,7 +15,7 @@ Use the Convinced Knowledge API when your server needs product information, cust
 | Convinced internal MCP, `/mcp/internal` | An approved knowledge analyst integration using Streamable HTTP | OAuth access with the required permissions; partner keys do not authorize this transport |
 | Browser WebMCP | Expose actions implemented by your website to the SDK agent | Your website's session and per-action authorization |
 
-For Enmo Buddy or another website integration, start with the [SDK overview](/guides/widget-sdk/overview). Use [WebMCP website tools](/guides/widget-sdk/webmcp) for page actions. WebMCP does not replace the Knowledge REST API or turn a partner key into a browser credential.
+For a website integration, start with the [SDK overview](/guides/widget-sdk/overview). Use [WebMCP website tools](/guides/widget-sdk/webmcp) for page actions. WebMCP does not replace the Knowledge REST API or turn a partner key into a browser credential.
 
 <Warning>
   The legacy `GET /sse` and `POST /messages` endpoints are retired and return `410 legacy_transport_retired`. Do not use old Claude Desktop or Cursor snippets that point a partner key at `/sse`.
