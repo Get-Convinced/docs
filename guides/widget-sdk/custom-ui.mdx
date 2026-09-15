@@ -1,10 +1,18 @@
 ---
-title: 'Default, themed, and headless UI'
-description: 'Use the managed-v2 preset, apply design tokens, or build a completely novel voice-first interface.'
+title: 'Custom UI and headless'
+description: 'Build a custom interface like Enmovil’s headless Enmo Buddy, or customize the supplied managed-v2 widget.'
 icon: 'paintbrush'
 ---
 
 The SDK separates the Convinced session and ElevenLabs voice controller from presentation. You can use the supplied Shadow DOM renderer, customize its tokens, or skip it and render the full experience in your application.
+
+## Enmovil Transformation uses headless
+
+**Enmo Buddy on Enmovil's Transformation page uses a headless SDK integration.** The website renders its own React guide panel, launcher, transcript, voice controls and page interactions. It uses `ConvincedVoiceController` for the ElevenLabs conversation and `ClientToolRegistry` for permitted website actions. It does not call `mountConvincedWidget()` or use the `managed-v2` preset.
+
+The Transformation implementation uses the voice and tool APIs directly, with `sessionId: null`; it does not create a `ConvincedClient` session. Convinced campaign personalization and session history therefore require a separate session integration if you add them to this design. Typed messages in its guide are sent through the ElevenLabs conversation.
+
+To build a similar interface, follow [Build a headless interface](#build-a-headless-interface) and [Host tools](/guides/widget-sdk/host-tools). WebMCP can change how the agent discovers page actions while keeping this custom interface. The [SDK quickstart](/guides/widget-sdk/quickstart) demonstrates the supplied `managed-v2` renderer as a separate presentation option.
 
 <Tip>
   To have a coding agent build the integration in your application, copy the [reviewed implementation prompt](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/sdk-implementation-prompt.txt). The [coding-agent guide](/guides/widget-sdk/build-with-an-agent) explains which placeholders and access to provide.
@@ -193,7 +201,9 @@ await widget.endSession()
 
 `endVoice()` only stops the current ElevenLabs transport. Use the awaited `endSession()` boundary when the buyer is finished: the managed renderer also persists its merged chat/voice transcript, linked conversation IDs, captured identity, and exact shown slide filenames.
 
-## Build a novel headless interface
+<span id="build-a-novel-headless-interface" />
+
+## Build a headless interface
 
 Do not call `mountConvincedWidget()` when your application owns the renderer. Subscribe to the chat client and voice controller independently:
 
