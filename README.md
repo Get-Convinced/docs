@@ -7,7 +7,7 @@ Public documentation for the Convinced campaign API, managed voice-first widget,
 Install the Mintlify CLI:
 
 ```bash
-npm i -g mint
+npm i -g mint@4.2.893
 ```
 
 From the repo root (where `docs.json` lives):
@@ -25,7 +25,7 @@ mint broken-links
 
 The preview runs at `http://localhost:3000` and reloads on file changes.
 
-If the dev server misbehaves, run `mint update` to grab the latest CLI before filing an issue.
+Use the pinned CLI version above for repeatable checks. Update it deliberately and rerun validation before changing the documented version.
 
 ## Content structure
 
@@ -51,7 +51,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). Run `mint dev` locally before opening 
 - Integration questions? Email [hi@getconvinced.ai](mailto:hi@getconvinced.ai).
 - Dashboard: [app.getconvinced.ai](https://app.getconvinced.ai).
 
-## SDK client entry point
+## SDK entry point
 
 Share [SDK overview](https://convinced.mintlify.app/guides/widget-sdk/overview). The SDK tab groups setup, voice and actions, interface and sessions, administration and operations, and reference. The implementation checklist is a launch reference, not the first page.
 
@@ -60,3 +60,7 @@ The guides target published npm `0.1.1-webmcp.2`. The overview records verified 
 Downloadable examples in `examples/` contain the complete quickstart module, editor, WebMCP helpers, matching provider schemas and reviewed implementation instructions. Validate these against the pinned published SDK when changing examples. Do not include private backend source or credentials in public documentation.
 
 Mintlify serves the JSON tool catalogs directly. TypeScript and text downloads link to immutable commits in this public repository because those extensions are not served by the current Mintlify plan. Check the deployed download URLs as well as `mint broken-links`.
+
+## Maintenance standard
+
+Keep public guides reusable across customers. Put customer implementation records in the customer handoff, not this public repository. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for audience, source ownership, versioning, example validation and deployed-link checks. The cited rationale lives in [maintainers/documentation-maintenance.md](maintainers/documentation-maintenance.md), which is excluded from the documentation site.

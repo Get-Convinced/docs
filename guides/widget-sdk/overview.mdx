@@ -18,7 +18,7 @@ The Convinced Widget SDK is a JavaScript package for adding voice, chat and perm
 | Let the agent use your website's actions | Explicit registry tools, or experimental WebMCP discovery | [Website tools](/guides/widget-sdk/host-tools) · [WebMCP](/guides/widget-sdk/webmcp) |
 | Let administrators change saved instructions and the opener | `ConvincedAgentAdmin` in an authenticated management interface | [Prompts and first message](/guides/widget-sdk/agent-prompts) |
 
-**Enmovil's Transformation page uses the headless option:** its Enmo Buddy interface is custom React, with the SDK's voice controller and tool registry underneath. See [the Enmovil example](/guides/widget-sdk/custom-ui#enmovil-transformation-uses-headless). The quickstart demonstrates `managed-v2`, the supplied widget interface.
+The quickstart uses the supplied `managed-v2` interface. Choose [headless integration](/guides/widget-sdk/custom-ui#when-to-use-headless) when your application owns the interface. Both use the same SDK voice and tool APIs.
 
 The hosted iframe and the JavaScript SDK are separate integrations. The published iframe loader does not expose the SDK's host-tool registration or WebMCP bridge. Choose the JavaScript SDK when your agent needs to act on the parent page.
 
@@ -59,7 +59,7 @@ The website owns its page actions and access checks. Convinced owns its hosted s
 
 ## Current availability
 
-The September 14, 2026 audit checked the published package against the hosted services. A browser API being present in the package does not mean every corresponding backend endpoint is deployed.
+Applies to SDK `0.1.1-webmcp.2` and the hosted services verified on September 14, 2026. SDK exports and deployed backend features are listed separately.
 
 | Capability | Current status |
 | --- | --- |

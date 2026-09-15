@@ -1,6 +1,6 @@
 ---
 title: "Build a page-aware guide"
-description: "Connect one voice and chat agent to meaningful page objects, bounded client tools, and observed UI receipts."
+description: "Connect a voice agent to meaningful page objects, bounded client tools, and observed page results."
 icon: "compass"
 ---
 
@@ -8,10 +8,12 @@ A page-aware guide can discuss what a visitor sees, move to the relevant part of
 
 The integration has two layers:
 
-- The Widget SDK owns the Convinced session, ElevenLabs connection, transcript, tool validation, consent, timeouts, and guide UI.
+- The Widget SDK supplies session and voice clients, tool validation, consent and timeouts. Use its supplied renderer or own the interface in a headless integration.
 - Your page owns its content, semantic IDs, router, focus state, panels, and the callbacks that already change those surfaces.
 
 The page should expose a small semantic adapter. Do not give the agent unrestricted DOM access.
+
+This guide binds page actions to ElevenLabs voice. Chat-driven page actions require a backend implementing the SDK tool-continuation protocol; the current hosted chat service does not provide that complete protocol. See [current availability](/guides/widget-sdk/overview#current-availability).
 
 ```text
 Visitor question
@@ -24,7 +26,7 @@ Visitor question
 
 ## Estimate the landing-page change
 
-The semantic adapter below is one concrete example using supply-chain roles. Other sites provide their own page IDs, entities and actions. For shared discovery across websites, publish these handlers through [WebMCP](/guides/widget-sdk/webmcp) and keep site-specific names out of generic instructions. The [customer editor](/guides/widget-sdk/agent-prompts) manages saved instructions and the opener separately from page data.
+The semantic adapter below is one concrete example using a fictional product catalog. Other sites provide their own page IDs, entities and actions. For shared discovery across websites, publish these handlers through [WebMCP](/guides/widget-sdk/webmcp) and keep site-specific names out of generic instructions. The [customer editor](/guides/widget-sdk/agent-prompts) manages saved instructions and the opener separately from page data.
 
 | Experience          | Typical client change                                               | Layout change                                                 |
 | ------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -72,28 +74,28 @@ Create stable identifiers for the objects a visitor can see and discuss. The IDs
 
 ```ts
 const pageGuide = {
-  pageId: "supply-chain-transformation",
-  route: "/transformation",
+  pageId: "product-catalog",
+  route: "/products",
   sections: [
     {
-      id: "ai-workforce-range",
-      label: "AI workforce supply-chain range",
+      id: "product-catalog",
+      label: "Product catalog",
     },
   ],
-  scopes: [
+  categories: [
     {
-      id: "supplier",
-      label: "Supplier",
-      roleIds: [
-        "ai-inbound-scheduler",
+      id: "desks",
+      label: "Desks",
+      productIds: [
+        "standing-desk",
       ],
     },
   ],
-  roles: [
+  products: [
     {
-      id: "ai-inbound-scheduler",
-      label: "AI Inbound Scheduler",
-      sectionId: "ai-workforce-range",
+      id: "standing-desk",
+      label: "Standing desk",
+      sectionId: "product-catalog",
       summary: "The exact approved description shown by the page.",
     },
   ],
@@ -102,31 +104,31 @@ const pageGuide = {
 
 Keep this contract compact:
 
-- Use stable page, section, scope, and entity IDs.
+- Use stable page, section, category, and entity IDs.
 - Include only facts that the page or an approved source can support.
-- Encode exact relationships such as which roles visibly intersect a scope.
+- Encode exact relationships such as which products visibly intersect a category.
 - Exclude form values, hidden personal data, API keys, raw HTML, and arbitrary instructions.
 - Do not use display labels as the only identifier.
 
 ## 3. Register a read tool before an action tool
 
-A discovery-oriented guide normally needs one tool that inspects an exact scope and one tool that presents a selected entity.
+A discovery-oriented guide normally needs one tool that inspects an exact category and one tool that presents a selected entity.
 
 ```ts
 tools.register({
   version: HOST_TOOL_PROTOCOL_VERSION,
-  name: "host_inspect_workforce_scope",
+  name: "host_list_category_products",
   description:
-    "Read the exact roles visibly associated with one supply-chain scope.",
+    "Read the exact products visibly associated with one catalog category.",
   inputSchema: {
     type: "object",
     properties: {
-      scope_id: {
+      category_id: {
         type: "string",
-        enum: pageGuide.scopes.map((scope) => scope.id),
+        enum: pageGuide.categories.map((category) => category.id),
       },
     },
-    required: ["scope_id"],
+    required: ["category_id"],
     additionalProperties: false,
   },
   locality: "host",
@@ -134,32 +136,32 @@ tools.register({
   consent: "none",
   timeoutMs: 1_000,
   constraints: {
-    section: "ai-workforce-range",
+    section: "product-catalog",
   },
-  handler: async ({ scope_id }): Promise<JsonObject> => {
-    const scope = pageGuide.scopes.find((item) => item.id === scope_id);
+  handler: async ({ category_id }): Promise<JsonObject> => {
+    const category = pageGuide.categories.find((item) => item.id === category_id);
 
-    if (!scope) {
+    if (!category) {
       return {
         status: "not_found",
-        requested_scope_id: scope_id,
-        roles: [],
+        requested_category_id: category_id,
+        products: [],
       };
     }
 
     return {
       status: "observed",
-      scope_id: scope.id,
-      scope_label: scope.label,
-      exact_role_ids: scope.roleIds,
-      roles: pageGuide.roles.filter((role) => scope.roleIds.includes(role.id)),
+      category_id: category.id,
+      category_label: category.label,
+      exact_product_ids: category.productIds,
+      products: pageGuide.products.filter((product) => category.productIds.includes(product.id)),
       presentation_performed: false,
     };
   },
 });
 ```
 
-The read tool prevents the agent from guessing which products belong to a visible area. This minimal example defines one role. When extending it, ensure every `roleIds` reference resolves to a full role object; validate the relationship when loading your page manifest.
+The read tool prevents the agent from guessing which products belong to a visible area. This minimal example defines one product. When extending it, ensure every `productIds` reference resolves to a full product object; validate the relationship when loading your page manifest.
 
 ## 4. Return an observed receipt after every page mutation
 
@@ -168,17 +170,17 @@ The action handler should call application code your page already owns. Wait unt
 ```ts
 tools.register({
   version: HOST_TOOL_PROTOCOL_VERSION,
-  name: "host_present_workforce_role",
-  description: "Focus one approved workforce role and open its page brief.",
+  name: "host_show_product_details",
+  description: "Focus one approved product and open its details panel.",
   inputSchema: {
     type: "object",
     properties: {
-      role_id: {
+      product_id: {
         type: "string",
-        enum: pageGuide.roles.map((role) => role.id),
+        enum: pageGuide.products.map((product) => product.id),
       },
     },
-    required: ["role_id"],
+    required: ["product_id"],
     additionalProperties: false,
   },
   locality: "host",
@@ -187,27 +189,27 @@ tools.register({
   timeoutMs: 5_000,
   constraints: {
     presentationOnly: true,
-    section: "ai-workforce-range",
+    section: "product-catalog",
   },
-  handler: async ({ role_id }): Promise<JsonObject> => {
-    const requestedRole = pageGuide.roles.find((role) => role.id === role_id);
-    if (!requestedRole)
-      return { status: "not_found", requested_role_id: role_id };
+  handler: async ({ product_id }): Promise<JsonObject> => {
+    const requestedProduct = pageGuide.products.find((product) => product.id === product_id);
+    if (!requestedProduct)
+      return { status: "not_found", requested_product_id: product_id };
 
-    await pageActions.presentRole(requestedRole.id);
+    await pageActions.showProductDetails(requestedProduct.id);
     const observed = pageActions.readSettledSelection();
 
     return {
       status:
-        observed.roleId === role_id && observed.briefOpen
+        observed.productId === product_id && observed.detailsOpen && observed.targetVisible
           ? "presented"
           : "not_presented",
-      requested_role_id: role_id,
-      active_role_id: observed.roleId,
-      brief_open: observed.briefOpen,
+      requested_product_id: product_id,
+      active_product_id: observed.productId,
+      details_open: observed.detailsOpen,
       target_visible: observed.targetVisible,
       selection_source: observed.selectionSource,
-      page_facts: observed.roleId === role_id ? requestedRole : null,
+      page_facts: observed.productId === product_id ? requestedProduct : null,
     };
   },
 });
@@ -229,8 +231,8 @@ const voice = new ConvincedVoiceController({
     agentId: "YOUR_PUBLIC_ELEVENLABS_AGENT_ID",
     connectionType: "webrtc",
     exactClientTools: {
-      inspect_workforce_scope: "host_inspect_workforce_scope",
-      present_workforce_role: "host_present_workforce_role",
+      list_category_products: "host_list_category_products",
+      show_product_details: "host_show_product_details",
     },
     genericClientTool: false,
   },
@@ -271,8 +273,8 @@ pageActions.onUserSelection((selection) => {
     JSON.stringify({
       event: "page_selection_changed",
       selection_source: "user",
-      role_id: selection.roleId,
-      brief_open: selection.briefOpen,
+      product_id: selection.productId,
+      details_open: selection.detailsOpen,
       selection_version: selection.version,
     }),
     "page-selection",
@@ -300,11 +302,11 @@ See [Custom UI and headless](/guides/widget-sdk/custom-ui) for rendering options
 
 Client tools cannot correct a sales prompt that always pitches the first matching product. Configure the guide agent to:
 
-1. Identify the visitor's operational scope.
-2. Use the read tool when scope membership matters.
+1. Identify the visitor's requested category.
+2. Use the read tool when category membership matters.
 3. Summarize the exact visible options before recommending one.
-4. Ask a narrowing question when multiple roles remain plausible.
-5. Present a role only after the visitor asks to see it or enough evidence supports the action.
+4. Ask a narrowing question when multiple products remain plausible.
+5. Present a product only after the visitor asks to see it or enough evidence supports the action.
 6. Explain only the facts returned by the presentation receipt.
 7. Correct itself when a visitor changes the page manually.
 
@@ -334,12 +336,12 @@ router.onChange(async ({ url, title, pageId }) => {
 
 Mount one manifest per route and unregister route-specific tools when that route unmounts. Keep the session owner above the router. A full document navigation unloads the browser voice transport; a conventional multi-page site starts a new SDK owner on the destination page rather than preserving an uninterrupted voice call.
 
-## Client handoff checklist
+## Integration checklist
 
 - The SDK is mounted once in a persistent owner.
 - The browser receives an intentionally public agent ID or a short-lived private credential, never an ElevenLabs API key.
 - Every page object has a stable semantic ID.
-- Scope membership and other important relationships are exact.
+- Category membership and other important relationships are exact.
 - Read tools do not mutate the page.
 - Mutation tools call existing page functions rather than arbitrary selectors.
 - Every mutation returns an observed terminal receipt.

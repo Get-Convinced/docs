@@ -179,9 +179,7 @@
                         "Expanding into Tier-2 cities"
                       ],
                       "competitorUsage": "Evaluating FarEye for last-mile visibility.",
-                      "relevantCaseStudies": [
-                        "Enmovil"
-                      ]
+                      "relevantCaseStudies": []
                     },
                     "additionalContext": "Lead with ROI on dispatch speed."
                   }
@@ -585,11 +583,8 @@
             "items": {
               "type": "string"
             },
-            "description": "Customer names you want the agent to bring up as proof points. Validated against your org's referenceable case studies. Unknown names are dropped silently and surfaced in `response.warnings.droppedCaseStudies`. Match is case-insensitive.",
-            "example": [
-              "Enmovil",
-              "Bizom"
-            ]
+            "description": "Customer names you want the agent to bring up as proof points. Validated against your org's referenceable case studies. Unknown names are dropped silently and surfaced in `response.warnings.droppedCaseStudies`. Match is case-insensitive. Examples use an empty list; supply only real, referenceable customer names from your own organization.",
+            "example": []
           }
         }
       },
