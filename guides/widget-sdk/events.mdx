@@ -252,3 +252,49 @@ Do not use direct context updates as a second conversation brain. They are deter
 ## Rendering ownership
 
 Use `state` when your framework prefers immutable snapshots. Use granular message, content, and tool events for append-only or streaming updates. Pick one ownership pattern for each visual region so completed messages are not inserted twice.
+
+## Candidate: session-owned headless voice
+
+This section targets the **unpublished `0.1.1-webmcp.3` candidate** and its matching transcript-reconciliation backend. Published `.2` examples above still require manual wiring. Installing the candidate alone does not change the hosted service or configure its voice agent.
+
+The new `client.createVoiceController()` attaches voice to the existing Convinced session. The SDK captures voice messages, retains provider identifiers internally, carries the Convinced session ID into the transport, and includes final shutdown turns when you call `client.endSession()`.
+
+```ts
+import { ConvincedClient } from '@convinced/widget-sdk'
+
+const client = new ConvincedClient({ orgSlug: 'your-org' })
+await client.initialize({ loadMedia: false })
+const voice = client.createVoiceController()
+
+// A minimal transcript; replace it with your framework's renderer.
+const transcript = document.createElement('div')
+document.body.append(transcript)
+client.on('message', message => {
+  const row = document.createElement('p')
+  row.textContent = `${message.role}: ${message.text}`
+  transcript.append(row)
+})
+
+// Call from the visitor's microphone button.
+await voice.start()
+// When the visitor finishes, after any active text request:
+await client.endSession()
+```
+
+Convinced must configure the intended public agent in the session response. A private agent needs a server-supplied `descriptorFactory`; this change does not add the missing hosted credential endpoint. No provider API key belongs in the browser.
+
+Replace headless `new ConvincedVoiceController(...)` construction with the client factory. Remove manual `onConversationId` linking and custom transcript buffering. Render the combined text/voice `message` events from the client. The standalone controller remains available as a low-level adapter and does not gain session ownership automatically. A custom renderer still tracks which slides it displays and can pass `slidesViewed` to `endSession()`.
+
+For WebMCP, pass the bridge's tool registry as `tools`, `WEBMCP_VOICE_BINDINGS` as `exactClientTools`, and `genericClientTool: false` to the factory. Convinced must configure the hosted agent with those same two bindings. Creating a factory does not change the agent's live tools.
+
+### Saving and retrying
+
+- `voice.end()` stops voice while leaving the session available for text or reconnection.
+- `client.endSession()` stops attached voice and submits captured history. On an HTTP failure, retain the client and retry. After success, renew the session before another conversation.
+- Await finalization before destroying the client. Browser termination can still interrupt delivery; `destroy()` is not a persistence guarantee.
+- The backend merges snapshots with stored text and late provider imports. Summary writes are checked against the stored transcript so an older result cannot replace newer history.
+- A snapshot above 2,000 turns fails explicitly; each persisted turn is limited to 5,000 characters. Formatted summary input above 120,000 characters or a model failure leaves the stored transcript awaiting summary refresh. There is no background retry worker in this candidate. Repeated successful SDK finalization calls are cached and do not retry a missing summary.
+
+### Release requirements
+
+Convinced must deploy the companion backend, verify its production webhook signing secret and provider delivery, publish the tested SDK, and confirm the selected agent and exact tool bindings. Then test real speech, reconnects, a mixed text/voice session, failed-save retry and the persisted Convinced session record. Local mocked-provider checks do not establish live voice delivery. Existing session authorization, media-context size and private-credential endpoint limitations remain.

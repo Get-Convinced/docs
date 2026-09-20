@@ -6,6 +6,10 @@ icon: 'paintbrush'
 
 The SDK separates the Convinced session and ElevenLabs voice controller from presentation. You can use the supplied Shadow DOM renderer, customize its tokens, or skip it and render the full experience in your application.
 
+<Note>
+These examples target published `.2`. For the unpublished `.3` candidate, create headless voice through `client.createVoiceController()` so the SDK owns capture and session linking. See [migration and backend requirements](/guides/widget-sdk/events#candidate-session-owned-headless-voice).
+</Note>
+
 ## When to use headless
 
 Choose a headless integration when your application owns the guide panel, launcher, transcript, voice controls and page interactions. Use `ConvincedVoiceController` for the ElevenLabs conversation and `ClientToolRegistry` for permitted actions, then render state in your framework. Skip `mountConvincedWidget()` when you supply the interface.

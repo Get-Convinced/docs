@@ -10,6 +10,10 @@ There are three supported presentation paths around the same Convinced conversat
 2. The SDK `managed-v2` preset for an iframe-free functional composition.
 3. The headless SDK for a completely custom voice-first experience.
 
+<Note>
+This matrix describes published `.2`. The unpublished `.3` candidate moves headless voice capture and provider linking into `client.createVoiceController()`. Use the [candidate migration](/guides/widget-sdk/events#candidate-session-owned-headless-voice) with its required backend instead of the manual headless lifecycle below.
+</Note>
+
 ## Capability matrix
 
 Page tools below run through browser voice callbacks or explicit local SDK execution. The current hosted chat route does not implement SDK client-tool continuation; a shared registry does not enable chat-driven page actions there.

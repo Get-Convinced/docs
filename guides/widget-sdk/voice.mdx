@@ -8,6 +8,10 @@ icon: 'waveform-lines'
 
 Create the Convinced session before the voice controller. This gives the voice session a stable Convinced session ID, campaign context, and a place to link the ElevenLabs conversation ID.
 
+<Note>
+The standalone adapter examples below target published `.2`. The unpublished `.3` candidate adds `client.createVoiceController()` to own headless transcript capture and provider linking. See [candidate migration](/guides/widget-sdk/events#candidate-session-owned-headless-voice); the matching backend is required.
+</Note>
+
 ## Choose a browser-safe descriptor
 
 The descriptor must contain exactly one credential:

@@ -79,3 +79,9 @@ The WebMCP helpers require the prerelease and a compatible browser implementatio
 - `ConvincedApiError` carries HTTP status, API code and response details; `ConvincedSdkError` represents SDK-level failures.
 
 The mounted renderer owns its transcript/media bookkeeping. A headless renderer must retain the voice rows and shown slide filenames needed by `client.endSession()`.
+
+## Candidate session ownership API
+
+Unpublished `0.1.1-webmcp.3` adds `client.createVoiceController(options?)`. It returns a `ConvincedVoiceController` attached to that client and exports `SessionVoiceOptions`. These options omit caller-owned `orgSlug` and `sessionId`, accept an optional tool registry, exact mappings and generic gateway setting, and retain descriptor/descriptor-factory and UI callbacks.
+
+Use `client.endSession()` to stop attached voice and submit the captured mixed transcript. Provider IDs are internal to this flow. The matching backend is required. See [migration, limits and release requirements](/guides/widget-sdk/events#candidate-session-owned-headless-voice); this is not part of published `.2`.
