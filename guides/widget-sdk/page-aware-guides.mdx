@@ -226,7 +226,7 @@ The result is evidence, not an optimistic acknowledgement. The agent should expl
 The tool names configured on the ElevenLabs agent are on the left. The registered SDK tools are on the right.
 
 ```ts
-const voice = new ConvincedVoiceController({
+const voice = client.createVoiceController({
   descriptor: {
     agentId: "YOUR_PUBLIC_ELEVENLABS_AGENT_ID",
     connectionType: "webrtc",
@@ -237,10 +237,7 @@ const voice = new ConvincedVoiceController({
     genericClientTool: false,
   },
   tools,
-  orgSlug: client.orgSlug,
-  sessionId: () => client.state.session?.sessionId ?? null,
   authorizeToolCall: authorizePageTool,
-  onConversationId: (id) => client.linkElevenLabsConversation(id),
 });
 ```
 

@@ -6,16 +6,20 @@ icon: 'paintbrush'
 
 The SDK separates the Convinced session and ElevenLabs voice controller from presentation. You can use the supplied Shadow DOM renderer, customize its tokens, or skip it and render the full experience in your application.
 
+<Note>
+Create headless voice through `client.createVoiceController()` so the SDK owns transcript capture and session linking. See [session ownership](/guides/widget-sdk/events#session-owned-headless-voice).
+</Note>
+
 ## When to use headless
 
-Choose a headless integration when your application owns the guide panel, launcher, transcript, voice controls and page interactions. Use `ConvincedVoiceController` for the ElevenLabs conversation and `ClientToolRegistry` for permitted actions, then render state in your framework. Skip `mountConvincedWidget()` when you supply the interface.
+Choose a headless integration when your application owns the guide panel, launcher, transcript, voice controls and page interactions. Use `client.createVoiceController()` for the voice conversation and `ClientToolRegistry` for permitted actions, then render state in your framework. Skip `mountConvincedWidget()` when you supply the interface.
 
 For voice and page actions alone, the controller can run without a Convinced session. Add `ConvincedClient` when you need Convinced chat, campaign personalization, identity or session-history APIs. Typed input sent through `voice.sendUserMessage()` belongs to the ElevenLabs conversation; `client.sendMessage()` uses the Convinced chat service.
 
 Follow [Build a headless interface](#build-a-headless-interface) for the client APIs and [Host tools](/guides/widget-sdk/host-tools) for page actions. The [SDK quickstart](/guides/widget-sdk/quickstart) demonstrates the supplied `managed-v2` renderer. Both presentation choices can use the same permitted website tools, including the experimental WebMCP adapter.
 
 <Tip>
-  To have a coding agent build the integration in your application, copy the [reviewed implementation prompt](https://raw.githubusercontent.com/Get-Convinced/docs/c8b149988998d6d98948a62cd50472273191ab63/examples/sdk-implementation-prompt.txt). The [coding-agent guide](/guides/widget-sdk/build-with-an-agent) explains which placeholders and access to provide.
+  To have a coding agent build the integration in your application, copy the [reviewed implementation prompt](https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-implementation-prompt.txt). The [coding-agent guide](/guides/widget-sdk/build-with-an-agent) explains which placeholders and access to provide.
 </Tip>
 
 ## Choose a presentation level
@@ -205,10 +209,13 @@ await widget.endSession()
 
 ## Build a headless interface
 
-Do not call `mountConvincedWidget()` when your application owns the renderer. Subscribe to the chat client and voice controller independently:
+Do not call `mountConvincedWidget()` when your application owns the renderer. The following fragment assumes your UI callbacks and elements exist. Create voice through the session client and render its combined message state:
 
 ```ts
 import { buildManagedVoiceStartContext } from '@convinced/widget-sdk'
+
+await client.initialize({ loadMedia: false })
+const voice = client.createVoiceController()
 
 const stopClient = client.on('state', (state) => {
   renderChatMessages(state.messages)
@@ -226,11 +233,6 @@ const stopVoiceState = voice.subscribe((state) => {
   })
 })
 
-const stopVoiceMessages = voice.on('message', ({ source, message }) => {
-  renderVoiceTranscript(source, message)
-})
-
-await client.initialize()
 
 voiceButton.addEventListener('click', async () => {
   await client.markVoiceUpgrade(
@@ -324,20 +326,17 @@ client.destroy()
 
 For a mounted interface, `widget.endSession()` ends the attached ElevenLabs conversation, merges the SDK chat and voice transcript in time order, includes the exact slide filenames shown by the renderer, and persists the result to the current Convinced session. It de-duplicates matching transcript rows and applies the session history limits before sending. `widget.destroy()` then removes its DOM and subscriptions; ending the session alone does not unmount the interface.
 
-In a headless interface, collect voice `message` events and shown slide filenames yourself, then pass them as `clientMessages` and `slidesViewed` to `client.endSession()`. The client-only default contains SDK chat messages; it cannot infer which custom voice transcript rows or media your renderer displayed.
+With `client.createVoiceController()`, the SDK captures both spoken and typed voice turns. A headless renderer only tracks which slides it shows.
 
 ```ts
-await voice.end()
 await client.endSession({
-  clientMessages: mergedChatAndVoiceHistory,
   slidesViewed: shownSlideFilenames,
 })
 stopClient()
 stopVoiceState()
-stopVoiceMessages()
 client.destroy()
 ```
 
-The transcript and slide arrays above belong to your renderer. Show persistence errors and keep the session available for retry before destroying its owner.
+The slide array belongs to your renderer. Show persistence errors and keep the session available for retry before destroying its owner.
 
 `widget.destroy()` removes the supplied interface and unsubscribes its listeners. When a voice controller is attached, it also attempts to end voice and persist the same merged history. Explicitly awaiting `widget.endSession()` is easier to observe and retry when delivery matters.

@@ -2,7 +2,7 @@ Build a Convinced Widget SDK integration for this application's own pages.
 
 Read https://convinced.mintlify.app/guides/widget-sdk/overview first, then quickstart, voice, host-tools, security and the implementation checklist. Use the current-availability table as a constraint; package APIs are not proof of backend deployment.
 
-Install and pin @convinced/widget-sdk@0.1.1-webmcp.2, commit the lockfile, use Node.js >=22.14 and the existing application framework. Use the documented complete sdk-quickstart.ts module as the starting point, or explain why the application needs a headless interface. Do not depend on private Convinced source repositories.
+Install and pin @convinced/widget-sdk@0.1.1-webmcp.3, commit the lockfile, use Node.js >=22.14 and the existing application framework. Use the documented complete sdk-quickstart.ts module as the starting point, or explain why the application needs a headless interface. Do not depend on private Convinced source repositories.
 
 Identify real prerequisites: Convinced organization slug, allowed origin, any widget token, intended ElevenLabs agent, public/private connection mode and provider tool configuration. Do not invent credentials, organization settings, or unsupported API endpoints. Keep provider management keys server-side.
 
@@ -16,6 +16,6 @@ For experimental WebMCP, use the documented discovery/execution callbacks and do
 
 Saved system prompt and first message edits must use ConvincedAgentAdmin on an authenticated management surface with Convinced ADMIN access and a server-owned agent binding. Customer-domain login needs an agreed backend authentication integration; a proxy or API key assumption is insufficient. Display provider-confirmed success, preserve omitted fields and require reload on a stale revision or uncertain write.
 
-Handle initialization/start/end failures visibly. Start voice from a visitor gesture. Keep subscriptions scoped, end sessions from reliable application actions, preserve retry paths on failed persistence, and dispose only when the owner is finished. Test identity, media, analytics consent and saved history where used.
+For headless use client.createVoiceController(), render client message events and await client.endSession(). The SDK captures spoken and typed voice turns and manages provider associations. Remove manual provider-ID wiring and transcript buffers. Track shown media only if used. Handle initialization/start/end failures visibly. Start voice from a visitor gesture. Keep subscriptions scoped, end sessions from reliable application actions, preserve retry paths on failed persistence, and dispose only when the owner is finished. Test identity, media, analytics consent and saved history where used.
 
 Deliver a reviewable website PR. Include actual commands and test results for initialization, real microphone/audio, correct opener, read/action/denial on at least two pages, route continuity, browser support, cleanup and relevant admin persistence. Clearly label checks that were simulated, inferred or blocked. The website owner reviews, merges and deploys their repository.

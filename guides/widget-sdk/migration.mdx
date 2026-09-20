@@ -10,6 +10,10 @@ There are three supported presentation paths around the same Convinced conversat
 2. The SDK `managed-v2` preset for an iframe-free functional composition.
 3. The headless SDK for a completely custom voice-first experience.
 
+<Note>
+This matrix describes SDK `.3` and the hosted service. Headless voice created with `client.createVoiceController()` captures turns and links the session automatically; see [migration](/guides/widget-sdk/events#session-owned-headless-voice).
+</Note>
+
 ## Capability matrix
 
 Page tools below run through browser voice callbacks or explicit local SDK execution. The current hosted chat route does not implement SDK client-tool continuation; a shared registry does not enable chat-driven page actions there.
@@ -36,7 +40,7 @@ Page tools below run through browser voice callbacks or explicit local SDK execu
 | Private voice credentials | Confirm the hosted deployment's provider configuration with its operator | Supply your own authenticated descriptor factory; hosted `getVoiceCredential()` is unavailable | Same credential requirement |
 | WebMCP | No cross-origin discovery API | Experimental same-origin bridge; managed callbacks remain additional tools | Experimental bridge with two callbacks when configured alone |
 | Saved agent prompt and opener | Separate authenticated administration surface | `ConvincedAgentAdmin` requires a Convinced organization ADMIN session and agent binding | Same management client and authentication |
-| Availability today | Hosted production loader | Public `@convinced/widget-sdk@0.1.1-webmcp.2` prerelease | Same pinned package |
+| Availability today | Hosted production loader | Public `@convinced/widget-sdk@0.1.1-webmcp.3` prerelease | Same pinned package |
 
 ## Can the original widget be built through the SDK?
 
@@ -67,7 +71,7 @@ The current hosted loader has no page-tool registration or router API. Add those
 Pin the package version used by these guides:
 
 ```bash
-npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.2
+npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.3
 ```
 
 WebMCP migration is optional: publish existing handlers, configure the two generic provider callbacks on a separate agent, then test discovery and visible outcomes. See [WebMCP](/guides/widget-sdk/webmcp) and [Prompts and first message](/guides/widget-sdk/agent-prompts) for their setup requirements.
@@ -92,7 +96,7 @@ WebMCP migration is optional: publish existing handlers, configure the two gener
     Start with `preset: 'managed-v2'` to compare behavior. Move to headless only for visual or interaction requirements the preset does not cover.
   </Step>
   <Step title="Link and close the session">
-    Call `linkElevenLabsConversation()` from `onConversationId` and track SPA route changes. For a mounted widget, await `widget.endSession()` so its voice transcript and shown slides are included. Headless interfaces await `voice.end()` and pass their owned transcript and media history to `client.endSession()`.
+    Track SPA route changes. For a mounted widget, await `widget.endSession()`. For headless, create voice with `client.createVoiceController()` and await `client.endSession()`; the SDK captures turns and provider associations, while your UI supplies `slidesViewed` if used.
   </Step>
   <Step title="Run parity tests">
     Test campaign and generic sessions, each configured voice mode, chat fallback, real microphone and audio, exact ElevenLabs tool callbacks, SPA navigation, scroll, highlight, identity, slides, videos, welcome card, engagement modes, meeting CTA, configured launcher treatments, reconnect or second voice session, lifecycle events, and mobile layouts.
@@ -119,7 +123,7 @@ Sites without a bundler can self-host the IIFE from the installed package:
 
 ```html
 <script
-  src="/vendor/convinced-widget-sdk-0.1.1-webmcp.2.global.js"
+  src="/vendor/convinced-widget-sdk-0.1.1-webmcp.3.global.js"
 ></script>
 <script>
   const SDK = window.ConvincedWidgetSDK
@@ -134,7 +138,7 @@ Copy `node_modules/@convinced/widget-sdk/dist/convinced-widget.global.js` to the
 ## Evidence to keep before removing the iframe
 
 - One successful ready-target campaign session and one generic fallback session.
-- A real ElevenLabs conversation ID linked to the Convinced session.
+- A saved Convinced session containing the spoken and typed turns, including a reconnect.
 - Browser evidence that a voice tool changed an SPA route without reload.
 - Browser evidence for scroll and temporary highlight on stable selectors.
 - Voice and chat proof that target-specific opener, pills, knowledge, and media are present.

@@ -9,19 +9,19 @@
         "properties": {
           "names": {
             "type": "array",
+            "description": "Supply exactly one discovered tool name to fetch its schema; omit for catalog summaries.",
             "items": {
               "type": "string",
+              "description": "Exact discovered website tool name.",
               "maxLength": 128
-            },
-            "minItems": 1,
-            "maxItems": 1
+            }
           },
           "offset": {
             "type": "integer",
+            "description": "Non-negative next_offset from the previous catalog page; omit to start at zero.",
             "minimum": 0
           }
-        },
-        "additionalProperties": false
+        }
       },
       "expects_response": true,
       "execution_mode": "immediate",
@@ -38,11 +38,13 @@
         "properties": {
           "tool_id": {
             "type": "string",
+            "description": "Exact opaque tool ID returned by discovery.",
             "minLength": 1,
             "maxLength": 128
           },
           "arguments_json": {
             "type": "string",
+            "description": "JSON object encoded as a string, matching the discovered input_schema_json.",
             "minLength": 2,
             "maxLength": 16128
           }
@@ -50,8 +52,7 @@
         "required": [
           "tool_id",
           "arguments_json"
-        ],
-        "additionalProperties": false
+        ]
       },
       "expects_response": true,
       "execution_mode": "immediate",

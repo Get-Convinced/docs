@@ -1,7 +1,8 @@
 import {
   ClientToolRegistry,
   ConvincedAgentAdmin,
-  ConvincedVoiceController,
+  ConvincedClient,
+  type ConvincedVoiceController,
   createWebMcpBridge,
   getWebMcpModelContext,
   publishRegistryToWebMcp,
@@ -65,7 +66,7 @@ export async function publishPageTools(options: {
 
 /** Public-agent example. Start voice only from your visitor's explicit gesture. */
 export function createWebsiteVoice(options: {
-  orgSlug: string
+  client: ConvincedClient
   publicAgentId: string
   argumentEncoding?: 'json-string' | 'object'
   authorize: (tool: WebMcpRegisteredTool, input: JsonObject) => boolean | Promise<boolean>
@@ -80,8 +81,7 @@ export function createWebsiteVoice(options: {
   })
   let voice: ConvincedVoiceController
   try {
-    voice = new ConvincedVoiceController({
-      orgSlug: options.orgSlug,
+    voice = options.client.createVoiceController({
       tools: new ClientToolRegistry(bridge.tools),
       descriptor: {
         agentId: options.publicAgentId,
@@ -97,6 +97,6 @@ export function createWebsiteVoice(options: {
   return {
     voice,
     bridge,
-    async dispose() { try { await voice.end() } finally { bridge.dispose() } },
+    async dispose() { await options.client.endSession(); bridge.dispose() },
   }
 }

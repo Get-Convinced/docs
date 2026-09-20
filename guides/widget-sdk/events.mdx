@@ -192,47 +192,26 @@ await voice.start(buildManagedVoiceStartContext(client.state, {
 
 Import `buildManagedVoiceStartContext` from `@convinced/widget-sdk`. This marks the session as upgraded to voice and gives the backend a bounded copy of the chat path. The context builder includes a bounded copy of the same history for the live ElevenLabs agent.
 
-## Link ElevenLabs conversations
-
-```ts
-const voice = new ConvincedVoiceController({
-  // ...descriptor, tools, and session options
-  onConversationId: (conversationId) => {
-    client.linkElevenLabsConversation(conversationId)
-  },
-})
-```
-
-The client keeps every linked ID for the current Convinced session. IDs reset when a new session is created.
-
 ## End the session
 
+For headless voice, create the controller through the session owner:
+
 ```ts
-await voice.end()
-
-await client.endSession({
-  // A headless UI supplies its merged chat/voice history and shown media.
-  clientMessages: mergedChatAndVoiceHistory,
-  slidesViewed: shownSlideFilenames,
-  email: client.state.identity?.email,
-})
-
+const voice = client.createVoiceController()
+// Start voice from a visitor gesture; typed input uses voice.sendUserMessage(text).
+await voice.start()
+// On explicit completion, after any active chat request:
+await client.endSession({ slidesViewed: shownSlideFilenames })
 client.destroy()
 ```
 
-`endSession()` sends:
+The SDK sends the Convinced session ID, captured chat and voice turns, internal provider associations and available identity. The application supplies only the media it actually displayed. Omit `slidesViewed` when unused. You do not need a separate transcript buffer or provider conversation IDs.
 
-- The current Convinced session ID.
-- SDK chat messages by default, or your canonical chat/voice transcript when you provide `clientMessages`.
-- Exact shown slide filenames when you provide `slidesViewed`.
-- The latest and complete set of linked ElevenLabs conversation IDs.
-- Captured email, name, and company when available.
+Keep the client if saving fails and offer a retry. Use `client.renewSession()` before another conversation after successful finalization. `voice.end()` stops only the transport and allows reconnection to the same session.
 
-Call it from an explicit close, completed conversation, route teardown, or another application path that can await the network request. `beforeunload` and `pagehide` cannot guarantee an async request finishes.
+For a supplied interface, call `await widget.endSession()`, then destroy the widget and client. The managed renderer handles its transcript and media bookkeeping. A standalone `new ConvincedVoiceController(...)` is a low-level adapter; it does not acquire session ownership automatically.
 
-For a mounted interface, call `await widget.endSession()`. It ends the attached voice controller and persists the time-ordered, de-duplicated SDK chat plus voice transcript together with the slides actually shown by the renderer. `destroy()` attempts the same work, but an explicit awaited teardown is easier to monitor and retry.
-
-A headless interface owns its voice transcript and media history. Pass those values explicitly to `client.endSession()`; calling the client alone cannot infer which voice rows or slides a custom renderer presented.
+Call finalization from an application action that can await the network request. Browser termination, `beforeunload` and `pagehide` cannot guarantee delivery.
 
 ## Direct context sync
 
@@ -252,3 +231,51 @@ Do not use direct context updates as a second conversation brain. They are deter
 ## Rendering ownership
 
 Use `state` when your framework prefers immutable snapshots. Use granular message, content, and tool events for append-only or streaming updates. Pick one ownership pattern for each visual region so completed messages are not inserted twice.
+
+<span id="candidate-session-owned-headless-voice" />
+
+## Session-owned headless voice
+
+Available in **`0.1.1-webmcp.3`** with the Convinced transcript-reconciliation backend deployed on 21 September 2026. Self-hosted installations need that backend support. The SDK does not configure the selected agent's tools.
+
+The new `client.createVoiceController()` attaches voice to the existing Convinced session. The SDK captures spoken messages and successful `voice.sendUserMessage()` sends, retains provider identifiers internally, carries the Convinced session ID into the transport, and includes final shutdown turns when you call `client.endSession()`.
+
+```ts
+import { ConvincedClient } from '@convinced/widget-sdk'
+
+const client = new ConvincedClient({ orgSlug: 'your-org' })
+await client.initialize({ loadMedia: false })
+const voice = client.createVoiceController()
+
+// A minimal transcript; replace it with your framework's renderer.
+const transcript = document.createElement('div')
+document.body.append(transcript)
+client.on('message', message => {
+  const row = document.createElement('p')
+  row.textContent = `${message.role}: ${message.text}`
+  transcript.append(row)
+})
+
+// Call from the visitor's microphone button.
+await voice.start()
+// When the visitor finishes, after any active text request:
+await client.endSession()
+```
+
+Convinced must configure the intended public agent in the session response. A private agent needs a server-supplied `descriptorFactory`; this change does not add the missing hosted credential endpoint. No provider API key belongs in the browser.
+
+Replace headless `new ConvincedVoiceController(...)` construction with the client factory. Remove manual `onConversationId` linking and custom transcript buffering. Render the combined text/voice `message` events from the client. The standalone controller remains available as a low-level adapter and does not gain session ownership automatically. A custom renderer still tracks which slides it displays and can pass `slidesViewed` to `endSession()`.
+
+For WebMCP, pass the bridge's tool registry as `tools`, `WEBMCP_VOICE_BINDINGS` as `exactClientTools`, and `genericClientTool: false` to the factory. Convinced must configure the hosted agent with those same two bindings. Creating a factory does not change the agent's live tools.
+
+### Saving and retrying
+
+- `voice.end()` stops voice while leaving the session available for text or reconnection.
+- `client.endSession()` stops attached voice and submits captured history. On an HTTP failure, retain the client and retry. After success, renew the session before another conversation.
+- Await finalization before destroying the client. Browser termination can still interrupt delivery; `destroy()` is not a persistence guarantee.
+- The backend merges snapshots with stored text and late provider imports. Summary writes are checked against the stored transcript so an older result cannot replace newer history.
+- A snapshot above 2,000 turns fails explicitly; each persisted turn is limited to 5,000 characters. Formatted summary input above 120,000 characters or a model failure leaves the stored transcript awaiting summary refresh. There is no background retry worker in this release. Repeated successful SDK finalization calls are cached and do not retry a missing summary.
+
+### Verify your deployment
+
+Confirm the selected agent and its exact tool bindings. Test real speech, typed input, reconnects, failed-save retry and the persisted Convinced session record. Browser capture supports immediate saving; late provider imports require configured webhook signing and delivery. Local mocked-provider checks do not establish live speech quality or cross-browser compatibility. Existing session authorization, media-context size and private-credential endpoint limitations remain.
