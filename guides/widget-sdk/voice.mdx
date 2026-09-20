@@ -9,7 +9,7 @@ icon: 'waveform-lines'
 Create the Convinced session before the voice controller. This gives the voice session a stable Convinced session ID, campaign context, and a place to link the ElevenLabs conversation ID.
 
 <Note>
-The standalone adapter examples below target published `.2`. The unpublished `.3` candidate adds `client.createVoiceController()` to own headless transcript capture and provider linking. See [candidate migration](/guides/widget-sdk/events#candidate-session-owned-headless-voice); the matching backend is required.
+For headless integrations, use `client.createVoiceController()` to capture spoken and typed turns and link the conversation automatically. See [session ownership](/guides/widget-sdk/events#session-owned-headless-voice). The standalone constructor remains available for low-level integrations and the managed renderer.
 </Note>
 
 ## Choose a browser-safe descriptor
@@ -94,7 +94,7 @@ For a website-independent WebMCP agent, use `WEBMCP_VOICE_BINDINGS` and `generic
 `exactClientTools` maps an ElevenLabs client-tool name to one registered SDK tool:
 
 ```ts
-const voice = new ConvincedVoiceController({
+const voice = client.createVoiceController({
   descriptor: {
     agentId: 'agent_123',
     connectionType: 'webrtc',
@@ -106,13 +106,10 @@ const voice = new ConvincedVoiceController({
     },
   },
   tools,
-  orgSlug: client.orgSlug,
-  sessionId: () => client.state.session?.sessionId ?? null,
   authorizeToolCall: ({ tool }) => {
     if (tool.effect === 'read') return true
     return window.confirm(`Allow ${tool.description}?`)
   },
-  onConversationId: (id) => client.linkElevenLabsConversation(id),
 })
 ```
 
@@ -199,15 +196,13 @@ volumeSlider.addEventListener('input', () => {
 })
 
 endButton.addEventListener('click', async () => {
-  await voice.end()
   await client.endSession({
-    clientMessages: mergedChatAndVoiceHistory,
     slidesViewed: shownSlideFilenames,
   })
 })
 ```
 
-That example is headless, so the application supplies the voice transcript and shown media it owns. When you use `mountConvincedWidget()`, prefer `await widget.endSession()` instead: the mounted renderer ends voice and supplies its merged chat/voice history and shown slide filenames automatically.
+That headless controller belongs to the client, which captures its spoken and typed turns. The application supplies shown media. When you use `mountConvincedWidget()`, prefer `await widget.endSession()` instead: the mounted renderer ends voice and supplies its merged chat/voice history and shown slide filenames automatically.
 
 The controller also exposes:
 
@@ -258,7 +253,7 @@ router.onChange(async ({ url, title }) => {
 })
 ```
 
-`onConversationId` should call `client.linkElevenLabsConversation(id)`. For a mounted renderer, `widget.endSession()` persists all linked conversation IDs alongside its merged browser voice/chat transcript, captured identity, and shown slides. A headless renderer passes its own transcript and `slidesViewed` values to `client.endSession()`.
+`client.createVoiceController()` keeps provider conversation IDs internal and captures typed and spoken turns. Await `client.endSession()` in headless integrations; pass `slidesViewed` only for media your UI displayed. For a mounted renderer, use `widget.endSession()`.
 
 <Note>
   ElevenLabs' text simulation is useful for testing prompt and tool selection, but it does not prove microphone input, synthesized audio, or DOM execution. Test those paths in a real browser before launch.

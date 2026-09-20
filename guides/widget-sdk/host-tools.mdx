@@ -76,7 +76,7 @@ Call `removeDomTools()` when the current page no longer offers those capabilitie
 The name on the left must exactly match the client tool configured on the ElevenLabs agent:
 
 ```ts
-const voice = new ConvincedVoiceController({
+const voice = client.createVoiceController({
   descriptor: {
     agentId: 'agent_123',
     exactClientTools: {
@@ -88,13 +88,10 @@ const voice = new ConvincedVoiceController({
     genericClientTool: { name: 'host_extension_call' },
   },
   tools,
-  orgSlug: client.orgSlug,
-  sessionId: () => client.state.session?.sessionId ?? null,
   authorizeToolCall: ({ tool }) => {
     if (tool.effect === 'read') return true
     return window.confirm(`Allow voice to use ${tool.description}?`)
   },
-  onConversationId: (id) => client.linkElevenLabsConversation(id),
 })
 ```
 

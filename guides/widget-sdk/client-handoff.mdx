@@ -18,12 +18,12 @@ Start with the [SDK overview](/guides/widget-sdk/overview), then use this checkl
 The voice agent can differ from the organization's default widget agent. Match the descriptor's agent ID to the intended management binding. A public widget token or Campaign API key does not grant prompt-editing access.
 
 <Note>
-For the unpublished `.3` session-ownership candidate, follow the [migration requirements](/guides/widget-sdk/events#candidate-session-owned-headless-voice) and supplied candidate package. Do not use the `.2` installation below to test that new behavior. Convinced must deploy and verify the companion backend before production rollout.
+Use the exact `.3` package below with the deployed Convinced backend. Existing headless integrations must switch to `client.createVoiceController()`; upgrading the package alone does not attach a standalone controller to a session.
 </Note>
 
 ## Prepare the implementation
 
-1. Install `@convinced/widget-sdk@0.1.1-webmcp.2` and commit the lockfile. Use the [quickstart module](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/sdk-quickstart.ts) or [reviewed coding-agent prompt](https://raw.githubusercontent.com/Get-Convinced/docs/c8b149988998d6d98948a62cd50472273191ab63/examples/sdk-implementation-prompt.txt).
+1. Install `@convinced/widget-sdk@0.1.1-webmcp.3` and commit the lockfile. Use the [quickstart module](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/sdk-quickstart.ts) or [reviewed coding-agent prompt](https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-implementation-prompt.txt).
 2. Select the supplied widget, headless UI or hosted iframe. The hosted loader does not expose the SDK's page-tool bridge.
 3. Confirm your Convinced organization, allowed origin and any required widget token. Test a generic session before adding optional campaign attribution.
 4. Configure the actual ElevenLabs agent. Use the [managed callback definitions](/examples/elevenlabs-managed-tools.json) or [WebMCP callbacks](/examples/elevenlabs-webmcp-tools.json), matching only the capabilities your integration activates.

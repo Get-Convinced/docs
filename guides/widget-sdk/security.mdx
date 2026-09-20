@@ -33,12 +33,9 @@ Saved prompt administration is a separate access level: `ConvincedAgentAdmin` re
 The current hosted service does not expose the `getVoiceCredential()` endpoint. Use an intentionally public agent ID or your own authenticated credential service. The following adapter applies only after a Convinced backend with that endpoint is deployed:
 
 ```ts Browser with a compatible backend
-const voice = new ConvincedVoiceController({
+const voice = client.createVoiceController({
   descriptorFactory: () => client.getVoiceCredential(),
   tools,
-  orgSlug: client.orgSlug,
-  sessionId: () => client.state.session?.sessionId ?? null,
-  onConversationId: (id) => client.linkElevenLabsConversation(id),
 })
 ```
 

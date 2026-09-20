@@ -55,7 +55,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). Run `mint dev` locally before opening 
 
 Share [SDK overview](https://convinced.mintlify.app/guides/widget-sdk/overview). The SDK tab groups setup, voice and actions, interface and sessions, administration and operations, and reference. The implementation checklist is a launch reference, not the first page.
 
-The guides target published npm `0.1.1-webmcp.2`. The overview records verified hosted availability, including missing private voice credentials and chat-tool protocol gaps. Prompt endpoints use authenticated organization ADMIN sessions; Campaign partner keys are a separate credential.
+The guides target published npm `0.1.1-webmcp.3`. The overview records verified hosted availability, including missing private voice credentials and chat-tool protocol gaps. Prompt endpoints use authenticated organization ADMIN sessions; Campaign partner keys are a separate credential.
 
 Downloadable examples in `examples/` contain the complete quickstart module, editor, WebMCP helpers, matching provider schemas and reviewed implementation instructions. Validate these against the pinned published SDK when changing examples. Do not include private backend source or credentials in public documentation.
 

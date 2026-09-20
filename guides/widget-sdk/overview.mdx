@@ -32,18 +32,18 @@ The hosted iframe and the JavaScript SDK are separate integrations. The publishe
 Campaigns are optional. An ordinary page can create a session without a campaign link. See [campaign sessions](/guides/widget-sdk/campaigns) for personalized campaign experiences.
 
 <Note>
-The unpublished `0.1.1-webmcp.3` candidate adds session-owned headless voice. It requires a matching backend change. See the [candidate migration](/guides/widget-sdk/events#candidate-session-owned-headless-voice) before testing it; the installation instructions below remain for published `.2`.
+Version `.3` adds session-owned headless voice, typed-input capture and retryable finalization. The companion backend is deployed. See [session ownership and migration](/guides/widget-sdk/events#session-owned-headless-voice).
 </Note>
 
 ## Install
 
-These guides target the published prerelease **`0.1.1-webmcp.2`**:
+These guides target the published prerelease **`0.1.1-webmcp.3`**:
 
 ```bash
-npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.2
+npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.3
 ```
 
-Commit your lockfile. This version is under npm's `next` tag; the unversioned install selects `latest`, which remains `0.1.0` and lacks WebMCP and saved prompt administration. The [tagged source](https://github.com/Get-Convinced/convinced-widget-sdk/tree/v0.1.1-webmcp.2) matches these guides.
+Commit your lockfile. This version is under npm's `next` tag; the unversioned install selects `latest`, which remains `0.1.0` and lacks WebMCP and saved prompt administration. The [tagged source](https://github.com/Get-Convinced/convinced-widget-sdk/tree/v0.1.1-webmcp.3) matches these guides.
 
 ## How the pieces connect
 
@@ -63,11 +63,12 @@ The website owns its page actions and access checks. Convinced owns its hosted s
 
 ## Current availability
 
-Applies to SDK `0.1.1-webmcp.2` and the hosted services verified on September 14, 2026. SDK exports and deployed backend features are listed separately.
+Applies to SDK `0.1.1-webmcp.3` and the hosted session finalization verified on September 21, 2026. SDK exports and deployed backend features are listed separately.
 
 | Capability | Current status |
 | --- | --- |
 | Hosted widget configuration, session initialization and session end | Verified against the deployed Convinced backend |
+| Session-owned headless voice and typed input | `client.createVoiceController()` captures turns; `client.endSession()` saves them through the Convinced session |
 | Public ElevenLabs connection, managed UI and explicit voice tools | Implemented in the SDK; configure the agent and test your real voice flow |
 | Saved system prompt and first message | Management API deployed; requires Convinced organization ADMIN authentication and a registered agent owner |
 | WebMCP discovery and execution | Experimental; native browser transport tested, real voice task acceptance still required |

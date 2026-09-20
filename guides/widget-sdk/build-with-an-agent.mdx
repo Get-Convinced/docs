@@ -7,7 +7,7 @@ icon: 'wand-magic-sparkles'
 Give your coding agent the reviewed implementation prompt below. It starts from the deployed SDK path, separates optional backend capabilities, and adds page tools, WebMCP, or custom UI only when your application needs them.
 
 <CardGroup cols={2}>
-  <Card title="Open the agent build prompt" icon="file-lines" href="https://raw.githubusercontent.com/Get-Convinced/docs/c8b149988998d6d98948a62cd50472273191ab63/examples/sdk-implementation-prompt.txt">
+  <Card title="Open the agent build prompt" icon="file-lines" href="https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-implementation-prompt.txt">
     Open the plain-text file, then copy its entire contents into your coding agent.
   </Card>
   <Card title="View the SDK repository" icon="github" href="https://github.com/Get-Convinced/convinced-widget-sdk">
@@ -17,10 +17,10 @@ Give your coding agent the reviewed implementation prompt below. It starts from 
 
 ## Use the prompt
 
-Use the [reviewed implementation prompt](https://raw.githubusercontent.com/Get-Convinced/docs/c8b149988998d6d98948a62cd50472273191ab63/examples/sdk-implementation-prompt.txt). The older `AGENT_BUILD_PROMPT.txt` inside the package contains backend and internal-lab assumptions that do not all match the hosted service; do not use it as an unconditional production checklist. Give the coding agent the [SDK overview](/guides/widget-sdk/overview), [WebMCP guide](/guides/widget-sdk/webmcp), [prompt editor guide](/guides/widget-sdk/agent-prompts), pinned SDK version, organization slug, and the enabled backend capabilities. Clients do not need Convinced's private application source to integrate the SDK.
+Use the [reviewed implementation prompt](https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-implementation-prompt.txt). The older `AGENT_BUILD_PROMPT.txt` inside the package contains backend and internal-lab assumptions that do not all match the hosted service; do not use it as an unconditional production checklist. Give the coding agent the [SDK overview](/guides/widget-sdk/overview), [WebMCP guide](/guides/widget-sdk/webmcp), [prompt editor guide](/guides/widget-sdk/agent-prompts), pinned SDK version, organization slug, and the enabled backend capabilities. Clients do not need Convinced's private application source to integrate the SDK.
 
 1. Open your web application in the coding agent's workspace.
-2. Open [the implementation prompt](https://raw.githubusercontent.com/Get-Convinced/docs/c8b149988998d6d98948a62cd50472273191ab63/examples/sdk-implementation-prompt.txt).
+2. Open [the implementation prompt](https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-implementation-prompt.txt).
 3. Copy and paste the entire file into the agent.
 4. Supply your organization slug, approved agent configuration, desired presentation, router, allowed routes, brand reference, and test commands.
 5. Ask the agent to inspect the application first and request only missing values that block implementation.
@@ -32,7 +32,7 @@ Use the [reviewed implementation prompt](https://raw.githubusercontent.com/Get-C
 Install the version used by these guides:
 
 ```bash
-npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.2
+npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.3
 ```
 
 WebMCP is experimental and opt-in in this release. The prompt tells the agent to use the repository's existing package manager, framework, router, design system, consent flow, analytics setup, and test tools. Keep the package lockfile and deployed backend capabilities aligned with these instructions.

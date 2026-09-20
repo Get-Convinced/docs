@@ -4,7 +4,7 @@ description: 'Find the public SDK classes, methods, tool adapters and lifecycle 
 icon: 'code'
 ---
 
-Import public APIs from `@convinced/widget-sdk@0.1.1-webmcp.2` using the module name `@convinced/widget-sdk`. The installed package's TypeScript declarations are the exact signature reference; this page groups them by the work they perform.
+Import public APIs from `@convinced/widget-sdk@0.1.1-webmcp.3` using the module name `@convinced/widget-sdk`. The installed package's TypeScript declarations are the exact signature reference; this page groups them by the work they perform.
 
 ## Session and chat
 
@@ -15,7 +15,8 @@ Import public APIs from `@convinced/widget-sdk@0.1.1-webmcp.2` using the module 
 | Initialize and read configuration | `initialize()`, `getConfig()`, `createSession()`, `renewSession()`, `state` |
 | Converse | `sendMessage()`, `cancelActiveTurn()` |
 | Identity and enrichment | `captureIdentity()`, `identify()`, `setIdentity()`, `getVisitorIntel()` |
-| Voice association | `getVoiceCredential()` (hosted endpoint unavailable), `markVoiceUpgrade()`, `linkElevenLabsConversation()` |
+| Voice ownership | `createVoiceController()` |
+| Low-level voice association | `getVoiceCredential()` (hosted endpoint unavailable), `markVoiceUpgrade()`, `linkElevenLabsConversation()` |
 | Media | `getSlides()`, `getSlideMetadata()` |
 | Site and session context | `updatePage()`, `updateSessionContext()` |
 | Lifecycle events | `track()`, `sendEvent()`, `on()`, `once()`, `off()` |
@@ -43,7 +44,7 @@ Use `browserSessionInput()` and `resolveWidgetSessionAttribution()` to prepare a
 
 ## Saved agent configuration
 
-Available in `0.1.1-webmcp.2` with the deployed authenticated management API. This example shows the call shape; supply your organization, agent ID and management origin:
+Available in `0.1.1-webmcp.3` with the deployed authenticated management API. This example shows the call shape; supply your organization, agent ID and management origin:
 
 ```ts
 const admin = new ConvincedAgentAdmin({ orgSlug, agentId, apiBase })
@@ -78,10 +79,10 @@ The WebMCP helpers require the prerelease and a compatible browser implementatio
 - `createPostHogBridge()` / `ConvincedPostHogBridge` correlate consented analytics with SDK sessions.
 - `ConvincedApiError` carries HTTP status, API code and response details; `ConvincedSdkError` represents SDK-level failures.
 
-The mounted renderer owns its transcript/media bookkeeping. A headless renderer must retain the voice rows and shown slide filenames needed by `client.endSession()`.
+The mounted renderer owns its transcript/media bookkeeping. Headless controllers created through the client capture turns automatically; the renderer supplies shown slide filenames when used.
 
-## Candidate session ownership API
+## Session ownership API
 
-Unpublished `0.1.1-webmcp.3` adds `client.createVoiceController(options?)`. It returns a `ConvincedVoiceController` attached to that client and exports `SessionVoiceOptions`. These options omit caller-owned `orgSlug` and `sessionId`, accept an optional tool registry, exact mappings and generic gateway setting, and retain descriptor/descriptor-factory and UI callbacks.
+SDK `0.1.1-webmcp.3` adds `client.createVoiceController(options?)`. It returns a `ConvincedVoiceController` attached to that client and exports `SessionVoiceOptions`. These options omit caller-owned `orgSlug` and `sessionId`, accept an optional tool registry, exact mappings and generic gateway setting, and retain descriptor/descriptor-factory and UI callbacks.
 
-Use `client.endSession()` to stop attached voice and submit the captured mixed transcript. Provider IDs are internal to this flow. The matching backend is required. See [migration, limits and release requirements](/guides/widget-sdk/events#candidate-session-owned-headless-voice); this is not part of published `.2`.
+Use `client.endSession()` to stop attached voice and submit the captured mixed transcript. Provider IDs are internal to this flow. The matching backend is required. See [migration, limits and release requirements](/guides/widget-sdk/events#session-owned-headless-voice).

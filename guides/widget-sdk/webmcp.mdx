@@ -15,7 +15,7 @@ Each website defines its useful actions, schemas and handlers. The agent discove
 
 ## Prerequisites and browser support
 
-Install `@convinced/widget-sdk@0.1.1-webmcp.2` and use a compatible browser. The recorded native experiment used Chrome 152 with the WebMCP testing flag and JSON-string arguments. The current [Chrome overview](https://developer.chrome.com/docs/ai/webmcp) documents its origin trial and local testing setup.
+Install `@convinced/widget-sdk@0.1.1-webmcp.3` and use a compatible browser. The recorded native experiment used Chrome 152 with the WebMCP testing flag and JSON-string arguments. The current [Chrome overview](https://developer.chrome.com/docs/ai/webmcp) documents its origin trial and local testing setup.
 
 The bridge detects `document.modelContext`, with support for the older `navigator.modelContext` location. Check for registration and discovery methods separately. Keep your ordinary page interface or a tested [explicit-tool integration](/guides/widget-sdk/host-tools) available when support is absent.
 
@@ -31,10 +31,10 @@ The definitions and instructions are plain downloadable files; no private reposi
 
 ## Connect existing page tools
 
-Save [sdk-handoff.ts](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/sdk-handoff.ts) in your application. Its typed helpers publish a registry and create a standalone public-agent voice bridge. The following browser module uses those helpers after the DOM exists:
+Save [sdk-handoff.ts](https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-handoff.ts) in your application. Its typed helpers publish a registry and create a session-owned public-agent voice bridge. The following browser module uses those helpers after the DOM exists:
 
 ```ts
-import { ClientToolRegistry, registerDomTools } from '@convinced/widget-sdk'
+import { ClientToolRegistry, ConvincedClient, registerDomTools } from '@convinced/widget-sdk'
 import { publishPageTools, createWebsiteVoice } from './sdk-handoff'
 
 export async function mountWebsiteVoice(publicAgentId: string, orgSlug: string) {
@@ -44,15 +44,17 @@ export async function mountWebsiteVoice(publicAgentId: string, orgSlug: string) 
     authorize: ({ action }) => action === 'pageContext' ||
       window.confirm(`Allow ${action} on this page?`),
   })
+  const client = new ConvincedClient({ orgSlug })
+  await client.initialize({ loadMedia: false })
   const published = await publishPageTools({
-    tools, orgSlug, sessionId: () => null,
+    tools, orgSlug, sessionId: () => client.state.session?.sessionId ?? null,
     authorize: ({ tool }) => tool.effect === 'read' ||
       window.confirm(`Allow ${tool.description}?`),
   })
   let integration: ReturnType<typeof createWebsiteVoice>
   try {
     integration = createWebsiteVoice({
-      orgSlug, publicAgentId,
+      client, publicAgentId,
       argumentEncoding: 'json-string', // Tested Chrome 152 setup
       // Explicit allowlist for the two handlers we just registered.
       authorize: (tool) => ['host_get_page_context', 'host_highlight'].includes(tool.name),
@@ -64,7 +66,7 @@ export async function mountWebsiteVoice(publicAgentId: string, orgSlug: string) 
   const talk = document.createElement('button')
   talk.textContent = 'Start voice'
   const stop = document.createElement('button')
-  stop.textContent = 'End voice'
+  stop.textContent = 'End session'
   const status = document.createElement('p')
   status.setAttribute('role', 'status')
   const onTalk = async () => {
@@ -74,17 +76,18 @@ export async function mountWebsiteVoice(publicAgentId: string, orgSlug: string) 
     finally { talk.disabled = false }
   }
   const onStop = async () => {
-    try { await integration.voice.end(); status.textContent = 'Disconnected' }
-    catch { status.textContent = 'Could not confirm the conversation ended.' }
+    try { await client.endSession(); talk.disabled = true; status.textContent = 'Conversation saved' }
+    catch { status.textContent = 'Save failed. Select End session to retry.' }
   }
   talk.addEventListener('click', onTalk)
   stop.addEventListener('click', onStop)
   document.body.append(talk, stop, status)
   return {
     async dispose() {
-      try { await integration.dispose() }
-      finally {
+      await integration.dispose()
+      {
         published.dispose()
+        client.destroy()
         talk.removeEventListener('click', onTalk)
         stop.removeEventListener('click', onStop)
         talk.remove(); stop.remove(); status.remove()
@@ -94,7 +97,7 @@ export async function mountWebsiteVoice(publicAgentId: string, orgSlug: string) 
 }
 ```
 
-Call `await mountWebsiteVoice('YOUR_PUBLIC_AGENT_ID', 'YOUR_ORG_SLUG')` once and keep the returned owner until application teardown. This standalone example connects directly to ElevenLabs; it does not create a Convinced session or persist a Convinced transcript. Use the [SDK quickstart](/guides/widget-sdk/quickstart) and pass session linkage when you need those features.
+Call `await mountWebsiteVoice('YOUR_PUBLIC_AGENT_ID', 'YOUR_ORG_SLUG')` once and keep the returned owner until application teardown. This example creates a Convinced session and uses session-owned voice. The SDK captures spoken and typed turns and saves them on End session. A failed save retains the owner for retry. To start another conversation after success, renew the client session before starting voice again.
 
 The allowlist admits only the two registered handlers; mutations still pass through the publisher's registry policy and the DOM action policy. A website with its own native tools can skip publication and supply its own per-tool authorization to `createWebsiteVoice()`.
 
@@ -124,7 +127,7 @@ Annotations such as `readOnlyHint` do not grant permission. Validate arguments, 
 
 ## Compatibility and validation
 
-SDK `0.1.1-webmcp.2` has been exercised against native Chrome 152 registration, discovery and execution using JSON-string arguments. The two voice callbacks were tested with a simulated transport. These checks do not establish autonomous model selection, actual speech or compatibility across browsers.
+SDK `.3` includes native Chrome transport tests and session finalization tests. A real provider test on Chrome 153 also exercised typed input through the live model and WebMCP callbacks. These checks do not establish microphone recognition quality or compatibility across browsers.
 
 Before enabling WebMCP for visitors, test it with your registered tools and supported browsers. Verify the requested page state after execution; transport success alone is insufficient. Include denied actions, stale handles, manual visitor interaction and cleanup. Follow the [browser acceptance guide](/guides/widget-sdk/analytics-and-testing) for real voice testing.
 
