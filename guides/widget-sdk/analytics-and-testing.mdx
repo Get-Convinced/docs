@@ -146,7 +146,7 @@ Run these checks in your actual browser:
 4. Navigate through your SPA, select a page item manually during an agent action, and confirm that the visitor's latest selection remains authoritative.
 5. Verify configured identity, media, and meeting-request behavior, including visible failures. Use test data; do not automatically retry an ambiguous form submission.
 6. Enable analytics only after consent. Inspect replay masking and request completion, then query PostHog by the opaque Convinced session ID.
-7. Await `widget.endSession()` for a supplied renderer, or end voice and submit your owned transcript and media history for headless. Check the actual Convinced session record.
+7. Await `widget.endSession()` for a supplied renderer. For headless voice created by `client.createVoiceController()`, await `client.endSession({ slidesViewed })`; the SDK supplies captured turns and provider IDs, while your renderer supplies only the media it displayed. Check the actual Convinced session record.
 8. Repeat the relevant flows on mobile and with microphone permission denied, a network failure, and a disabled or unavailable tool.
 
 For automated microphone testing, use a supported browser's fake-microphone input with a test WAV file and assert recognition plus output audio. A text-only simulation does not prove those paths. Keep test credentials on trusted infrastructure and record blockers honestly when provider or dashboard access is unavailable.

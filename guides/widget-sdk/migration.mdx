@@ -14,13 +14,56 @@ There are three supported presentation paths around the same Convinced conversat
 This matrix describes SDK `.3` and the hosted service. Headless voice created with `client.createVoiceController()` captures turns and links the session automatically; see [migration](/guides/widget-sdk/events#session-owned-headless-voice).
 </Note>
 
+## Upgrade from `.2` to `.3`
+
+Version `.3` keeps the `.2` exports, so an existing build does not fail because a class or method was removed. It does change the required integration path for durable headless voice history. A standalone `new ConvincedVoiceController(...)` remains a low-level adapter and is not attached to a `ConvincedClient` session. Upgrading the package without changing that construction leaves transcript capture and provider linking under application ownership.
+
+Replace the standalone controller and manual association:
+
+```ts
+// .2 application-owned session association
+const voice = new ConvincedVoiceController({
+  orgSlug: client.orgSlug,
+  sessionId: () => client.state.session?.sessionId ?? null,
+  tools,
+  descriptor,
+  onConversationId: (id) => client.linkElevenLabsConversation(id),
+})
+```
+
+with the `.3` session-owned controller:
+
+```ts
+// .3 session-owned voice
+const voice = client.createVoiceController({
+  tools,
+  descriptor,
+})
+```
+
+Then finalize from an explicit application action:
+
+```ts
+await client.endSession({ slidesViewed: shownSlideFilenames })
+```
+
+The client stops attached voice, captures spoken turns and successful `voice.sendUserMessage()` calls, retains provider conversation IDs, and submits the mixed history. Do not send a second transcript buffer or fetch the provider conversation immediately from `/session/end`. A custom renderer still supplies the filenames of media it actually displayed.
+
+`.3` also rejects lifecycle races that `.2` could allow. Wait for `initialize()` or `renewSession()` before starting voice, wait for an active chat turn before finalizing, end active voice before replacing the Convinced session, and call `renewSession()` before starting another conversation after a successful `endSession()`.
+
+If the `.2` WebMCP exporter produced provider schemas that ElevenLabs rejected, replace the two provider tools with the [published `.3` definitions](/examples/elevenlabs-webmcp-tools.json). The SDK still validates the full browser schema; the provider-facing export omits unsupported JSON Schema keywords.
+
+<Tip>
+  Supplied `managed-v2` integrations can continue to call `widget.endSession()`. The renderer already owns its transcript and media bookkeeping. The required code migration above applies to headless integrations that previously constructed voice directly.
+</Tip>
+
 ## Capability matrix
 
 Page tools below run through browser voice callbacks or explicit local SDK execution. The current hosted chat route does not implement SDK client-tool continuation; a shared registry does not enable chat-driven page actions there.
 
 | Capability | Managed iframe | SDK `managed-v2` preset | Headless SDK |
 | --- | --- | --- | --- |
-| ElevenLabs voice as primary path | Built in | Supply `ConvincedVoiceController`; preset renders voice, mute, push-to-talk, and transcript | Supply controller and render your own controls |
+| ElevenLabs voice as primary path | Built in | Use `client.createVoiceController()`; the preset renders voice, mute, push-to-talk, and transcript | Use `client.createVoiceController()` and render your own controls |
 | Chat fallback | Built in | Built in; recoverable audio-start failures retry as an ElevenLabs text-only conversation | `ConvincedClient.sendMessage()` |
 | Campaign and personalized-link attribution | Loader resolves it | `initialize()` / `browserSessionInput()` resolve the same precedence | Same client API |
 | Target-specific opener | Rendered and used for ElevenLabs | Rendered and passed automatically to voice | Field available; use `buildManagedVoiceStartContext()` |
@@ -87,7 +130,7 @@ WebMCP migration is optional: publish existing handlers, configure the two gener
     Initialize `ConvincedClient` from the same campaign URL and compare `session.personalization`, `config.pillsConfig`, recommended slides, and recommended videos with the managed session.
   </Step>
   <Step title="Create one shared tool registry">
-    Register only the page and application capabilities the current route needs. Pass the registry to both `ConvincedClient` and `ConvincedVoiceController`.
+    Register only the page and application capabilities the current route needs. Pass the registry to `ConvincedClient`; `client.createVoiceController()` inherits it unless you supply a voice-specific registry.
   </Step>
   <Step title="Confirm the voice context contract">
     The `managed-v2` preset automatically passes session, campaign, knowledge, page, identity, transcript, and ranked-media context. A headless renderer calls `buildManagedVoiceStartContext()` explicitly. Map exact page/application tool names and enable the generic extension gateway only when it exists on the agent.
@@ -129,7 +172,9 @@ Sites without a bundler can self-host the IIFE from the installed package:
   const SDK = window.ConvincedWidgetSDK
   const client = new SDK.ConvincedClient({ orgSlug: 'acme' })
 
-  // Construct voice after client.initialize(), then pass both into the mount.
+  // After client.initialize():
+  // const voice = client.createVoiceController({ descriptor })
+  // Then pass both client and voice into the mount.
 </script>
 ```
 
