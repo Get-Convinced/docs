@@ -1,7 +1,6 @@
 import {
   ClientToolRegistry,
   ConvincedClient,
-  ConvincedVoiceController,
   mountConvincedWidget,
   registerDomTools,
   type ClientToolDefinition,
@@ -23,14 +22,12 @@ export async function createWebsiteWidget(options: {
     tool.effect === 'read' || window.confirm(`Allow ${tool.description}?`)
   const client = new ConvincedClient({
     orgSlug: options.orgSlug,
-    widgetToken: options.widgetToken,
+    ...(options.widgetToken ? { widgetToken: options.widgetToken } : {}),
     tools,
     authorizeToolCall: authorize,
   })
   await client.initialize()
-  const voice = new ConvincedVoiceController({
-    orgSlug: client.orgSlug,
-    sessionId: () => client.state.session?.sessionId ?? null,
+  const voice = client.createVoiceController({
     tools,
     authorizeToolCall: authorize,
     descriptor: {
@@ -43,7 +40,6 @@ export async function createWebsiteWidget(options: {
       },
       genericClientTool: false,
     },
-    onConversationId: (id) => client.linkElevenLabsConversation(id),
   })
   const widget = mountConvincedWidget({
     client,
