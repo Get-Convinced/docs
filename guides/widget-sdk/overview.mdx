@@ -4,9 +4,9 @@ description: 'Add one Convinced conversation to any website and render it with y
 icon: 'layer-group'
 ---
 
-`@convinced/widget-sdk` 0.1.6 has a headless core. It manages a Convinced conversation, optional speech I/O, host tools, and session lifecycle without requiring React. Build every visual surface in your application, or opt into the package's `mountConvincedWidget()` convenience renderer.
+`@convinced/widget-sdk` 0.1.7 has a headless core. It manages a Convinced conversation, optional speech I/O, host tools, and session lifecycle without requiring React. Build every visual surface in your application, or opt into the package's `mountConvincedWidget()` convenience renderer.
 
-Version 0.1.6 addresses GPT Live append-size failures for grounded answers and page context. The SDK sends a concise spoken excerpt while keeping the full Luna answer in the client, and splits context updates into smaller ordered messages. See [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
+Version 0.1.7 lets the Convinced Luna agent carry a request through knowledge and browser tools while Live handles speech. Luna can supply a short spoken briefing alongside the full written answer. The SDK stops a superseded delegated turn before starting later browser actions. See [Optional Live voice](/guides/widget-sdk/voice).
 
 The only agent identifier exposed in browser configuration is `agentId`, the public ID of a Convinced `AgentDeployment`. Do not put an OpenAI key, a model-provider ID, or any other provider credential in browser code.
 
@@ -18,7 +18,7 @@ Text and speech share one Convinced session. `gpt-6-luna` handles typed input an
 - Optional `gpt-live-1` provides full-duplex speech and answers greetings and conversational clarifications directly.
 - Live delegates requests that need organization knowledge, page context, slides, or tools to `gpt-6-luna`.
 - Completed Live-native user/assistant pairs enter `client.state.messages`, so typed and delegated Luna requests share the available conversation history.
-- When voice is active, a typed turn still enters the same conversation and its answer is spoken.
+- When voice is active, a typed turn still enters the same conversation and its answer is spoken. A newly submitted typed turn supersedes an unfinished delegated voice turn.
 - Disabling or ending voice leaves chat active.
 - A chat-only integration never creates an OpenAI Live session.
 
@@ -48,7 +48,7 @@ const widget = mountConvincedWidget({ client, voice: live })
 
 The renderer is a convenience layer over the same headless APIs. Use a custom renderer when the host must own exact layout, theme, slide behavior, or form behavior.
 
-Use one `ClientToolRegistry` for chat and voice. The Convinced backend pauses a `gpt-6-luna` turn and returns the browser an opaque signed continuation. The SDK validates the requested call against the local registry and host policy, executes the handler, and returns the opaque continuation with the result. The backend verifies the signature and exact call binding before it resumes the turn. WebMCP tools use the same registry and policy.
+Use one `ClientToolRegistry` for chat and voice. The Convinced backend pauses a Luna turn before a browser tool, keeps the agent's run state on the server, and returns the browser an opaque signed continuation. The SDK validates the requested call against the local registry and host policy, executes the handler, and returns the result. The backend checks the signed call and one-use continuation before Luna resumes with that observation. WebMCP tools use the same registry and policy.
 
 ## Start here
 
@@ -56,5 +56,5 @@ Use one `ClientToolRegistry` for chat and voice. The Convinced backend pauses a 
   <Card title="Quickstart" icon="bolt" href="/guides/widget-sdk/quickstart">Create a chat-only conversation, then opt in to voice.</Card>
   <Card title="Custom UI" icon="palette" href="/guides/widget-sdk/custom-ui">Render state and content in your framework.</Card>
   <Card title="Voice" icon="microphone-lines" href="/guides/widget-sdk/voice">Understand Live delegation and channel behavior.</Card>
-  <Card title="SDK API map" icon="code" href="/guides/widget-sdk/api-reference">Find the public 0.1.6 surface.</Card>
+  <Card title="SDK API map" icon="code" href="/guides/widget-sdk/api-reference">Find the public 0.1.7 surface.</Card>
 </CardGroup>

@@ -1,6 +1,6 @@
 ---
 title: 'SDK API map'
-description: 'Public classes and methods in @convinced/widget-sdk 0.1.6.'
+description: 'Public classes and methods in @convinced/widget-sdk 0.1.7.'
 icon: 'code'
 ---
 
@@ -9,15 +9,15 @@ Import from `@convinced/widget-sdk`. The installed TypeScript declarations are t
 ## `ConvincedClient`
 
 ```ts
+import { ConvincedClient } from '@convinced/widget-sdk'
+
 const client = new ConvincedClient({
-  orgSlug,
-  agentId?,
-  tools?,
-  authorizeToolCall?,
+  orgSlug: 'acme',
+  agentId: 'adpl_public_example',
 })
 ```
 
-`agentId` is a public Convinced `AgentDeployment` ID. It is optional when the organization has one default live widget deployment.
+`agentId` is a public Convinced `AgentDeployment` ID. It is optional when the organization has one default live widget deployment. Pass the optional `tools` registry and `authorizeToolCall` callback when the host exposes browser actions; see the [quickstart](/guides/widget-sdk/quickstart).
 
 | Work | API |
 | --- | --- |
@@ -30,7 +30,7 @@ const client = new ConvincedClient({
 | Lifecycle | `renewSession()`, `endSession()`, `destroy()` |
 | Events | `on()`, `once()`, `off()` |
 
-`sendMessage()` is always the typed-input API. When Live is connected, a bounded excerpt of the canonical `gpt-6-luna` result is sent to Live for speech; the full result stays in the client. See [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
+`sendMessage()` is always the typed-input API. When Live is connected, a short Luna briefing is sent to Live for speech; the full result stays in the client. Submitting typed input during an unfinished delegated voice turn stops that turn before later browser actions. See [Optional Live voice](/guides/widget-sdk/voice).
 
 ## `ConvincedLiveController`
 
@@ -76,7 +76,12 @@ tools.register({
   effect: 'navigate',
   consent: 'per_call',
   timeoutMs: 5_000,
-  handler: async () => ({ ok: true }),
+  handler: async () => {
+    const section = document.querySelector('#pricing')
+    if (!section) return { status: 'not_found' }
+    section.scrollIntoView({ behavior: 'smooth' })
+    return { status: 'scroll_requested' }
+  },
 })
 ```
 

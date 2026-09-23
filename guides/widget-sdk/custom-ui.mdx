@@ -4,14 +4,14 @@ description: 'Render the headless SDK in any framework while keeping conversatio
 icon: 'palette'
 ---
 
-The 0.1.6 SDK core is headless. A headless host renders every visible surface and decides how those surfaces behave on desktop, mobile, and embedded pages. If a functional default is enough, use the optional `mountConvincedWidget({ client, voice: live })` renderer instead.
+The 0.1.7 SDK core is headless. A headless host renders every visible surface and decides how those surfaces behave on desktop, mobile, and embedded pages. If a functional default is enough, use the optional `mountConvincedWidget({ client, voice: live })` renderer instead.
 
 ## Render from state
 
 ```ts
 const unsubscribe = client.on('state', state => {
   renderMessages(state.messages)
-  setComposerDisabled(state.status === 'streaming' || state.status === 'paused')
+  renderTurnStatus(state.status)
 })
 
 form.addEventListener('submit', async event => {
@@ -24,6 +24,9 @@ form.addEventListener('submit', async event => {
 ```
 
 Use either full state snapshots or granular events for a given visual region. Mixing both for the same message list can duplicate content.
+Keep the composer available while a delegated voice task streams or waits for a browser tool. The visitor can type a correction; the SDK supersedes unfinished delegated work before its next browser action. For other concurrent typed turns, the SDK serializes requests.
+
+Treat suggested-question chips as shortcuts for the same `client.sendMessage()` path as the composer. A chip should add one user turn to the canonical conversation, not advance a separate page-defined agent journey. Keep actual UI commands, consent, and form validation in the host with observable results.
 
 ## Own presentation behavior
 

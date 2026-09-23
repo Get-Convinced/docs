@@ -1,13 +1,13 @@
 ---
 title: 'Build with a coding agent'
-description: 'Give a coding agent a precise 0.1.6 implementation brief.'
+description: 'Give a coding agent a precise 0.1.7 implementation brief.'
 icon: 'wand-magic-sparkles'
 ---
 
 Use this brief when an AI coding agent is implementing the website integration:
 
 ```text
-Install @convinced/widget-sdk@0.1.6.
+Install @convinced/widget-sdk@0.1.7.
 
 Build an integration for this website using the headless core. The host
 application owns layout, theme, responsive behavior, controls, slide
@@ -32,8 +32,12 @@ gpt-6-luna. Completed Live-native user/assistant pairs join client.state.message
 and provide context for both typed and delegated requests. Render shared history
 from state updates; native pairs do not emit duplicate client message events.
 Typed input while Live is connected stays in that chat
-and its answer is spoken. live.end() must leave chat active. A chat-only path
-must never start Live.
+and its answer is spoken. A typed request supersedes unfinished delegated work.
+Live should keep a task running through a backchannel or speech interruption;
+a clear correction can supersede it. Luna can use multiple knowledge and browser
+tools for one request. A short verified voice briefing may accompany the full
+written answer. live.end() must leave chat active. A chat-only path must never
+start Live.
 
 Use the same registry for typed and spoken turns. Preserve Convinced's opaque
 signed pause/execute/resume flow: the browser checks the local call and policy,
@@ -44,9 +48,11 @@ Render only text, slide, and video message content. Implement forms through
 host UI and registered tools. Use live.on() or live.subscribe(); Live does not
 have once() or off().
 
-For WebMCP, feature-detect with getWebMcpModelContext(). Use the documented
-createWebMcpBridge signature. When publishing, pass modelContext, execution, and
-authorize; await publisher.ready and retain every dispose() handle.
+Publish the client's registry to WebMCP with client.publishToolsToWebMcp();
+await publisher?.ready and dispose it on teardown. To consume tools registered
+by another same-origin component, feature-detect with getWebMcpModelContext(),
+then use the documented createWebMcpBridge({ modelContext, origin, authorize,
+argumentEncoding }) signature and dispose that bridge on teardown.
 
 Keep systemPrompt and firstMessage editing in ConvincedAgentAdmin on an
 authenticated same-origin Convinced admin surface or approved same-origin
@@ -55,8 +61,10 @@ management proxy. The API updates Convinced only.
 Update SPA page context, render sanitized structured content, and end the
 session explicitly. Add real-browser acceptance for chat-only, voice opt-in,
 a Live-native greeting and clarification followed by typed and delegated requests
-with that context, typed-during-voice, voice shutdown, tool success/denial, media,
-forms, long grounded answers, page context within the 8 KiB limit, and teardown.
+with that context, a spoken multi-step page-and-slide request, a backchannel,
+a clear correction, typed-during-voice, voice shutdown, tool success/denial,
+media, forms, long grounded answers, page context within the 8 KiB limit,
+and teardown.
 Verify completed native pairs in the default session-end
 transcript, without assuming every fragment or reload/reconnect recovery.
 ```

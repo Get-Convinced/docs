@@ -1,25 +1,25 @@
 ---
-title: 'SDK 0.1.6 client handoff'
+title: 'SDK 0.1.7 client handoff'
 description: 'What changed in the new SDK and the Convinced agent ID for Enmovil pages.'
 icon: 'clipboard-check'
 ---
 
-SDK 0.1.6 gives website teams a headless chat and voice client. The website owns its interface, slides, forms, and page actions. Convinced owns the prompt, knowledge, models, session, and provider credentials.
+SDK 0.1.7 gives website teams a headless chat and voice client. The website owns its interface, slides, forms, and page actions. Convinced owns the prompt, knowledge, models, session, and provider credentials.
 
-## What changed from 0.1.2 through 0.1.6
+## What changed from 0.1.2 through 0.1.7
 
 - 0.1.2 moved chat, knowledge, and tool decisions to one Convinced `gpt-6-luna` conversation. Optional `gpt-live-1` adds speech through WebRTC and client delegation; it uses no ElevenLabs credentials or agent IDs.
 - 0.1.3 fixed large slide catalogs: chat receives a compact list of all available slide filenames for generic selection, while rich slide metadata stays local for rendering.
 - 0.1.4 fixed rejection of a second signed tool batch in one turn and allowed Live to end while microphone permission was still pending.
 - 0.1.5 let Live answer greetings and conversational clarifications directly. Grounded organization, page, slide, and tool requests delegate to Luna. Completed Live-native user/assistant pairs join shared client history for typed and delegated follow-ups. Existing client and registry setup remains applicable.
-
 - 0.1.6 addresses GPT Live's observed 500-token per-append failures. Grounded speech uses a bounded excerpt; page context is split into smaller ordered updates. Full Luna answers remain in the client, and the context input limit remains 8 KiB. See [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
+- 0.1.7 lets Luna continue one request through knowledge and browser tools using a server-held agent run. It can return a short voice briefing separately from the full written answer. A new delegated correction or typed request stops unfinished delegated work before later browser actions. Voice ending during a tool continuation no longer changes that turn's signed voice mode.
 
 - Text and speech share one Convinced session. Typed input and grounded delegated work use `gpt-6-luna`; `gpt-live-1` handles conversational exchanges and full-duplex audio. Voice can stop while chat continues.
 - Completed Live-native pairs update `client.state.messages` and notify state subscribers without duplicate client `message` events. The default session-end transcript includes these pairs. Partial fragments and reload/reconnect recovery are not guaranteed; Live caption callbacks remain available.
 - The browser uses the public Convinced `agentId` to select a deployment. It receives no OpenAI key or provider agent ID.
 - One `ClientToolRegistry` powers slides, forms, page actions, and WebMCP for both input modes. `client.publishToolsToWebMcp()` exposes that registry to supporting browsers.
-- Browser tool calls pause and resume through a short-lived signed capability. Convinced checks the session and exact calls, and accepts each continuation once.
+- Browser tool calls pause through a short-lived signed capability. Convinced keeps the agent run state server-side, checks the session and exact calls, accepts each continuation once, and resumes Luna with the browser result.
 - An authenticated Convinced administrator can edit the deployment's saved `systemPrompt` and `firstMessage` with `ConvincedAgentAdmin`. The changes apply to future sessions.
 
 ## Enmovil ID for new pages
@@ -36,6 +36,6 @@ const client = new ConvincedClient({
 
 Use this ID when duplicating the Transformation page's prompt and behavior on another Enmovil page. A different prompt should have its own Convinced deployment and ID. The generic **Test Widget** ID is not the Transformation agent. Add each new website origin to the deployment's allowed domains before testing it.
 
-Pin `@convinced/widget-sdk@0.1.6`, build the host UI, and register only the slide, form, navigation, and WebMCP actions that the page can really perform. Confirm the matching Convinced Live configuration is deployed and begin a fresh Live session. Test chat only, voice opt-in, a direct Live greeting and clarification followed by both typed and delegated grounded requests with that context, completed native pairs in the session-end transcript, voice with slides, long grounded answers and page context, typed input during voice, multiple signed tool batches in a turn, ending Live while microphone permission is pending, tool approval and denial, and explicit session completion in the deployed page.
+Pin `@convinced/widget-sdk@0.1.7`, build the host UI, and register only the slide, form, navigation, and WebMCP actions that the page can really perform. Confirm the matching Convinced Live configuration is deployed and begin a fresh Live session. Test chat-only use, voice opt-in, a spoken page-and-slide walkthrough, a backchannel that leaves the task running, a clear mid-task correction that stops stale work, typed input during voice, multiple signed browser-tool rounds, tool denial and timeout, and explicit session completion. Confirm each claimed page or slide action against what is actually visible.
 
 Start with the [SDK overview](/guides/widget-sdk/overview), [quickstart](/guides/widget-sdk/quickstart), and [WebMCP guide](/guides/widget-sdk/webmcp). Use the [migration guide](/guides/widget-sdk/migration) for an earlier SDK integration and the [prompt guide](/guides/widget-sdk/agent-prompts) for administrator edits.

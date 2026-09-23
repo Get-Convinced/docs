@@ -12,7 +12,7 @@ WebMCP lets a website expose structured JavaScript tools to agents. The SDK maps
 
 ## Consume same-origin WebMCP tools
 
-Use `getWebMcpModelContext()` to detect `document.modelContext` and the legacy `navigator.modelContext` shape. `createWebMcpBridge()` requires the model context, the host-selected origin, an authorizer, and an explicit argument encoding.
+Use `getWebMcpModelContext()` to detect `document.modelContext` and the legacy `navigator.modelContext` shape. Pass the model context, host-selected origin, and authorizer to `createWebMcpBridge()`. Set the argument encoding explicitly for the browser you tested; the SDK defaults to JSON-string encoding when omitted.
 
 ```ts
 import {
@@ -78,7 +78,7 @@ Whether a tool was registered directly, adapted from MCP, or discovered through 
 4. `ClientToolRegistry` runs the registered `handler` once.
 5. The SDK returns the result and opaque continuation to Convinced.
 6. The backend verifies the signature, organization, session, turn, call IDs, tool names, arguments, expiry, and call count before resuming `gpt-6-luna`.
-7. If Live is connected, `gpt-live-1` receives a bounded speech excerpt of the verified answer. The full result remains in the client; see [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
+7. If Live is connected, `gpt-live-1` receives the backend's short verified voice briefing when available, or a bounded complete-sentence fallback. The full result remains in the client; see [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
 
 The browser does not verify the server signature itself. It treats the continuation as opaque and cannot mint, alter, or reuse it for another turn.
 
