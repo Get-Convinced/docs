@@ -1,20 +1,20 @@
 ---
-title: 'Migrate to 0.1.2'
-description: 'Move from provider-coupled voice to one GPT-6 Luna conversation with optional GPT-Live speech.'
+title: 'Migrate to 0.1.3'
+description: 'Move to the current SDK release and keep large slide catalogs out of chat requests.'
 icon: 'arrow-right-arrow-left'
 ---
 
-This guide covers migrations from the published 0.1.0 SDK and the 0.1.1 WebMCP previews. SDK 0.1.2 makes the Convinced `gpt-6-luna` conversation canonical. Optional `gpt-live-1` supplies full-duplex speech through client delegation. The browser no longer selects a speech-provider agent or receives a provider credential.
+This guide covers migrations from published SDK 0.1.0, the 0.1.1 WebMCP previews, and SDK 0.1.2. SDK 0.1.2 made the Convinced `gpt-6-luna` conversation canonical, with optional `gpt-live-1` speech through client delegation. SDK 0.1.3 keeps that API and fixes large media catalogs: only metadata for recommended slides is sent with chat, while the full catalog stays local for rendering. This prevents a large catalog from exceeding the backend's chat request limit.
 
-Pin the release and commit the lockfile:
+If you already use 0.1.2, this is a patch-level package update; no API or integration changes are required. Upgrade and commit the lockfile:
 
 ```bash
-npm install --save-exact @convinced/widget-sdk@0.1.2
+npm install --save-exact @convinced/widget-sdk@0.1.3
 ```
 
 ## API mapping
 
-| Earlier SDK | 0.1.2 | Migration action |
+| Earlier SDK | 0.1.3 | Migration action |
 | --- | --- | --- |
 | `new ConvincedClient({ orgSlug, ... })` | `new ConvincedClient({ orgSlug, agentId, ... })` | Add the public Convinced `AgentDeployment` ID. It is not a provider ID. |
 | `new ConvincedVoiceController(...)` | `client.createLiveController()` | Let the initialized client own its single Live controller. |
@@ -32,6 +32,10 @@ npm install --save-exact @convinced/widget-sdk@0.1.2
 | `WEBMCP_VOICE_BINDINGS` | `WEBMCP_TOOL_NAMES` | Update the exported constant when referenced. |
 | WebMCP shorthand calls | `client.publishToolsToWebMcp()` | Publish the shared registry with one call, await `ready`, and call `dispose()` on teardown. Use the lower-level bridge only to consume another component's tools. |
 | Prompt response `source: 'elevenlabs'`, branch/version/traffic fields | `source: 'convinced'`, `agentId`, prompt fields, revision | Remove provider branch UI. Persist only the Convinced live prompt version. |
+
+## Upgrade from 0.1.2
+
+The 0.1.2 client could include the full slide metadata catalog in a chat request. On catalogs larger than the request limit, chat failed before returning an answer. Version 0.1.3 sends recommended slide metadata as chat context and retains the complete catalog locally, so slides remain available to the host UI. Install 0.1.3, rebuild the website, and repeat a chat request that previously failed with a large slide catalog. No server configuration or tool registration change is needed.
 
 ## Migrate the runtime
 
@@ -92,7 +96,7 @@ Before switching, export the old provider prompt and opener for rollback records
 
 ## Migration checklist
 
-- [ ] Pin `@convinced/widget-sdk@0.1.2` and commit the lockfile.
+- [ ] Pin `@convinced/widget-sdk@0.1.3` and commit the lockfile.
 - [ ] Replace provider IDs and descriptors with the public Convinced `agentId`.
 - [ ] Remove browser provider keys, signed URLs, conversation tokens, and credential factories.
 - [ ] Create one `ConvincedLiveController` from the initialized client and reuse it across enable/disable cycles.
@@ -115,8 +119,8 @@ Prepare rollback before changing production traffic:
 
 1. Preserve the previous package version, lockfile, website build, provider configuration, and exported provider prompt as read-only rollback artifacts.
 2. Keep prompt migration separate from the website release. Record the Convinced revision and values before every admin edit.
-3. If speech fails, disable the voice control first. SDK 0.1.2 chat remains usable without Live.
-4. If the full website release must roll back, restore the previous package and integration together. Do not mix a 0.1.1 provider controller with a 0.1.2 session or registry.
+3. If speech fails, disable the voice control first. SDK 0.1.3 chat remains usable without Live.
+4. If the full website release must roll back, restore the previous package and integration together. Do not mix a 0.1.1 provider controller with a 0.1.3 session or registry.
 5. Restore provider-side prompt state only when the old runtime actually uses it. Do not overwrite the new Convinced prompt as part of an unrelated UI rollback.
 6. Start a fresh test session after rollback. Do not attempt to move active Live sessions or message history between runtimes.
 7. Repeat the old version's microphone, tool, prompt, and teardown acceptance checks before restoring traffic.
@@ -124,7 +128,7 @@ Prepare rollback before changing production traffic:
 ## Paste-ready coding-agent prompt
 
 ```text
-Migrate this website from an earlier @convinced/widget-sdk version to exactly 0.1.2.
+Migrate this website from an earlier @convinced/widget-sdk version to exactly 0.1.3.
 
 First inventory the current Convinced session owner, provider-specific voice
 controller, browser provider IDs or credentials, message stores, tool bindings,

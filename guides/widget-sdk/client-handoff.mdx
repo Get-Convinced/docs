@@ -1,12 +1,14 @@
 ---
-title: 'SDK 0.1.2 client handoff'
+title: 'SDK 0.1.3 client handoff'
 description: 'What changed in the new SDK and the Convinced agent ID for Enmovil pages.'
 icon: 'clipboard-check'
 ---
 
-SDK 0.1.2 gives website teams a headless chat and voice client. The website owns its interface, slides, forms, and page actions. Convinced owns the prompt, knowledge, models, session, and provider credentials.
+SDK 0.1.3 gives website teams a headless chat and voice client. The website owns its interface, slides, forms, and page actions. Convinced owns the prompt, knowledge, models, session, and provider credentials.
 
-## What changed in 0.1.2
+## What changed in 0.1.3
+
+- Large slide catalogs no longer make chat requests exceed the request-size limit. The SDK sends recommended slide metadata as context and keeps the full catalog locally for rendering.
 
 - Text and spoken turns share one `gpt-6-luna` conversation and its knowledge and tool decisions. Optional `gpt-live-1` adds full-duplex speech through WebRTC and client delegation; voice can stop while chat continues.
 - The browser uses the public Convinced `agentId` to select a deployment. It receives no OpenAI key or provider agent ID.
@@ -28,6 +30,6 @@ const client = new ConvincedClient({
 
 Use this ID when duplicating the Transformation page's prompt and behavior on another Enmovil page. A different prompt should have its own Convinced deployment and ID. The generic **Test Widget** ID is not the Transformation agent. Add each new website origin to the deployment's allowed domains before testing it.
 
-Pin `@convinced/widget-sdk@0.1.2`, build the host UI, and register only the slide, form, navigation, and WebMCP actions that the page can really perform. Test chat only, voice opt-in, voice with slides, typed input during voice, tool approval and denial, and explicit session completion in the deployed page.
+Pin `@convinced/widget-sdk@0.1.3`, build the host UI, and register only the slide, form, navigation, and WebMCP actions that the page can really perform. Test chat only, voice opt-in, voice with slides, typed input during voice, tool approval and denial, and explicit session completion in the deployed page.
 
 Start with the [SDK overview](/guides/widget-sdk/overview), [quickstart](/guides/widget-sdk/quickstart), and [WebMCP guide](/guides/widget-sdk/webmcp). Use the [migration guide](/guides/widget-sdk/migration) for an earlier SDK integration and the [prompt guide](/guides/widget-sdk/agent-prompts) for administrator edits.

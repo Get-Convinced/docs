@@ -55,7 +55,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). Run `mint dev` locally before opening 
 
 Share [SDK overview](https://convinced.mintlify.app/guides/widget-sdk/overview). The SDK tab groups setup, voice and actions, interface and sessions, administration and operations, and reference. The implementation checklist is a launch reference, not the first page.
 
-The guides target published npm `0.1.2`. The headless client owns one `gpt-6-luna` conversation, and optional `gpt-live-1` adds speech through client delegation. Prompt endpoints require an authenticated organization ADMIN session or an authenticated same-origin management proxy; Campaign partner keys are a separate credential.
+The guides target published npm `0.1.3`. The headless client owns one `gpt-6-luna` conversation, and optional `gpt-live-1` adds speech through client delegation. Prompt endpoints require an authenticated organization ADMIN session or an authenticated same-origin management proxy; Campaign partner keys are a separate credential.
 
 Downloadable examples in `examples/` contain the complete quickstart module, editor, WebMCP agent prompt, and reviewed implementation instructions. Validate these against the pinned published SDK when changing examples. Do not include private backend source or credentials in public documentation.
 
