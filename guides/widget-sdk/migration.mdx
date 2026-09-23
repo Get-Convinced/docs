@@ -1,10 +1,10 @@
 ---
 title: 'Migrate to 0.1.3'
-description: 'Move to the current SDK release and keep large slide catalogs out of chat requests.'
+description: 'Move to the current SDK release and keep rich slide metadata out of chat requests.'
 icon: 'arrow-right-arrow-left'
 ---
 
-This guide covers migrations from published SDK 0.1.0, the 0.1.1 WebMCP previews, and SDK 0.1.2. SDK 0.1.2 made the Convinced `gpt-6-luna` conversation canonical, with optional `gpt-live-1` speech through client delegation. SDK 0.1.3 keeps that API and fixes large media catalogs: only metadata for recommended slides is sent with chat, while the full catalog stays local for rendering. This prevents a large catalog from exceeding the backend's chat request limit.
+This guide covers migrations from published SDK 0.1.0, the 0.1.1 WebMCP previews, and SDK 0.1.2. SDK 0.1.2 made the Convinced `gpt-6-luna` conversation canonical, with optional `gpt-live-1` speech through client delegation. SDK 0.1.3 keeps that API and fixes large media catalogs: it sends a compact list of all available slide filenames for generic selection, while keeping rich slide metadata local for rendering. This prevents a large metadata catalog from exceeding the backend's chat request limit.
 
 If you already use 0.1.2, this is a patch-level package update; no API or integration changes are required. Upgrade and commit the lockfile:
 
@@ -35,7 +35,7 @@ npm install --save-exact @convinced/widget-sdk@0.1.3
 
 ## Upgrade from 0.1.2
 
-The 0.1.2 client could include the full slide metadata catalog in a chat request. On catalogs larger than the request limit, chat failed before returning an answer. Version 0.1.3 sends recommended slide metadata as chat context and retains the complete catalog locally, so slides remain available to the host UI. Install 0.1.3, rebuild the website, and repeat a chat request that previously failed with a large slide catalog. No server configuration or tool registration change is needed.
+The 0.1.2 client could include the full slide metadata catalog in a chat request. On catalogs larger than the request limit, chat failed before returning an answer. Version 0.1.3 sends a compact catalog of all available slide filenames with chat context, preserving generic slide selection, and retains the full metadata locally for rendering. Install 0.1.3, rebuild the website, and repeat a chat request that previously failed with a large slide catalog. No server configuration or tool registration change is needed.
 
 ## Migrate the runtime
 

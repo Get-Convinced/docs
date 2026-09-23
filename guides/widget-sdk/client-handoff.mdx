@@ -8,7 +8,7 @@ SDK 0.1.3 gives website teams a headless chat and voice client. The website owns
 
 ## What changed in 0.1.3
 
-- Large slide catalogs no longer make chat requests exceed the request-size limit. The SDK sends recommended slide metadata as context and keeps the full catalog locally for rendering.
+- Large slide catalogs no longer make chat requests exceed the request-size limit. The SDK sends a compact list of all available slide filenames for generic selection and keeps rich slide metadata locally for rendering.
 
 - Text and spoken turns share one `gpt-6-luna` conversation and its knowledge and tool decisions. Optional `gpt-live-1` adds full-duplex speech through WebRTC and client delegation; voice can stop while chat continues.
 - The browser uses the public Convinced `agentId` to select a deployment. It receives no OpenAI key or provider agent ID.
