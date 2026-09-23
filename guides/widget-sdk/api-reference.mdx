@@ -1,6 +1,6 @@
 ---
 title: 'SDK API map'
-description: 'Public classes and methods in @convinced/widget-sdk 0.1.5.'
+description: 'Public classes and methods in @convinced/widget-sdk 0.1.6.'
 icon: 'code'
 ---
 
@@ -30,7 +30,7 @@ const client = new ConvincedClient({
 | Lifecycle | `renewSession()`, `endSession()`, `destroy()` |
 | Events | `on()`, `once()`, `off()` |
 
-`sendMessage()` is always the typed-input API. When Live is connected, the same canonical `gpt-6-luna` result is also sent to Live for speech.
+`sendMessage()` is always the typed-input API. When Live is connected, a bounded excerpt of the canonical `gpt-6-luna` result is sent to Live for speech; the full result stays in the client. See [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
 
 ## `ConvincedLiveController`
 

@@ -47,7 +47,7 @@ Live's `onMessage`, `message`, and `message_delta` events still provide captions
 await client.sendMessage(input.value)
 ```
 
-This remains the only typed-input path. If Live is connected, the SDK sends the canonical `gpt-6-luna` answer to Live for speech.
+This remains the only typed-input path. If Live is connected, the SDK sends a bounded excerpt of the canonical `gpt-6-luna` answer to Live for speech. The full client message is unchanged; see [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
 
 ## Teardown
 

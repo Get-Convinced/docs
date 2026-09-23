@@ -4,7 +4,7 @@ description: 'Let Live handle conversation naturally and delegate grounded knowl
 icon: 'microphone-lines'
 ---
 
-SDK 0.1.5 adds optional full-duplex voice through OpenAI `gpt-live-1` and WebRTC. Live handles greetings and conversational clarifications directly. It delegates requests that need grounded organization knowledge, page context, slides, or tools to `gpt-6-luna` in the existing Convinced session.
+SDK 0.1.6 adds optional full-duplex voice through OpenAI `gpt-live-1` and WebRTC. Live handles greetings and conversational clarifications directly. It delegates requests that need grounded organization knowledge, page context, slides, or tools to `gpt-6-luna` in the existing Convinced session.
 
 ## Channel contract
 
@@ -14,7 +14,7 @@ SDK 0.1.5 adds optional full-duplex voice through OpenAI `gpt-live-1` and WebRTC
 | Start voice | Adds a Live WebRTC session to the existing conversation |
 | Greet or clarify conversationally | Live responds directly without a Luna round trip |
 | Ask about the organization, page, slides, or a tool action | Live delegates the request to `gpt-6-luna`, including recent Live-native context |
-| Type while voice is active | `gpt-6-luna` answers in the same conversation; Live speaks the answer |
+| Type while voice is active | `gpt-6-luna` answers in the same conversation; Live receives a bounded excerpt for speech |
 | End or disable voice | Closes audio; chat stays active |
 | End the SDK session | Ends the canonical conversation and any active Live transport |
 
@@ -51,9 +51,19 @@ live.sendContextualUpdate(
 
 Context updates are untrusted observations. They do not replace the saved Convinced prompt or grant tool permissions.
 
+## Live payload limits
+
+SDK 0.1.6 addresses the observed GPT Live rejection when an individual append exceeded 500 tokens. The SDK applies a conservative 450-byte UTF-8 content cap to each commentary or thinking append.
+
+For a grounded Luna answer, the SDK removes media directives and Markdown link destinations from the speech input, then bounds it to a short excerpt. A long answer retains its beginning and end with a middle-omission marker. The full Luna answer and structured content remain available through the client; the spoken rendering may omit details. The SDK does not split the answer into repeated spoken replies.
+
+Page/context updates keep the existing 8 KiB input limit. `live.sendContextualUpdate()` splits accepted context into ordered thinking appends of at most 450 UTF-8 bytes each, including any context-ID prefix in the first append. Inputs above 8 KiB are rejected.
+
+Keep page context concise and factual. After upgrading, verify a long grounded answer and a long page update on your deployed page. Continue handling Live connection and provider errors through the normal error events.
+
 ## Delegation and tools
 
-Live delegates when the request needs grounded organization knowledge, page context, slides, or tools. A greeting or conversational clarification can stay in Live. If `gpt-6-luna` requests a browser tool, Convinced pauses that turn and returns an opaque signed continuation. The SDK runs the local registry checks and handler, while the backend verifies the signature and exact call binding before resuming `gpt-6-luna`. Live speaks the verified final answer.
+Live delegates when the request needs grounded organization knowledge, page context, slides, or tools. A greeting or conversational clarification can stay in Live. If `gpt-6-luna` requests a browser tool, Convinced pauses that turn and returns an opaque signed continuation. The SDK runs the local registry checks and handler, while the backend verifies the signature and exact call binding before resuming `gpt-6-luna`. Live receives a bounded excerpt of the verified answer for speech; the full answer remains in the client.
 
 This keeps tool authorization, form handling, page actions, slides, and knowledge consistent across input modes.
 
@@ -65,7 +75,7 @@ Completed Live-native user/assistant pairs are added to `client.state.messages` 
 
 By default, `client.endSession()` includes the completed pairs in its `/session/end` payload. This covers completed exchanges, not every partial transcript fragment. It does not promise restoration across page reloads or Live reconnections. See [Conversation sessions](/guides/widget-sdk/sessions#persisted-history).
 
-The behavior requires the matching Convinced Live configuration as well as SDK 0.1.5. Start a fresh Live session after the release. Test a greeting and clarification followed by both a typed question and a spoken grounded request on your deployed page.
+The behavior requires the matching Convinced Live configuration as well as SDK 0.1.6. Start a fresh Live session after the release. Test a greeting and clarification followed by both a typed question and a spoken grounded request on your deployed page.
 
 ## Render voice state
 

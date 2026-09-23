@@ -1,6 +1,6 @@
-Build a Convinced Widget SDK 0.1.5 integration for this website.
+Build a Convinced Widget SDK 0.1.6 integration for this website.
 
-Install and pin @convinced/widget-sdk@0.1.5 and commit the lockfile. Use the existing application framework. Do not depend on private Convinced repositories or invent credentials, deployment IDs, routes, or product settings.
+Install and pin @convinced/widget-sdk@0.1.6 and commit the lockfile. Use the existing application framework. Do not depend on private Convinced repositories or invent credentials, deployment IDs, routes, or product settings.
 
 Create one ClientToolRegistry and one ConvincedClient({ orgSlug, agentId, tools, authorizeToolCall }). agentId is the public Convinced AgentDeployment ID. Keep every OpenAI key, provider identifier, management credential, and server secret out of browser code.
 
@@ -18,6 +18,6 @@ Persistent systemPrompt and firstMessage edits belong in ConvincedAgentAdmin on 
 
 Keep one client owner across SPA route changes, update page context, unregister stale route tools, and end the session from a reliable awaited application action. Do not rely on beforeunload.
 
-Run typecheck, unit tests, and real-browser acceptance. Prove chat-only, voice opt-in, direct Live greetings and clarification, typed and delegated grounded follow-ups that receive the completed native context, completed pairs in the default session-end transcript, interruption, typed input during voice, voice-off chat, tool success and denial, WebMCP fallback, route continuity, slides, host forms, prompt conflict, and explicit session completion. Inspect browser source, requests, storage, and logs for secrets or provider identifiers.
+Run typecheck, unit tests, and real-browser acceptance. Prove chat-only, voice opt-in, direct Live greetings and clarification, typed and delegated grounded follow-ups that receive the completed native context, completed pairs in the default session-end transcript, interruption, typed input during voice, long grounded answers, page context within the 8 KiB input limit, voice-off chat, tool success and denial, WebMCP fallback, route continuity, slides, host forms, prompt conflict, and explicit session completion. Inspect browser source, requests, storage, and logs for secrets or provider identifiers.
 
 Report exact changed files, commands, results, and anything blocked. Open a reviewable pull request for the website team.
