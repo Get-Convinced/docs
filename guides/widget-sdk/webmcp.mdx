@@ -54,7 +54,7 @@ webmcp?.dispose()
 
 `client.publishToolsToWebMcp()` publishes the client's existing registry, session context, and authorization policy without duplicating handlers. It returns an object with `ready` and `dispose`, or `null` when WebMCP is unavailable.
 
-Initialize the SDK client before publishing tools or invoking consent-gated host actions. Session-scoped consent requires an active SDK session; without one, the host must deny the action. Keep the normal consent prompt visible to the visitor when a tool requires approval.
+You can publish the registry before initializing the SDK client. Initialize the client before invoking consent-gated host actions: session-scoped consent requires an active SDK session, so deny those actions until a session is active. Keep the normal consent prompt visible to the visitor when a tool requires approval.
 
 ```ts
 const published = client.publishToolsToWebMcp()
