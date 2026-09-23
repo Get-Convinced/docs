@@ -1,99 +1,127 @@
 ---
-title: 'SDK quickstart'
-description: 'Mount a voice and chat widget on your website using the published JavaScript SDK.'
-icon: 'microphone-lines'
+title: 'Widget SDK quickstart'
+description: 'Start a headless Convinced chat on any website and optionally add speech.'
+icon: 'bolt'
 ---
 
-This example adds the supplied `managed-v2` interface to an existing browser application. It creates a Convinced session, connects a public ElevenLabs agent when the visitor starts voice, and exposes page context, scrolling and highlighting. Campaign attribution is optional.
+## 1. Install 0.1.4
 
-<Note>
-  This quickstart uses the supplied `managed-v2` widget. If your application needs to own the interface, use [Custom UI and headless](/guides/widget-sdk/custom-ui#when-to-use-headless).
-</Note>
-
-## 1. Install
-
-Use Node.js 22.14 or newer. From your application's package directory:
-
-```bash
-npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.3
+<CodeGroup>
+```bash npm
+npm install @convinced/widget-sdk@0.1.4
 ```
 
-Commit the lockfile. Load the code below through your application's bundler on the client, after the DOM exists. For a script-tag integration, see [browser bundle](/guides/widget-sdk/migration).
+```bash pnpm
+pnpm add @convinced/widget-sdk@0.1.4
+```
 
-## 2. Configure your organization and agent
+```bash bun
+bun add @convinced/widget-sdk@0.1.4
+```
+</CodeGroup>
 
-You need your provisioned Convinced `orgSlug`, the website's allowed origin and a public ElevenLabs `agentId`. Supply `widgetToken` if your deployment requires it. Use HTTPS or localhost for microphone access.
+The package is framework-neutral ESM with TypeScript declarations. Its core is headless; `mountConvincedWidget()` is an optional managed renderer.
 
-Download the [ElevenLabs managed tool definitions](/examples/elevenlabs-managed-tools.json). Each entry contains a `tool_config` with the exact name, description, input schema and response setting. Configure matching client tools in the ElevenLabs dashboard or through its [Tools API](https://elevenlabs.io/docs/api-reference/tools/create), then attach their tool IDs to your agent.
-
-For this quickstart, attach these **nine** client tools:
-
-| Tools | Supplied by |
-| --- | --- |
-| `show_slide`, `show_youtube_embed` | Managed renderer; content must exist in the session's allowed catalog |
-| `set_visitor_field`, `request_email_capture`, `confirm_visitor_form` | Managed identity interface; submission needs host authorization |
-| `show_book_demo_cta` | Managed renderer using deployment settings |
-| `host_get_page_context`, `host_scroll_to`, `host_highlight` | This example's DOM tool registry |
-
-The download also includes optional `host_navigate` and `host_extension_call`. This quickstart does not activate them. Add them only with matching handlers and bindings. Use **Wait for response** so the model can inspect each result before claiming success.
-
-Enable the agent's first-message conversation override. The managed widget supplies its selected greeting, including configured, campaign and return-visitor greetings, as a voice-start override. A saved opener and a session override have different scopes; see [prompts and first message](/guides/widget-sdk/agent-prompts).
-
-<Note>
-  This example uses a public agent. For private agents, implement a server-issued descriptor as described in [ElevenLabs voice](/guides/widget-sdk/voice). The published `client.getVoiceCredential()` helper targets an undeployed hosted endpoint and returns `404`.
-</Note>
-
-## 3. Add the browser module
-
-Save the [complete typed module](https://raw.githubusercontent.com/Get-Convinced/docs/a9fbea271fd9f4dbba4387cc57712f56c3e3cb9e/examples/sdk-quickstart.ts) as `sdk-quickstart.ts` in your application. It defines the registry, permissions, session-owned voice controller, managed widget and cleanup in one function.
-
-Call it from your browser entry point:
+## 2. Create one tool registry
 
 ```ts
-import { createWebsiteWidget } from './sdk-quickstart'
+import {
+  ClientToolRegistry,
+  ConvincedClient,
+} from '@convinced/widget-sdk'
 
-async function main() {
-  const integration = await createWebsiteWidget({
-    orgSlug: 'YOUR_ORG_SLUG',
-    publicAgentId: 'YOUR_PUBLIC_ELEVENLABS_AGENT_ID',
-    // widgetToken: 'YOUR_PUBLIC_WIDGET_TOKEN', // If required
-  })
+const tools = new ClientToolRegistry()
 
-  // Keep this owner for the lifetime of your application.
-  // Call await integration.dispose() when the application deliberately ends it.
-  return integration
-}
-
-main().catch((error) => {
-  console.error('Widget initialization failed', error)
-  const message = document.createElement('p')
-  message.textContent = 'The assistant could not start. Please try again later.'
-  document.body.append(message)
+tools.register({
+  version: 1,
+  name: 'host_open_pricing',
+  description: 'Open the pricing section on the current website.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  locality: 'host',
+  effect: 'navigate',
+  consent: 'per_call',
+  timeoutMs: 5_000,
+  handler: async () => {
+    document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
+    return { ok: true }
+  },
 })
 ```
 
-Replace both placeholders before running. The SDK defaults to `https://app.getconvinced.ai`; this example does not require a campaign token, private application checkout, or browser-side ElevenLabs API key.
+The registry is the sole browser execution boundary for chat, voice, forms, slides, page actions, and WebMCP.
 
-The module passes authorization to both chat and voice and separately approves DOM mutations. Its confirmation dialogs are a minimal example; replace them with your application's policy and consent UI. Browser-side authorization does not replace server access checks.
+## 3. Initialize chat
 
-## 4. Run and verify
+```ts
+const client = new ConvincedClient({
+  orgSlug: 'acme',
+  agentId: 'adpl_public_example',
+  tools,
+  authorizeToolCall: async ({ tool }) => {
+    if (tool.effect === 'read') return true
+    return window.confirm(`Allow ${tool.description}?`)
+  },
+})
 
-Start your application's development server. Expect a **Talk to us** launcher with the managed voice and chat interface.
+await client.initialize()
 
-1. Open it and confirm configuration and session initialization succeed.
-2. Press the voice control and grant microphone access. Deployment settings may require an identity step or chat warmup first.
-3. Confirm the intended agent speaks. Ask it to describe the page, then highlight a visible heading. Approve the action and verify the page changed.
-4. Deny an action and confirm the agent reports the denial.
-5. Try chat and confirm a text reply. The hosted chat route does not implement the complete client-tool continuation protocol; this does not prove chat-driven page actions.
-6. End the session and verify the request succeeds. Check stored history separately if that is part of your launch requirements.
+client.on('state', state => renderConversation(state))
+client.on('content', event => renderContent(event.content))
 
-The widget registers managed voice callbacks when `widget.startVoice()` or its voice control starts the conversation. Calling `voice.start()` directly does not install the renderer's managed callbacks.
+await client.sendMessage('How can you help me?')
+```
 
-## 5. Extend the integration
+`agentId` is public configuration. It selects a live Convinced `AgentDeployment`; it is not a secret and does not grant administrative access. Omit it when the organization has one default live widget deployment.
 
-- **More pages:** Keep one owner mounted and update route context. Add navigation through your router using [host tools](/guides/widget-sdk/host-tools).
-- **Dynamic website tools:** Follow [WebMCP](/guides/widget-sdk/webmcp) for two discovery/execution callbacks. A headless WebMCP agent and the managed renderer use different callback sets.
-- **Your own interface:** Reuse the clients with [custom UI](/guides/widget-sdk/custom-ui).
-- **Saved instructions and opener:** Build an authenticated [agent editor](/guides/widget-sdk/agent-prompts).
+<Note>
+  Stop here for chat-only. No microphone is requested and no Live session is created.
+</Note>
 
-Use the [implementation checklist](/guides/widget-sdk/client-handoff) to verify your website and real voice flow before launch.
+## 4. Add optional voice
+
+```ts
+const live = client.createLiveController()
+
+live.on('state', state => renderVoiceState(state))
+
+talkButton.addEventListener('click', () => live.start())
+stopTalkingButton.addEventListener('click', () => live.end())
+```
+
+Call `start()` only after a visitor action. The SDK asks the Convinced backend to create a short-lived `gpt-live-1` WebRTC session. The browser never receives an OpenAI API key. Spoken turns are delegated to `client`'s existing `gpt-6-luna` conversation.
+
+Continue using `client.sendMessage()` for typed input while voice is active. The response is appended to the same history and spoken through the active Live session. `live.end()` stops audio without ending chat.
+
+## 5. End the conversation
+
+```ts
+await live?.end()
+await client.endSession()
+client.destroy()
+```
+
+Use an explicit close or completed-conversation action that can await the request. Do not depend on `beforeunload` for durable session completion.
+
+## Optional: mount the managed renderer
+
+Skip this section when your application renders the conversation itself.
+
+```ts
+import { mountConvincedWidget } from '@convinced/widget-sdk'
+
+const widget = mountConvincedWidget({
+  client,
+  voice: live,
+  preset: 'managed-v2',
+  placement: 'floating',
+})
+```
+
+The managed renderer uses the same client, Live controller, messages, media, and registry. A headless integration remains the right choice when the website must own exact layout, theme, slide behavior, or form behavior.
+
+<CardGroup cols={2}>
+  <Card title="Custom UI" icon="palette" href="/guides/widget-sdk/custom-ui">Render messages, media, forms, and voice controls.</Card>
+  <Card title="Sessions" icon="messages" href="/guides/widget-sdk/sessions">Keep one conversation across channel and route changes.</Card>
+  <Card title="Host tools" icon="screwdriver-wrench" href="/guides/widget-sdk/host-tools">Register safe browser capabilities.</Card>
+  <Card title="Security" icon="shield" href="/guides/widget-sdk/security">Review the browser and backend trust boundary.</Card>
+</CardGroup>

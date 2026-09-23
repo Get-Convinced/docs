@@ -12,9 +12,9 @@ For a website integration, share the [SDK overview](/guides/widget-sdk/overview)
 | Campaign API | `https://convinced-kb-mcp-production.up.railway.app` | Partner key on your backend |
 | Knowledge REST API, `POST /api/tool` | The same public Knowledge service origin | Partner key on your backend |
 | Browser widget runtime | `https://app.getconvinced.ai` | Public widget configuration and the deployed runtime's session flow |
-| SDK agent prompt management | `https://app.getconvinced.ai` | Authenticated Convinced organization ADMIN session |
+| SDK agent prompt management | `https://app.getconvinced.ai`, or an approved same-origin management proxy | Authenticated Convinced organization ADMIN access |
 
-Partner keys do not authorize prompt administration. A public website cannot become an administrator by setting an agent ID or forwarding a visitor's local application login. See [prompt editor setup](/guides/widget-sdk/agent-prompts) for supported administration and integration limits.
+Partner keys do not authorize prompt administration. A public website cannot become an administrator by setting an agent ID or forwarding a visitor's local application login. A customer-origin proxy must authenticate and authorize an administrator server-side and expose only the bounded management path. See [prompt editor setup](/guides/widget-sdk/agent-prompts) for the supported arrangements.
 
 ## Campaign base URL
 

@@ -1,96 +1,57 @@
 ---
-title: 'SDK overview'
-description: 'Add a conversation agent to your website, choose its interface, and expose the actions it can perform.'
+title: 'Widget SDK overview'
+description: 'Add one Convinced conversation to any website and render it with your own UI.'
 icon: 'layer-group'
 ---
 
-The Convinced Widget SDK is a JavaScript package for adding voice, chat and permitted page actions to your website. Use the supplied widget or build your own interface. It works without React and can be integrated into an existing application.
+`@convinced/widget-sdk` 0.1.4 has a headless core. It manages a Convinced conversation, optional speech I/O, host tools, and session lifecycle without requiring React. Build every visual surface in your application, or opt into the package's `mountConvincedWidget()` convenience renderer.
 
-**Start here when adding the SDK to a new website.** You supply the website's content, routes and useful actions. Adding a new page does not require a new SDK build.
+The only agent identifier exposed in browser configuration is `agentId`, the public ID of a Convinced `AgentDeployment`. Do not put an OpenAI key, a model-provider ID, or any other provider credential in browser code.
 
-## Choose an integration
+## One conversation, two inputs
 
-| Your goal | Integration | Next step |
-| --- | --- | --- |
-| Add a ready-made interface inside your page | `mountConvincedWidget()` with the `managed-v2` preset | [SDK quickstart](/guides/widget-sdk/quickstart) |
-| Own the entire interface | `ConvincedClient` and `client.createVoiceController()` | [Custom UI](/guides/widget-sdk/custom-ui) |
-| Embed the existing hosted widget | Hosted iframe loader | [Managed iframe](/guides/widget-sdk/managed-iframe) |
-| Let the agent use your website's actions | Explicit registry tools, or experimental WebMCP discovery | [Website tools](/guides/widget-sdk/host-tools) · [WebMCP](/guides/widget-sdk/webmcp) |
-| Let administrators change saved instructions and the opener | `ConvincedAgentAdmin` in an authenticated management interface | [Prompts and first message](/guides/widget-sdk/agent-prompts) |
+Text and speech use one canonical Convinced conversation backed by `gpt-6-luna`.
 
-The quickstart uses the supplied `managed-v2` interface. Choose [headless integration](/guides/widget-sdk/custom-ui#when-to-use-headless) when your application owns the interface. Both use the same SDK voice and tool APIs.
+- `client.sendMessage()` sends typed input directly to the `gpt-6-luna` conversation.
+- Optional `gpt-live-1` provides full-duplex microphone input and speech output.
+- Every spoken visitor turn is delegated to the same `gpt-6-luna` conversation.
+- When voice is active, a typed turn still enters the same conversation and its answer is spoken.
+- Disabling or ending voice leaves chat active.
+- A chat-only integration never creates an OpenAI Live session.
 
-The hosted iframe and the JavaScript SDK are separate integrations. The published iframe loader does not expose the SDK's host-tool registration or WebMCP bridge. Choose the JavaScript SDK when your agent needs to act on the parent page.
-
-## Before you start
-
-- Get your Convinced organization slug and widget configuration from your Convinced administrator. Configure the website's allowed origin and supply a widget token if required.
-- For voice, get the intended ElevenLabs agent ID and configure its matching client tools. A public agent can connect by ID; a private agent needs a server-issued conversation credential.
-- Run the visitor page over HTTPS, or localhost during development, for microphone access. Start voice from a visitor's button press.
-- For npm, use Node.js 22.14 or newer and your application's JavaScript bundler. A standalone browser bundle is also included.
-
-Campaigns are optional. An ordinary page can create a session without a campaign link. See [campaign sessions](/guides/widget-sdk/campaigns) for personalized campaign experiences.
-
-<Note>
-Version `.3` adds session-owned headless voice, typed-input capture and retryable finalization. The companion backend is deployed. See [session ownership and migration](/guides/widget-sdk/events#session-owned-headless-voice).
-</Note>
-
-## Install
-
-These guides target the published prerelease **`0.1.1-webmcp.3`**:
-
-```bash
-npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.3
-```
-
-Commit your lockfile. This version is under npm's `next` tag; the unversioned install selects `latest`, which remains `0.1.0` and lacks WebMCP and saved prompt administration. The [tagged source](https://github.com/Get-Convinced/convinced-widget-sdk/tree/v0.1.1-webmcp.3) matches these guides.
-
-## How the pieces connect
+Convinced's backend owns OpenAI credentials, model selection, prompts, knowledge, and the delegation bridge.
 
 ```mermaid
-flowchart TB
-  Visitor --> UI[Your website interface]
-  UI --> SDK[Convinced browser SDK]
-  SDK --> Runtime[Convinced session and chat API]
-  SDK --> Voice[ElevenLabs conversation]
-  Voice --> Tools[Registered tools or WebMCP bridge]
-  Tools --> Page[Your authorized page actions]
-  Admin[Customer administrator] --> Management[Authenticated management API]
-  Management --> Agent[Saved ElevenLabs agent settings]
+flowchart LR
+  UI[Host website UI] --> SDK[Widget SDK]
+  SDK --> Chat[Canonical GPT-6 Luna conversation]
+  SDK -. optional audio .-> Live[gpt-live-1]
+  Live -->|client delegation| Chat
+  Chat --> Tools[Signed tool continuation]
+  Tools --> Registry[Shared ClientToolRegistry]
+  Registry --> UI
 ```
 
-The website owns its page actions and access checks. Convinced owns its hosted session service. ElevenLabs runs the voice conversation. Saved prompt editing uses a separate authenticated management API; visitor credentials do not grant administration access.
+## What the host owns
 
-## Current availability
+In a headless integration, the host website decides how to present SDK state. It can render a floating panel, an inline guide, a full-page experience, or no persistent surface at all. The same applies to slide placement, transitions, consent UI, form fields, and error states.
 
-Applies to SDK `0.1.1-webmcp.3` and the hosted session finalization verified on September 21, 2026. SDK exports and deployed backend features are listed separately.
+The optional managed renderer supplies a functional Shadow DOM interface, voice and chat controls, identity UI, and deployment-driven presentation. Pass the same client and Live controller to it:
 
-| Capability | Current status |
-| --- | --- |
-| Hosted widget configuration, session initialization and session end | Verified against the deployed Convinced backend |
-| Session-owned headless voice and typed input | `client.createVoiceController()` captures turns; `client.endSession()` saves them through the Convinced session |
-| Public ElevenLabs connection, managed UI and explicit voice tools | Implemented in the SDK; configure the agent and test your real voice flow |
-| Saved system prompt and first message | Management API deployed; requires Convinced organization ADMIN authentication and a registered agent owner |
-| WebMCP discovery and execution | Experimental; native browser transport tested, real voice task acceptance still required |
-| `client.getVoiceCredential()` for private voice | **Unavailable on the hosted backend**; its endpoint returned `404`. Use your own authenticated credential service as described in [voice](/guides/widget-sdk/voice) |
-| Signed session capabilities and chat tool continuation | SDK protocol support exists; the hosted routes do not provide the complete protocol. Do not depend on these server guarantees |
-| Host tools through the hosted iframe loader | Unavailable; use the JavaScript SDK for website actions |
+```ts
+const live = client.createLiveController()
+const widget = mountConvincedWidget({ client, voice: live })
+```
 
-See [security](/guides/widget-sdk/security) and the [capability matrix](/guides/widget-sdk/migration) before choosing features for production.
+The renderer is a convenience layer over the same headless APIs. Use a custom renderer when the host must own exact layout, theme, slide behavior, or form behavior.
 
-## Add more pages and websites
+Use one `ClientToolRegistry` for chat and voice. The Convinced backend pauses a `gpt-6-luna` turn and returns the browser an opaque signed continuation. The SDK validates the requested call against the local registry and host policy, executes the handler, and returns the opaque continuation with the result. The backend verifies the signature and exact call binding before it resumes the turn. WebMCP tools use the same registry and policy.
 
-Keep one SDK owner mounted across SPA route changes. Update the page context, register the route's actions and remove tools that are no longer available. Use existing application controllers so a tool produces the same observable result as the interface.
-
-WebMCP lets the agent discover website actions through two fixed callbacks. Each website must still expose its own tools, validate arguments and enforce permissions. This SDK bridge supports same-origin discovery in compatible browsers; it does not give an agent automatic control of arbitrary websites.
-
-Keep saved agent instructions general: discover the current page's capabilities, use their schemas and confirm the returned outcome. Supply page-specific names, IDs and content as context or tool results. Adding the SDK to another page does not rewrite an existing page-specific agent prompt.
-
-## Build your integration
+## Start here
 
 <CardGroup cols={2}>
-  <Card title="SDK quickstart" icon="microphone-lines" href="/guides/widget-sdk/quickstart">Install, initialize a session and mount the supplied interface.</Card>
-  <Card title="Build with a coding agent" icon="wand-magic-sparkles" href="/guides/widget-sdk/build-with-an-agent">Use a reviewed implementation prompt and acceptance checklist.</Card>
-  <Card title="WebMCP website tools" icon="globe" href="/guides/widget-sdk/webmcp">Expose website actions and configure discovery and execution.</Card>
-  <Card title="Implementation checklist" icon="clipboard-check" href="/guides/widget-sdk/client-handoff">Verify ownership and actual task outcomes before launch.</Card>
+  <Card title="Quickstart" icon="bolt" href="/guides/widget-sdk/quickstart">Create a chat-only conversation, then opt in to voice.</Card>
+  <Card title="Custom UI" icon="palette" href="/guides/widget-sdk/custom-ui">Render state and content in your framework.</Card>
+  <Card title="Voice" icon="microphone-lines" href="/guides/widget-sdk/voice">Understand Live delegation and channel behavior.</Card>
+  <Card title="SDK API map" icon="code" href="/guides/widget-sdk/api-reference">Find the public 0.1.4 surface.</Card>
 </CardGroup>

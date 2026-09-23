@@ -1,204 +1,28 @@
 ---
-title: 'Slides and video'
-description: 'Render campaign proof in chat and let the ElevenLabs agent select media in a custom voice experience.'
-icon: 'photo-film'
+title: 'Slides and media'
+description: 'Render approved conversation media with host-owned layout and behavior.'
+icon: 'presentation-screen'
 ---
 
-Chat and voice select media through different transport conventions:
-
-- Chat responses use typed content derived from `[SLIDE:…]` and `[VIDEO:…]` directives.
-- ElevenLabs voice calls client tools such as `show_slide` or `show_youtube_embed` that you map to your renderer.
-
-The managed iframe supports both paths. The SDK `managed-v2` preset also supplies bounded `show_slide` and `show_youtube_embed` callbacks and the ranked voice catalog. A headless integration gets the chat parser and registry, then owns its voice-side media handlers and rendering.
-
-## Render chat content
-
-A WebMCP website can expose media actions through [the generic bridge](/guides/widget-sdk/webmcp). The following `show_slide` and `show_youtube_embed` examples describe the canonical managed contract; they are not automatically added to a two-callback WebMCP agent.
-
-Every assistant message exposes a `content` array:
+Convinced can return structured slide and video content with a `gpt-6-luna` response. The SDK resolves approved deployment media and emits typed content; a headless integration decides how to display it.
 
 ```ts
-client.on('content', ({ messageId, content }) => {
+client.on('content', ({ content }) => {
   for (const part of content) {
-    if (part.type === 'text') renderText(messageId, part.text)
-    if (part.type === 'slide') renderSlide(messageId, part)
-    if (part.type === 'video') renderVideo(messageId, part)
+    if (part.type === 'slide') renderSlide(part)
+    if (part.type === 'video') renderVideo(part)
   }
 })
 ```
 
-```ts
-type MessageContentPart =
-  | { type: 'text'; text: string }
-  | {
-      type: 'slide'
-      filename: string
-      url?: string
-      title?: string
-      metadata?: SlideMetadata
-    }
-  | {
-      type: 'video'
-      url: string
-      title?: string
-      embedUrl?: string
-    }
-```
+In a headless integration, the host decides whether media appears inline, beside the conversation, in a modal, or in a carousel. It also owns transitions, navigation, captions, close behavior, mobile layout, and accessibility. The optional managed renderer supplies its own functional media presentation.
 
-`client.initialize()` loads the slide list and metadata when slides are enabled. `sendMessage()` automatically includes the session's knowledge kit, recommended slides and videos, slide list, and slide metadata in chat context.
+## Safety rules
 
-The supplied renderer displays typed slides and supported video sources for you.
+- Render only media resolved from the initialized Convinced catalog.
+- Treat unknown directives and URLs as inert text.
+- Use `toSafeVideoEmbedUrl()` for supported video hosts.
+- Apply a restrictive Content Security Policy.
+- Preserve visible loading, failure, and close states.
 
-## Parse directives yourself
-
-The chat runtime may encode media as:
-
-```text
-[SLIDE:warehouse-automation.svg]
-[VIDEO:https://www.youtube.com/watch?v=M7lc1UVf-VE|Warehouse tour]
-```
-
-Use `parseAssistantContent()` when processing a raw assistant string:
-
-```ts
-import { parseAssistantContent } from '@convinced/widget-sdk'
-
-const content = parseAssistantContent(rawText, {
-  slides: client.state.slides,
-  slideMetadata: client.state.slideMetadata,
-  videos: client.state.session?.recommendedVideos,
-})
-```
-
-`stripAssistantDirectives()` returns clean visible text when your interface does not render the media parts.
-
-Video directives are resolved only when the URL exactly matches a video in the supplied initialized catalog. Unknown model-provided URLs are removed as inert directives and never create an iframe, native media request, or external link.
-
-## Register voice media tools in a headless UI
-
-Skip this section when using `preset: 'managed-v2'`: it registers the exact managed callbacks at voice start, accepts only initialized slide filenames and recommended video URLs, and renders the selected media in the supplied panel.
-
-For a headless renderer, configure `show_slide` and `show_youtube_embed` as ElevenLabs client tools, then map them to bounded renderer functions in the shared registry:
-
-```ts
-import {
-  HOST_TOOL_PROTOCOL_VERSION,
-  toSafeVideoEmbedUrl,
-} from '@convinced/widget-sdk'
-
-tools.registerMany([
-  {
-    version: HOST_TOOL_PROTOCOL_VERSION,
-    name: 'client_show_slide',
-    description: 'Display one slide from the initialized Convinced slide catalog.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        filename: { type: 'string', maxLength: 256 },
-      },
-      required: ['filename'],
-      additionalProperties: false,
-    },
-    locality: 'host',
-    effect: 'mutate',
-    consent: 'none',
-    timeoutMs: 2_000,
-    handler: async ({ filename }) => {
-      if (typeof filename !== 'string') throw new Error('Invalid filename')
-
-      const slide = client.state.slides.find((item) => item.filename === filename)
-      if (!slide) throw new Error('Slide is not in the initialized catalog')
-
-      renderActiveSlide({
-        ...slide,
-        metadata: client.state.slideMetadata[filename],
-      })
-      return { shown: true, filename }
-    },
-  },
-  {
-    version: HOST_TOOL_PROTOCOL_VERSION,
-    name: 'client_show_video',
-    description: 'Display one supported video in the custom widget.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        url: { type: 'string', maxLength: 2048 },
-        title: { type: 'string', maxLength: 200 },
-      },
-      required: ['url'],
-      additionalProperties: false,
-    },
-    locality: 'host',
-    effect: 'mutate',
-    consent: 'none',
-    timeoutMs: 2_000,
-    handler: async ({ url, title }) => {
-      if (typeof url !== 'string') throw new Error('Invalid video URL')
-      const recommended = client.state.session?.recommendedVideos?.find(
-        (video) => video.url === url,
-      )
-      if (!recommended) throw new Error('Video is not in the initialized catalog')
-      const embedUrl = toSafeVideoEmbedUrl(url)
-      if (!embedUrl) throw new Error('Unsupported video host')
-
-      renderActiveVideo({
-        url,
-        embedUrl,
-        title: typeof title === 'string' ? title : recommended.title,
-      })
-      return { shown: true, url }
-    },
-  },
-])
-```
-
-Bind the exact ElevenLabs names:
-
-```ts
-exactClientTools: {
-  show_slide: 'client_show_slide',
-  show_youtube_embed: 'client_show_video',
-}
-```
-
-Enable **Wait for response** for these ElevenLabs tools so the agent knows whether the media was actually displayed.
-
-## Give a headless voice renderer a compact catalog
-
-`managed-v2` automatically builds `SLIDES_DETAILS` and `VIDEOS_DETAILS` from the initialized session immediately before voice starts. A headless renderer can use the same bounded adapter:
-
-```ts
-import { buildManagedVoiceStartContext } from '@convinced/widget-sdk'
-
-await voice.start(buildManagedVoiceStartContext(client.state, {
-  exactClientTools: {
-    show_slide: 'client_show_slide',
-    show_youtube_embed: 'client_show_video',
-  },
-}))
-```
-
-The helper prefers target-ranked recommendations and bounds the catalog. If your custom ElevenLabs prompt uses different variable names, build an equivalent compact context explicitly rather than sending every media asset.
-
-## Embed video safely
-
-`toSafeVideoEmbedUrl()` converts supported YouTube and Vimeo URLs into embed URLs. It returns `undefined` for unsupported hosts or invalid URLs.
-
-For an exact URL present in the initialized recommendation catalog, the supplied renderer:
-
-- Embeds supported YouTube and Vimeo URLs.
-- Uses native controls for direct `.mp4`, `.webm`, and `.ogg` HTTP(S) sources.
-- Falls back to a safe external link for other approved HTTP(S) URLs.
-
-<Warning>
-  Never place an arbitrary model-provided URL directly into an iframe, native media element, or link. Require an exact initialized recommendation, validate the URL, and restrict media origins with Content Security Policy.
-</Warning>
-
-## Design recommendations
-
-- Keep the spoken explanation and its supporting media in one visible group.
-- Provide a text fallback when a slide URL is missing or a video cannot be embedded.
-- Use titles and slide metadata for accessible labels.
-- Do not autoplay video with sound while the voice agent is speaking.
-- Let visitors close or collapse media without ending the voice session.
+Slides and media belong to the canonical `gpt-6-luna` turn. If Live is active, its audio can describe the result, but Live does not own a separate slide state.

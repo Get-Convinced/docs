@@ -1,193 +1,173 @@
 ---
-title: 'Migration and capability matrix'
-description: 'Choose the managed iframe, the SDK default preset, or a headless renderer without losing campaign or voice behavior.'
+title: 'Migrate to 0.1.4'
+description: 'Upgrade the Widget SDK and fix large slide catalogs and Live lifecycle edge cases.'
 icon: 'arrow-right-arrow-left'
 ---
 
-There are three supported presentation paths around the same Convinced conversation runtime:
+This guide covers migrations from published SDK 0.1.0, the 0.1.1 WebMCP previews, and SDK 0.1.2 or 0.1.3. SDK 0.1.2 made the Convinced `gpt-6-luna` conversation canonical, with optional `gpt-live-1` speech through client delegation. SDK 0.1.3 fixed large slide catalogs by sending a compact list of all available filenames for generic selection and keeping rich metadata local for rendering. SDK 0.1.4 fixes rejection of a second signed tool batch and lets Live end cleanly while microphone permission is still pending. These releases do not change the public API.
 
-1. The hosted managed iframe for the exact current widget appearance and lowest maintenance.
-2. The SDK `managed-v2` preset for an iframe-free functional composition.
-3. The headless SDK for a completely custom voice-first experience.
-
-<Note>
-This matrix describes SDK `.3` and the hosted service. Headless voice created with `client.createVoiceController()` captures turns and links the session automatically; see [migration](/guides/widget-sdk/events#session-owned-headless-voice).
-</Note>
-
-## Upgrade from `.2` to `.3`
-
-Version `.3` keeps the `.2` exports, so an existing build does not fail because a class or method was removed. It does change the required integration path for durable headless voice history. A standalone `new ConvincedVoiceController(...)` remains a low-level adapter and is not attached to a `ConvincedClient` session. Upgrading the package without changing that construction leaves transcript capture and provider linking under application ownership.
-
-Replace the standalone controller and manual association:
-
-```ts
-// .2 application-owned session association
-const voice = new ConvincedVoiceController({
-  orgSlug: client.orgSlug,
-  sessionId: () => client.state.session?.sessionId ?? null,
-  tools,
-  descriptor,
-  onConversationId: (id) => client.linkElevenLabsConversation(id),
-})
-```
-
-with the `.3` session-owned controller:
-
-```ts
-// .3 session-owned voice
-const voice = client.createVoiceController({
-  tools,
-  descriptor,
-})
-```
-
-Then finalize from an explicit application action:
-
-```ts
-await client.endSession({ slidesViewed: shownSlideFilenames })
-```
-
-The client stops attached voice, captures spoken turns and successful `voice.sendUserMessage()` calls, retains provider conversation IDs, and submits the mixed history. Do not send a second transcript buffer or fetch the provider conversation immediately from `/session/end`. A custom renderer still supplies the filenames of media it actually displayed.
-
-`.3` also rejects lifecycle races that `.2` could allow. Wait for `initialize()` or `renewSession()` before starting voice, wait for an active chat turn before finalizing, end active voice before replacing the Convinced session, and call `renewSession()` before starting another conversation after a successful `endSession()`.
-
-If the `.2` WebMCP exporter produced provider schemas that ElevenLabs rejected, replace the two provider tools with the [published `.3` definitions](/examples/elevenlabs-webmcp-tools.json). The SDK still validates the full browser schema; the provider-facing export omits unsupported JSON Schema keywords.
-
-<Tip>
-  Supplied `managed-v2` integrations can continue to call `widget.endSession()`. The renderer already owns its transcript and media bookkeeping. The required code migration above applies to headless integrations that previously constructed voice directly.
-</Tip>
-
-## Capability matrix
-
-Page tools below run through browser voice callbacks or explicit local SDK execution. The current hosted chat route does not implement SDK client-tool continuation; a shared registry does not enable chat-driven page actions there.
-
-| Capability | Managed iframe | SDK `managed-v2` preset | Headless SDK |
-| --- | --- | --- | --- |
-| ElevenLabs voice as primary path | Built in | Use `client.createVoiceController()`; the preset renders voice, mute, push-to-talk, and transcript | Use `client.createVoiceController()` and render your own controls |
-| Chat fallback | Built in | Built in; recoverable audio-start failures retry as an ElevenLabs text-only conversation | `ConvincedClient.sendMessage()` |
-| Campaign and personalized-link attribution | Loader resolves it | `initialize()` / `browserSessionInput()` resolve the same precedence | Same client API |
-| Target-specific opener | Rendered and used for ElevenLabs | Rendered and passed automatically to voice | Field available; use `buildManagedVoiceStartContext()` |
-| Campaign pills | Rendered | Rendered before generic questions | Data available on `config.pillsConfig` |
-| Knowledge, proof, slides, and videos in chat | Built in | Chat context and typed rendering built in | Chat context built in; renderer is yours |
-| Slides and videos in voice | Built-in managed client tools and voice context | Built-in managed media callbacks and automatic ranked-media context | Use `buildManagedVoiceStartContext()` and render the callback result yourself |
-| Voice modes and mode toggle | Full hosted flow | Honors `text_only`, `smart_gate`, `email_gate`, `always_voice`, `voice_only`, and `allowModeToggle` | Your UI enforces deployment policy |
-| Identity | Hosted profile and voice gates | Managed gated modes plus in-conversation voice-led identity tools and `identityPolicy` | `captureIdentity()`, `identify()`, and `profile_gate` events |
-| Meeting CTA, engagement offers, and welcome card | Built in | Built in; `rules` and `both` render deterministic offers while `ai_decides` stays agent-owned | Render from `meetingCta*`, `engagementTriggers`, and `pillsConfig.welcomeCard` |
-| SPA navigation, page context, scroll, highlight | Not exposed by the current production loader | Direct `registerDomTools()` registry | Same registry |
-| Custom page functions | Not exposed by the current production loader | Custom registry tools and generic gateway | Same registry |
-| MCP adapter | No parent-page MCP API in the current loader | `createMcpTools()` for a caller-managed client | Same adapter |
-| Lifecycle and analytics | `sendEvent()`, `setIdentity()`, open, and close | `track()`, `identify()`, `updatePage()`, voice linking, and `endSession()` | Same APIs |
-| Hosted launcher, callout, ticker, and theme variants | Exact source of truth | Functional config-driven style, position, v2 theme, callout, pulse, ticker bar, intro, and lux treatments | Unlimited custom presentation |
-| Mobile keyboard and hosted geometry behavior | Built in | Responsive supplied panel | Your application owns it |
-| Style isolation | Cross-origin iframe | Shadow DOM | Your application's styling model |
-| Private voice credentials | Confirm the hosted deployment's provider configuration with its operator | Supply your own authenticated descriptor factory; hosted `getVoiceCredential()` is unavailable | Same credential requirement |
-| WebMCP | No cross-origin discovery API | Experimental same-origin bridge; managed callbacks remain additional tools | Experimental bridge with two callbacks when configured alone |
-| Saved agent prompt and opener | Separate authenticated administration surface | `ConvincedAgentAdmin` requires a Convinced organization ADMIN session and agent binding | Same management client and authentication |
-| Availability today | Hosted production loader | Public `@convinced/widget-sdk@0.1.1-webmcp.3` prerelease | Same pinned package |
-
-## Can the original widget be built through the SDK?
-
-The SDK can reproduce the original widget's functional composition: campaign session, personalized greeting, pills, voice modes, identity gating, ElevenLabs voice, chat fallback, transcript, slides, videos, tools, lifecycle, welcome card, rules-owned engagement offers, meeting CTA, launcher callout, ticker, position, and theme presets. Its headless clients expose the same configuration for novel presentations.
-
-The supplied `managed-v2` preset intentionally leaves `ai_decides` enquiries to the agent runtime. It does not reproduce every historical launcher animation, mobile transition, and theme pixel for pixel. The managed iframe remains the exact visual reference. A client that needs a novel theme should use the SDK; a client that needs the exact hosted appearance should keep the iframe.
-
-The managed preset's automatic text-only recovery is limited to microphone, media-device, and voice-transport startup failures. Authentication, agent or token configuration, quota, concurrency, and capacity errors fail visibly and must be fixed before launch.
-
-## Map loader concepts to SDK APIs
-
-| Managed loader | SDK replacement |
-| --- | --- |
-| `data-org` | `new ConvincedClient({ orgSlug })` |
-| `data-token` | `widgetToken` client option |
-| `data-c` | `browserSessionInput({ c })` or `initialize({ session: { c } })` |
-| `data-pid` | `browserSessionInput({ pid })` |
-| `Convinced.openConvinced()` | `widget.open()` |
-| `Convinced.closeConvinced()` | `widget.close()` |
-| `Convinced.sendEvent()` | `client.sendEvent()` or `client.track()` |
-| `Convinced.setIdentity()` | `client.setIdentity()` or `client.identify()` |
-| Hosted UI configuration | `preset`, `theme`, or a headless renderer |
-
-The current hosted loader has no page-tool registration or router API. Add those capabilities directly through `registerDomTools(tools, options)` and `client.registerTool()` after migrating.
-
-## Migrate an existing embed
-
-Pin the package version used by these guides:
+If you already use 0.1.2 or 0.1.3, this is a patch-level package update; no API or integration changes are required. Upgrade and commit the lockfile:
 
 ```bash
-npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.3
+npm install --save-exact @convinced/widget-sdk@0.1.4
 ```
 
-WebMCP migration is optional: publish existing handlers, configure the two generic provider callbacks on a separate agent, then test discovery and visible outcomes. See [WebMCP](/guides/widget-sdk/webmcp) and [Prompts and first message](/guides/widget-sdk/agent-prompts) for their setup requirements.
+## API mapping
 
-<Steps>
-  <Step title="Inventory the hosted deployment">
-    Record the organization slug, public embed token, campaign URLs, configured voice mode, first message, campaign pills, launcher, identity behavior, slides, videos, meeting CTA, return-visitor behavior, and any public loader calls.
-  </Step>
-  <Step title="Inventory the ElevenLabs contract">
-    Record the agent ID or private-session flow, prompt dynamic-variable names, exact client-tool names and schemas, first-message override, and which tools wait for a response. Do not assume SDK names automatically match an existing agent.
-  </Step>
-  <Step title="Create the SDK session first">
-    Initialize `ConvincedClient` from the same campaign URL and compare `session.personalization`, `config.pillsConfig`, recommended slides, and recommended videos with the managed session.
-  </Step>
-  <Step title="Create one shared tool registry">
-    Register only the page and application capabilities the current route needs. Pass the registry to `ConvincedClient`; `client.createVoiceController()` inherits it unless you supply a voice-specific registry.
-  </Step>
-  <Step title="Confirm the voice context contract">
-    The `managed-v2` preset automatically passes session, campaign, knowledge, page, identity, transcript, and ranked-media context. A headless renderer calls `buildManagedVoiceStartContext()` explicitly. Map exact page/application tool names and enable the generic extension gateway only when it exists on the agent.
-  </Step>
-  <Step title="Choose the renderer">
-    Start with `preset: 'managed-v2'` to compare behavior. Move to headless only for visual or interaction requirements the preset does not cover.
-  </Step>
-  <Step title="Link and close the session">
-    Track SPA route changes. For a mounted widget, await `widget.endSession()`. For headless, create voice with `client.createVoiceController()` and await `client.endSession()`; the SDK captures turns and provider associations, while your UI supplies `slidesViewed` if used.
-  </Step>
-  <Step title="Run parity tests">
-    Test campaign and generic sessions, each configured voice mode, chat fallback, real microphone and audio, exact ElevenLabs tool callbacks, SPA navigation, scroll, highlight, identity, slides, videos, welcome card, engagement modes, meeting CTA, configured launcher treatments, reconnect or second voice session, lifecycle events, and mobile layouts.
-  </Step>
-</Steps>
+| Earlier SDK | 0.1.4 | Migration action |
+| --- | --- | --- |
+| `new ConvincedClient({ orgSlug, ... })` | `new ConvincedClient({ orgSlug, agentId, ... })` | Add the public Convinced `AgentDeployment` ID. It is not a provider ID. |
+| `new ConvincedVoiceController(...)` | `client.createLiveController()` | Let the initialized client own its single Live controller. |
+| `descriptor.agentId`, `signedUrl`, `conversationToken` | Removed | Delete provider identifiers and browser voice credentials. Convinced creates Live server-side. |
+| `client.getVoiceCredential()` | Removed | Delete private-provider credential endpoints and factories. |
+| `voice.start(dynamicVariables/overrides)` | `live.start({ context?, startMuted? })` | Pass only bounded factual context. Prompts, models, knowledge, and credentials remain server-owned. |
+| `voice.sendUserMessage(text)` | `client.sendMessage(text)` | All typed turns enter the canonical `gpt-6-luna` chat. Connected Live speaks the result. |
+| Separate voice transcript | `client.state.messages` | Remove manual transcript buffers and merge logic. |
+| `voice.conversationId` / provider IDs | `live.liveSessionId` | Treat it as transport metadata; the Convinced session remains canonical. |
+| `voice.on(...)`, `once()`, `off()` | `live.on(...)`, `live.subscribe(...)` | Retain the returned unsubscribe functions. Live has no `once()` or `off()`. |
+| Provider-specific client-tool bindings | Shared `ClientToolRegistry` | Register each action once with a `handler`. |
+| `execute` on a registered tool | `handler` | Rename the implementation property. |
+| Voice callback media/forms | `text | slide | video` content plus registry tools | Render message content from the client. Open or submit forms through host UI/tools. |
+| `mountConvincedWidget({ client, voice })` with old voice controller | `mountConvincedWidget({ client, voice: live })` | Keep the optional renderer, or stay headless. |
+| `WEBMCP_VOICE_BINDINGS` | `WEBMCP_TOOL_NAMES` | Update the exported constant when referenced. |
+| WebMCP shorthand calls | `client.publishToolsToWebMcp()` | Publish the shared registry with one call, await `ready`, and call `dispose()` on teardown. Use the lower-level bridge only to consume another component's tools. |
+| Prompt response `source: 'elevenlabs'`, branch/version/traffic fields | `source: 'convinced'`, `agentId`, prompt fields, revision | Remove provider branch UI. Persist only the Convinced live prompt version. |
 
-## Run both paths during rollout
+## Upgrade from 0.1.2 or 0.1.3
 
-Keep the iframe integration available behind a reversible application flag while validating the SDK:
+Version 0.1.3 addressed the 0.1.2 large-catalog failure by sending a compact catalog of all available slide filenames with chat context and retaining rich metadata locally for rendering. Version 0.1.4 adds two runtime fixes: a second signed browser-tool batch in one turn is accepted, and ending Live while the browser's microphone permission request is pending completes cleanly. Upgrade to 0.1.4 and rebuild the website. No API, server configuration, or tool registration change is needed.
+
+## Migrate the runtime
 
 ```ts
-if (flags.useSdkWidget) {
-  mountSdkWidget()
-} else {
-  loadManagedWidgetScript()
-}
+const tools = new ClientToolRegistry()
+
+tools.register({
+  version: 1,
+  name: 'host_open_pricing',
+  description: 'Open the pricing section.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  locality: 'host',
+  effect: 'navigate',
+  consent: 'per_call',
+  timeoutMs: 5_000,
+  handler: async () => {
+    await openPricing()
+    return { status: 'shown' }
+  },
+})
+
+const client = new ConvincedClient({
+  orgSlug: 'acme',
+  agentId: 'deployment_acme_site',
+  tools,
+  authorizeToolCall,
+})
+
+await client.initialize()
+
+const live = client.createLiveController()
+await live.start({ context: `Page: ${document.title}` })
+
+// Typed input always uses GPT-6 Luna, including while Live is connected.
+await client.sendMessage('Compare the plans')
+
+// Stop audio and keep chat active.
+await live.end()
 ```
 
-Do not mount both for the same visitor session. They would create separate browser runtimes and could duplicate greetings, analytics, identity enquiries, or ElevenLabs conversations.
+For the optional managed renderer:
 
-## Browser script migration
-
-Sites without a bundler can self-host the IIFE from the installed package:
-
-```html
-<script
-  src="/vendor/convinced-widget-sdk-0.1.1-webmcp.3.global.js"
-></script>
-<script>
-  const SDK = window.ConvincedWidgetSDK
-  const client = new SDK.ConvincedClient({ orgSlug: 'acme' })
-
-  // After client.initialize():
-  // const voice = client.createVoiceController({ descriptor })
-  // Then pass both client and voice into the mount.
-</script>
+```ts
+const widget = mountConvincedWidget({
+  client,
+  voice: live,
+  preset: 'managed-v2',
+})
 ```
 
-Copy `node_modules/@convinced/widget-sdk/dist/convinced-widget.global.js` to the versioned URL above as part of your site's build. If using a CDN, pin the exact package version and calculate Subresource Integrity from those exact bytes; never reuse a hash from another release.
+Skip the renderer when the website owns exact layout, theme, slide behavior, and forms.
 
-## Evidence to keep before removing the iframe
+## Migrate prompt administration
 
-- One successful ready-target campaign session and one generic fallback session.
-- A saved Convinced session containing the spoken and typed turns, including a reconnect.
-- Browser evidence that a voice tool changed an SPA route without reload.
-- Browser evidence for scroll and temporary highlight on stable selectors.
-- Voice and chat proof that target-specific opener, pills, knowledge, and media are present.
-- Configured welcome card, deterministic engagement offers, safe meeting link, callout, ticker, position, and theme treatment.
-- Identity success and failure paths for every configured voice mode.
-- Desktop and mobile screenshots at the breakpoints your site supports.
-- A test trace for tool name, arguments, authorization, result, and final agent response.
+Keep `ConvincedAgentAdmin`, but pass the Convinced `AgentDeployment` ID as `agentId`. Run it on an authenticated Convinced admin origin or through an approved same-origin management proxy. The API updates Convinced only.
+
+Before switching, export the old provider prompt and opener for rollback records. After switching, read the Convinced prompt, save one controlled change, reload it, and prove a stale revision returns `409 prompt_conflict`.
+
+## Migration checklist
+
+- [ ] Pin `@convinced/widget-sdk@0.1.4` and commit the lockfile.
+- [ ] Replace provider IDs and descriptors with the public Convinced `agentId`.
+- [ ] Remove browser provider keys, signed URLs, conversation tokens, and credential factories.
+- [ ] Create one `ConvincedLiveController` from the initialized client and reuse it across enable/disable cycles.
+- [ ] Route every typed turn through `client.sendMessage()`.
+- [ ] Remove separate voice history, provider conversation linking, and teardown merging.
+- [ ] Register each browser action once in one `ClientToolRegistry` with `handler`, schema, effect, consent, and timeout.
+- [ ] Publish the client registry through `client.publishToolsToWebMcp()`; await `ready` and retain its `dispose()` handle.
+- [ ] Render only `text`, `slide`, and `video` message parts. Keep forms in host UI/tools.
+- [ ] Decide between headless rendering and the optional managed renderer.
+- [ ] Move persistent prompt editing to the authenticated Convinced admin API or approved same-origin proxy.
+- [ ] Test chat-only and confirm no Live request or microphone prompt occurs.
+- [ ] Test spoken input, interruption, and a typed turn while Live is connected.
+- [ ] End Live and prove chat remains active.
+- [ ] Test tool success, denial, timeout, stale WebMCP handles, slides, forms, SPA route changes, and explicit session completion.
+- [ ] Inspect browser code, storage, requests, and logs for provider IDs or secrets.
+
+## Rollback plan
+
+Prepare rollback before changing production traffic:
+
+1. Preserve the previous package version, lockfile, website build, provider configuration, and exported provider prompt as read-only rollback artifacts.
+2. Keep prompt migration separate from the website release. Record the Convinced revision and values before every admin edit.
+3. If speech fails, disable the voice control first. SDK 0.1.4 chat remains usable without Live.
+4. If the full website release must roll back, restore the previous package and integration together. Do not mix a 0.1.1 provider controller with a 0.1.4 session or registry.
+5. Restore provider-side prompt state only when the old runtime actually uses it. Do not overwrite the new Convinced prompt as part of an unrelated UI rollback.
+6. Start a fresh test session after rollback. Do not attempt to move active Live sessions or message history between runtimes.
+7. Repeat the old version's microphone, tool, prompt, and teardown acceptance checks before restoring traffic.
+
+## Paste-ready coding-agent prompt
+
+```text
+Migrate this website from an earlier @convinced/widget-sdk version to exactly 0.1.4.
+
+First inventory the current Convinced session owner, provider-specific voice
+controller, browser provider IDs or credentials, message stores, tool bindings,
+WebMCP setup, renderer, prompt editor, route lifecycle, and teardown behavior.
+
+Create one ConvincedClient({ orgSlug, agentId, tools, authorizeToolCall }).
+agentId is the public Convinced AgentDeployment ID. Remove every provider ID,
+API key, signed URL, conversation token, and provider credential factory from
+browser code.
+
+Keep one ClientToolRegistry. Every tool must use handler, an object JSON schema,
+effect, consent, timeout, and a bounded result that reports the observed outcome.
+Do not duplicate tools for speech. Preserve Convinced's opaque signed
+pause/execute/resume flow; the browser validates the local call and policy, while
+the backend verifies the signature and exact call binding.
+
+Send every typed turn through client.sendMessage(). Create optional speech with
+const live = client.createLiveController(). Start it only from a user gesture.
+gpt-live-1 must client-delegate every spoken turn to the same gpt-6-luna chat.
+A typed turn while Live is connected must be spoken. live.end() must leave chat
+active, and chat-only use must create no Live session.
+
+Use live.on() or live.subscribe(); do not call once() or off(). Render only text,
+slide, and video message content. Implement forms through host UI and registered
+tools. Choose either a headless UI or the optional
+mountConvincedWidget({ client, voice: live }) renderer.
+
+For WebMCP publishing, use client.publishToolsToWebMcp(), await publisher?.ready,
+and dispose it on teardown. Use createWebMcpBridge only if the agent must
+consume tools registered by another same-origin component.
+
+Keep persistent systemPrompt and firstMessage editing in ConvincedAgentAdmin on
+an authenticated same-origin Convinced admin surface or approved same-origin
+management proxy. Updates change Convinced only. Preserve expectedRevision and
+reload on 409.
+
+Run typecheck, unit tests, and real-browser acceptance. Prove chat-only, voice
+opt-in, spoken input, typed input during voice, voice-off chat, tool success and
+denial, WebMCP fallback, route continuity, slides, forms, prompt conflict, and
+awaited session end. Report exact files, commands, results, and anything blocked.
+Open a reviewable website pull request and record any production rollout decision.
+```

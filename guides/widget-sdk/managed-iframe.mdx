@@ -1,96 +1,20 @@
 ---
-title: 'Managed iframe loader'
-description: 'Install the hosted widget, use its public loader API, and choose the SDK when the agent needs page actions.'
+title: 'Managed iframe and JavaScript SDK'
+description: 'Choose the hosted iframe, the SDK managed renderer, or the SDK headless core.'
 icon: 'window-maximize'
 ---
 
-The managed loader is the fastest path to the complete hosted widget. Convinced owns its rendering, launcher variants, mobile behavior, ElevenLabs voice flow, campaign context, identity gates, chat fallback, slides, videos, and updates.
+The managed iframe is a separate hosted integration. Convinced owns its UI and release lifecycle. `@convinced/widget-sdk` 0.1.4 provides a headless core plus an optional managed renderer inside the host page.
 
-Use this path when you want the original hosted appearance. Use the [Widget SDK](/guides/widget-sdk/quickstart) when your page must own the renderer or run without an iframe.
-
-## Install the loader
-
-```html
-<script
-  src="https://app.getconvinced.ai/widget/loader.js"
-  data-org="acme"
-  async
-></script>
-```
-
-The loader creates a cross-origin iframe and selects the widget version and launcher configured for the organization.
-
-Campaign attribution comes from the host-page URL by default:
-
-```text
-https://www.acme.com/demo?c=northstar-logistics&utm_source=email
-```
-
-See [Campaign sessions](/guides/widget-sdk/campaigns) for the exact precedence.
-
-## Loader attributes
-
-| Attribute | Purpose |
+| Need | Choose |
 | --- | --- |
-| `data-org` | Required organization slug |
-| `data-token` | Optional public embed token for organizations that require one |
-| `data-c` | Explicit campaign target token; overrides URL-derived campaign values |
-| `data-pid` | Explicit personalized-link ID |
-| `data-launcher` | Preview override for a configured launcher style |
-| `data-bottom-offset` | Safe CSS length that raises launcher-anchored states |
-| `data-test="true"` | Request widget test mode |
-| `data-debug="true"` | Request the widget debug surface |
-| `async` | Load without blocking the host page |
+| Small embed with Convinced-hosted UI | Managed iframe |
+| SDK-managed Shadow DOM panel in the host page | `mountConvincedWidget({ client, voice: live })` |
+| Host-owned layout, theme, slides, forms, and controls | Widget SDK 0.1.4 headless core |
+| Direct access to `ClientToolRegistry` or WebMCP | Widget SDK 0.1.4 |
 
-`data-token` is a public widget embed token. It is not a Campaign API key, a campaign target token, or an ElevenLabs API key.
+Do not mount the iframe and the SDK for the same visitor conversation. They create separate runtimes and can duplicate greetings, session records, or actions.
 
-## Call the public loader API
+The iframe's public embed token and the SDK's public Convinced `agentId` are different identifiers. Neither is an OpenAI key, provider ID, or administrative credential.
 
-The current production loader does not expose a host-tool registration API or native cross-origin WebMCP discovery. [Prompt administration](/guides/widget-sdk/agent-prompts) belongs in an authenticated admin application, not the public loader API.
-
-After the loader fetches configuration and creates the widget, it exposes these browser methods. Use the queue below when initialization may still be in progress:
-
-```js
-Convinced.openConvinced()
-Convinced.closeConvinced()
-Convinced.sendEvent('pricing_plan_opened', { plan: 'enterprise' })
-Convinced.setIdentity({
-  email: 'priya@acme.com',
-  name: 'Priya Rao',
-  company: 'Acme Logistics',
-  industry: 'Logistics',
-  role: 'VP Operations',
-})
-```
-
-Queue calls before an async loader has finished:
-
-```html
-<script>
-  window.Convinced = window.Convinced || { _q: [] }
-  window.Convinced._q.push([
-    'sendEvent',
-    'landing_page_loaded',
-    { variant: 'enterprise' },
-  ])
-</script>
-<script
-  src="https://app.getconvinced.ai/widget/loader.js"
-  data-org="acme"
-  async
-></script>
-```
-
-## Add page actions with the SDK
-
-The production loader exposes `openConvinced()`, `closeConvinced()`, `sendEvent()`, and `setIdentity()`. It does not implement `data-host-tools`, `setNavigationHandler()`, `setHostToolAuthorizer()`, or `registerHostTool()`. Adding those names to the queue does not enable them.
-
-For an agent that can read the page, highlight a section, follow an SPA route, or call application functions, use the [SDK quickstart](/guides/widget-sdk/quickstart) in the parent page. Register bounded actions through [Host tools and MCP](/guides/widget-sdk/host-tools), or use the experimental [WebMCP adapter](/guides/widget-sdk/webmcp).
-
-The SDK must execute in the same document as the page actions. A cross-origin iframe does not gain access to the parent's tools merely because both surfaces use Convinced.
-
-## Original appearance versus SDK composition
-
-The managed iframe is the source of truth for the current hosted launchers, themes, responsive geometry, and mobile keyboard handling. The SDK's `managed-v2` preset reproduces the functional composition, including managed welcome, engagement, meeting, callout, ticker, position, and theme surfaces, but it does not claim pixel parity with every historical animation and mobile transition.
-
-See [Migration and capability matrix](/guides/widget-sdk/migration) before replacing an existing embed.
+For new SDK work, continue with the [quickstart](/guides/widget-sdk/quickstart). Existing iframe customers can migrate feature by feature with the [0.1.4 migration guide](/guides/widget-sdk/migration).

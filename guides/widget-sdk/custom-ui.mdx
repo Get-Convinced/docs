@@ -1,342 +1,70 @@
 ---
-title: 'Custom UI and headless'
-description: 'Choose a supplied widget, customize its theme, or build your own interface with the SDK clients.'
-icon: 'paintbrush'
+title: 'Build a custom UI'
+description: 'Render the headless SDK in any framework while keeping conversation state canonical.'
+icon: 'palette'
 ---
 
-The SDK separates the Convinced session and ElevenLabs voice controller from presentation. You can use the supplied Shadow DOM renderer, customize its tokens, or skip it and render the full experience in your application.
+The 0.1.4 SDK core is headless. A headless host renders every visible surface and decides how those surfaces behave on desktop, mobile, and embedded pages. If a functional default is enough, use the optional `mountConvincedWidget({ client, voice: live })` renderer instead.
 
-<Note>
-Create headless voice through `client.createVoiceController()` so the SDK owns transcript capture and session linking. See [session ownership](/guides/widget-sdk/events#session-owned-headless-voice).
-</Note>
-
-## When to use headless
-
-Choose a headless integration when your application owns the guide panel, launcher, transcript, voice controls and page interactions. Use `client.createVoiceController()` for the voice conversation and `ClientToolRegistry` for permitted actions, then render state in your framework. Skip `mountConvincedWidget()` when you supply the interface.
-
-For voice and page actions alone, the controller can run without a Convinced session. Add `ConvincedClient` when you need Convinced chat, campaign personalization, identity or session-history APIs. Typed input sent through `voice.sendUserMessage()` belongs to the ElevenLabs conversation; `client.sendMessage()` uses the Convinced chat service.
-
-Follow [Build a headless interface](#build-a-headless-interface) for the client APIs and [Host tools](/guides/widget-sdk/host-tools) for page actions. The [SDK quickstart](/guides/widget-sdk/quickstart) demonstrates the supplied `managed-v2` renderer. Both presentation choices can use the same permitted website tools, including the experimental WebMCP adapter.
-
-<Tip>
-  To have a coding agent build the integration in your application, copy the [reviewed implementation prompt](https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-implementation-prompt.txt). The [coding-agent guide](/guides/widget-sdk/build-with-an-agent) explains which placeholders and access to provide.
-</Tip>
-
-## Choose a presentation level
-
-An administrator prompt editor is a separate authenticated surface. Use [ConvincedAgentAdmin](/guides/widget-sdk/agent-prompts) there to edit the ElevenLabs system prompt and first message. This visitor UI receives only the public greeting and session configuration it needs.
-
-| Level | You own | The SDK supplies |
-| --- | --- | --- |
-| `preset: 'managed-v2'` | Brand tokens and optional identity wording | Campaign greeting and pills, deployment voice modes, identity gate, voice controls, chat fallback, transcript, media, welcome card, engagement offers, meeting CTA, and configured launcher treatments |
-| `preset: 'minimal'` | Identity timing and all managed marketing surfaces | The compact panel, session state, voice controls, chat, pills, and media; managed welcome, offer, meeting, callout, ticker, and theme treatments stay hidden |
-| Headless | Every DOM element and interaction | Typed session, chat, voice, media, lifecycle, and tool APIs |
-
-`managed-v2` is the default preset.
+## Render from state
 
 ```ts
-const widget = mountConvincedWidget({
-  client,
-  voice,
-  preset: 'managed-v2',
-  placement: 'floating',
-})
-```
-
-It uses the deployment's `voiceMode`, `allowModeToggle`, first-message configuration, return-visitor greeting, campaign pills, suggested questions, welcome card, engagement triggers, meeting CTA, launcher position and style, v2 theme, callout, ticker, colors, agent name, launcher label, and dark-mode flag.
-
-<Note>
-  The preset is a functional reconstruction, not a pixel-for-pixel port of every hosted launcher. Use the [managed iframe](/guides/widget-sdk/managed-iframe) when exact hosted visuals are a requirement.
-</Note>
-
-## Theme the supplied renderer
-
-```ts
-const widget = mountConvincedWidget({
-  client,
-  voice,
-  preset: 'managed-v2',
-  title: 'Talk to a product specialist',
-  launcherLabel: 'Open product guide',
-  theme: {
-    primary: '#0f766e',
-    onPrimary: '#ffffff',
-    accent: '#ffffff',
-    background: '#f0fdfa',
-    surface: '#ffffff',
-    text: '#134e4a',
-    muted: '#5f7471',
-    border: '#99f6e4',
-    radius: '14px',
-    fontFamily: 'system-ui, sans-serif',
-    width: '420px',
-    height: '680px',
-    zIndex: 1000,
-  },
-})
-```
-
-The renderer lives in an open Shadow DOM so host-page styles do not accidentally rewrite its internals. Theme keys map to variables on `widget.host`:
-
-| Theme key | CSS variable |
-| --- | --- |
-| `primary` | `--convinced-primary` |
-| `onPrimary` | `--convinced-on-primary` |
-| `accent` | `--convinced-accent` |
-| `background` | `--convinced-background` |
-| `surface` | `--convinced-surface` |
-| `text` | `--convinced-text` |
-| `muted` | `--convinced-muted` |
-| `border` | `--convinced-border` |
-| `radius` | `--convinced-radius` |
-| `fontFamily` | `--convinced-font-family` |
-| `width` | `--convinced-width` |
-| `height` | `--convinced-height` |
-| `zIndex` | `--convinced-z-index` |
-
-Use `onPrimary` for readable text and icons on `primary` controls. Keep `accent` for decorative highlights, voice state, and secondary brand color; do not assume two neighboring brand colors have sufficient text contrast.
-
-Update tokens after mount when your site changes theme:
-
-```ts
-widget.host.style.setProperty('--convinced-primary', '#2563eb')
-widget.host.style.setProperty('--convinced-background', '#0b1020')
-widget.host.style.setProperty('--convinced-text', '#f8fafc')
-```
-
-The host exposes current mode and deployment decisions through data attributes such as `data-mode`, `data-voice-mode`, `data-launcher-style`, `data-widget-theme`, and `data-dark`. The supplied CSS applies their functional treatments; your application can inspect them for diagnostics and host-level layout decisions.
-
-## Use managed marketing surfaces
-
-`managed-v2` renders the functional deployment surfaces returned in `WidgetConfig`:
-
-| Configuration | Supplied behavior |
-| --- | --- |
-| `pillsConfig.welcomeCard` | Bounded tagline, up to four stats, up to eight safe customer logos, optional background, and CTA before the first chat or voice message |
-| `engagementTriggers.emailCapture` | A rules-owned email enquiry after the configured number of completed assistant turns |
-| `engagementTriggers.resourceOffer` | A rules-owned offer that sends its configured prompt into the active voice or chat channel |
-| `engagementTriggers.meetingCta` | A rules-owned meeting action; it opens the safe HTTP(S) URL when configured or the in-widget demo-request form otherwise |
-| `meetingCtaText` / `meetingCtaUrl` | A safe persistent meeting link when configured; `show_book_demo_cta` falls back to the durable in-widget request form when the URL is absent |
-| `launcherStyle`, `launcherPosition`, `v2Theme` | Functional launcher and panel treatments for the configured preset |
-| `launcherCallout`, `launcherCalloutEnabled`, `launcherPulseEnabled` | Configured callout and pulse treatment |
-| `tickerColor`, `tickerLines`, `tickerLuxStyle`, `tickerBarEnabled`, `tickerIntroEnabled` | Configured ticker copy and presentation |
-
-Engagement mode `rules` or `both` renders the deterministic surface. Mode `ai_decides` remains agent-owned so the browser does not turn an adaptive enquiry into a fixed timer. Unsafe, credential-bearing, or non-HTTP(S) meeting and logo URLs are not rendered. Motion-heavy treatments honor `prefers-reduced-motion`.
-
-Headless interfaces can own the complete fallback handoff:
-
-```ts
-client.reportDemoRequestOpened('pricing_page')
-
-const request = await client.submitDemoRequest({
-  name: 'Priya Rao',
-  email: 'priya@acme.example',
-  phone: '+91 90000 00000',
-  company: 'Acme',
-  context: 'Interested in an enterprise rollout',
+const unsubscribe = client.on('state', state => {
+  renderMessages(state.messages)
+  setComposerDisabled(state.status === 'streaming' || state.status === 'paused')
 })
 
-if (request.requestId) {
-  console.log('Request reference:', request.requestId)
-}
-showRequestReceived() // Your application acknowledges the accepted request.
-```
-
-`submitDemoRequest()` submits a follow-up enquiry and synchronizes visitor identity. Within one SDK client, identical concurrent and completed calls share the first response. Keep the form and retry control visible if submission or identity synchronization fails.
-
-The current hosted endpoint returns `ok` and `submittedAt`; it does not return `requestId`, `visitorId`, or an idempotency guarantee. The SDK uses the identity endpoint when the response lacks `visitorId`. The response types also support a newer backend contract with opaque correlation and `alreadySubmitted`, but do not assume those optional fields exist on every deployment.
-
-<Warning>
-  SDK coalescing is local to one client instance. The current hosted endpoint can overwrite a previous same-session request on a later network call. Do not automatically retry an ambiguous submission or promise exactly-once lead creation. Confirm its status with the operator before resubmitting.
-</Warning>
-
-<Note>
-  This fallback creates a request for team follow-up; it does not reserve a calendar time. Configure `meetingCtaUrl` when the CTA should open a real scheduler.
-</Note>
-
-## Mount inline
-
-```html
-<div id="sales-guide"></div>
-```
-
-```ts
-mountConvincedWidget({
-  client,
-  voice,
-  target: '#sales-guide',
-  placement: 'inline',
-  preset: 'managed-v2',
-})
-```
-
-Run the mount after the target exists. Inline mode renders a region instead of a floating dialog and requires an explicit target.
-
-## Mount a product-native guide rail
-
-Use the headless clients when the guide must remain beside an interactive product page. Mount the conversation owner at the application-shell level and render the transcript in an existing rail region:
-
-```html
-<div class="app-shell">
-  <main id="page-content"></main>
-  <aside id="product-guide" aria-label="Product guide"></aside>
-</div>
-```
-
-Keep the SDK session and voice controller mounted when the visitor changes routes or collapses the rail. End the conversation only from an explicit end-session action.
-
-On a narrow screen, convert the rail into a bottom sheet or compact launcher. Do not leave the global navigation underneath an open rail or allow the guide to cover the page's only primary action.
-
-The rail should call bounded page callbacks and render their observed results. See [Build a page-aware guide](/guides/widget-sdk/page-aware-guides) for the complete integration contract.
-
-## Control the supplied widget
-
-```ts
-widget.open()
-widget.close()
-widget.toggle()
-widget.setMode('voice')
-await widget.startVoice()
-await widget.endVoice()
-await widget.endSession()
-```
-
-`setMode('voice')` still enforces the configured voice mode and warmup count. `smart_gate` and `email_gate` enforce their managed identity requirement; `always_voice` and `voice_only` connect first and collect identity in the conversation. `voice_only` prevents switching to the separate chat channel.
-
-`endVoice()` only stops the current ElevenLabs transport. Use the awaited `endSession()` boundary when the buyer is finished: the managed renderer also persists its merged chat/voice transcript, linked conversation IDs, captured identity, and exact shown slide filenames.
-
-<span id="build-a-novel-headless-interface" />
-
-## Build a headless interface
-
-Do not call `mountConvincedWidget()` when your application owns the renderer. The following fragment assumes your UI callbacks and elements exist. Create voice through the session client and render its combined message state:
-
-```ts
-import { buildManagedVoiceStartContext } from '@convinced/widget-sdk'
-
-await client.initialize({ loadMedia: false })
-const voice = client.createVoiceController()
-
-const stopClient = client.on('state', (state) => {
-  renderChatMessages(state.messages)
-  renderCampaignPills(state.config?.pillsConfig?.pills ?? [])
-  renderIdentity(state.identity)
-  setChatBusy(['initializing', 'streaming', 'paused'].includes(state.status))
-})
-
-const stopVoiceState = voice.subscribe((state) => {
-  renderVoiceState({
-    status: state.status,
-    mode: state.mode,
-    muted: state.muted,
-    pushToTalkActive: state.pushToTalkActive,
-  })
-})
-
-
-voiceButton.addEventListener('click', async () => {
-  await client.markVoiceUpgrade(
-    client.state.messages.map(({ role, text: content }) => ({ role, content })),
-  )
-  await voice.start(buildManagedVoiceStartContext(client.state, {
-    pageUrl: window.location.href,
-    pageTitle: document.title,
-  }))
-})
-
-chatForm.addEventListener('submit', async (event) => {
+form.addEventListener('submit', async event => {
   event.preventDefault()
-  await client.sendMessage(composer.value)
+  const text = input.value.trim()
+  if (!text) return
+  input.value = ''
+  await client.sendMessage(text)
 })
 ```
 
-This is the path for novel themes, product-native layouts, avatar animation, full-screen demos, custom accessibility behavior, or a client-specific identity enquiry.
+Use either full state snapshots or granular events for a given visual region. Mixing both for the same message list can duplicate content.
 
-## Render campaign greeting and pills
+## Own presentation behavior
 
-The headless client returns all inputs the default preset uses:
+Your UI decides:
 
-```ts
-const session = client.state.session
-const config = client.state.config
+- where the conversation opens and how it closes;
+- colors, typography, spacing, motion, and accessibility;
+- whether voice is exposed and which controls are visible;
+- how slides, videos, links, and tool receipts appear;
+- how identity and other forms collect consent;
+- what happens when a tool, network request, or microphone fails.
 
-// This custom UI chooses the campaign opener first.
-// Return-visitor presentation is a separate product decision below.
-const greeting =
-  session?.personalization?.firstMessage ||
-  (config?.firstMessageEnabled !== false ? config?.firstMessageText : '') ||
-  config?.welcomeMessage ||
-  config?.greetingMessage
-
-const campaignPills = config?.pillsConfig?.enabled
-  ? [...config.pillsConfig.pills].sort((a, b) => a.order - b.order)
-  : []
-```
-
-The supplied `managed-v2` renderer instead prioritizes an enabled, in-window return-visitor greeting before the campaign opener. It applies `returnVisitorDays` and formats the `{topic}` and `{name}` placeholders. Headless UIs should explicitly choose and test their own return-visitor policy rather than displaying a raw template.
-
-When a visitor presses a pill, send its `prompt`, not its short `label`:
+The SDK emits structured content. A slide event identifies approved media; it does not dictate a carousel, modal, side rail, or transition.
 
 ```ts
-pillButton.addEventListener('click', () => {
-  if (voice.state.status === 'connected') {
-    voice.sendUserMessage(pill.prompt)
-  } else {
-    void client.sendMessage(pill.prompt).catch(showError)
+client.on('content', ({ content }) => {
+  for (const part of content) {
+    if (part.type === 'text') appendText(part.text)
+    if (part.type === 'slide') showSlide(part)
+    if (part.type === 'video') showVideo(part)
   }
 })
 ```
 
-Here `showError` is your application's visible error handler. Routing typed input into an already-live voice conversation keeps the same ElevenLabs context; sending it to `client.sendMessage()` would start a separate SDK chat turn.
+The content union is `text | slide | video`. Forms are host UI opened or updated by registered tools; they are not message content parts. Render model text as text or through a sanitized Markdown pipeline. Treat unknown directives as inert text. Render only media resolved from the initialized deployment catalog.
 
-Headless interfaces receive the same configuration fields and can replace any supplied surface while keeping the same session, voice, campaign, and lifecycle clients.
-
-## Own identity timing
-
-The default renderer accepts an `identityPolicy`:
+## Keep voice attached to the same client
 
 ```ts
-mountConvincedWidget({
-  client,
-  voice,
-  identityPolicy: ({ state, assistantMessages }) => {
-    if (state.identity || assistantMessages < 2) return false
+const live = client.createLiveController()
 
-    return {
-      title: 'Get your tailored rollout plan',
-      description: 'Where should we send it?',
-      submitLabel: 'Send my plan',
-      fields: ['email', 'name', 'company', 'role'],
-    }
-  },
+live.on('state', state => {
+  micButton.dataset.status = state.status
+  micButton.setAttribute('aria-pressed', String(state.status === 'connected'))
 })
 ```
 
-Headless interfaces listen for `profile_gate` on the client's `activity` event and call `client.captureIdentity()` from their own form. See [Identity and voice modes](/guides/widget-sdk/identity).
+Do not build a second message store for voice. Completed spoken turns and typed turns belong to `client.state.messages`. Ending Live removes the audio transport only.
 
-## Clean up one owner
+## Framework lifecycle
 
-Choose one component to own teardown. For a supplied widget:
+Create one `ConvincedClient` above the portion of an SPA that changes routes. Unsubscribe component listeners on unmount. Call `client.updatePage()` when route context changes, and end the session only when the user finishes the conversation.
 
-```ts
-await widget.endSession()
-widget.destroy()
-client.destroy()
-```
-
-For a mounted interface, `widget.endSession()` ends the attached ElevenLabs conversation, merges the SDK chat and voice transcript in time order, includes the exact slide filenames shown by the renderer, and persists the result to the current Convinced session. It de-duplicates matching transcript rows and applies the session history limits before sending. `widget.destroy()` then removes its DOM and subscriptions; ending the session alone does not unmount the interface.
-
-With `client.createVoiceController()`, the SDK captures both spoken and typed voice turns. A headless renderer only tracks which slides it shows.
-
-```ts
-await client.endSession({
-  slidesViewed: shownSlideFilenames,
-})
-stopClient()
-stopVoiceState()
-client.destroy()
-```
-
-The slide array belongs to your renderer. Show persistence errors and keep the session available for retry before destroying its owner.
-
-`widget.destroy()` removes the supplied interface and unsubscribes its listeners. When a voice controller is attached, it also attempts to end voice and persist the same merged history. Explicitly awaiting `widget.endSession()` is easier to observe and retry when delivery matters.
+See [Slides and media](/guides/widget-sdk/media), [Identity](/guides/widget-sdk/identity), and [Lifecycle events](/guides/widget-sdk/events) for the structured state your renderer can consume.

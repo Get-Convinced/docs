@@ -1,6 +1,6 @@
 # Convinced docs
 
-Public documentation for the Convinced campaign API, managed voice-first widget, and JavaScript Widget SDK. The site is built with [Mintlify](https://mintlify.com) and deployed at [convinced.mintlify.app](https://convinced.mintlify.app).
+Public documentation for the Convinced campaign API, managed widget, and JavaScript Widget SDK. The site is built with [Mintlify](https://mintlify.com) and deployed at [convinced.mintlify.app](https://convinced.mintlify.app).
 
 ## Local development
 
@@ -55,9 +55,9 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). Run `mint dev` locally before opening 
 
 Share [SDK overview](https://convinced.mintlify.app/guides/widget-sdk/overview). The SDK tab groups setup, voice and actions, interface and sessions, administration and operations, and reference. The implementation checklist is a launch reference, not the first page.
 
-The guides target published npm `0.1.1-webmcp.3`. The overview records verified hosted availability, including missing private voice credentials and chat-tool protocol gaps. Prompt endpoints use authenticated organization ADMIN sessions; Campaign partner keys are a separate credential.
+The guides target published npm `0.1.4`. The headless client owns one `gpt-6-luna` conversation, and optional `gpt-live-1` adds speech through client delegation. Prompt endpoints require an authenticated organization ADMIN session or an authenticated same-origin management proxy; Campaign partner keys are a separate credential.
 
-Downloadable examples in `examples/` contain the complete quickstart module, editor, WebMCP helpers, matching provider schemas and reviewed implementation instructions. Validate these against the pinned published SDK when changing examples. Do not include private backend source or credentials in public documentation.
+Downloadable examples in `examples/` contain the complete quickstart module, editor, WebMCP agent prompt, and reviewed implementation instructions. Validate these against the pinned published SDK when changing examples. Do not include private backend source or credentials in public documentation.
 
 Mintlify serves the JSON tool catalogs directly. TypeScript and text downloads link to immutable commits in this public repository because those extensions are not served by the current Mintlify plan. Check the deployed download URLs as well as `mint broken-links`.
 

@@ -1,68 +1,37 @@
 ---
-title: 'Implementation checklist'
-description: 'Verify your website integration, agent configuration and actual task outcomes before launch.'
+title: 'SDK 0.1.4 client handoff'
+description: 'What changed in the new SDK and the Convinced agent ID for Enmovil pages.'
 icon: 'clipboard-check'
 ---
 
-Start with the [SDK overview](/guides/widget-sdk/overview), then use this checklist to release your own website integration. These instructions apply to any customer website; your team owns its pages, repository and deployment.
+SDK 0.1.4 gives website teams a headless chat and voice client. The website owns its interface, slides, forms, and page actions. Convinced owns the prompt, knowledge, models, session, and provider credentials.
 
-## Agree on responsibilities
+## What changed from 0.1.2 through 0.1.4
 
-| Owner | Work |
-| --- | --- |
-| Convinced operator | Provision the organization, widget configuration, allowed origins and agent ownership; operate hosted services and management authentication |
-| Website team | Install the SDK, own UI and route lifecycle, expose permitted page actions, handle errors and deploy the website |
-| Voice configuration owner | Configure the intended ElevenLabs agent, live branch, matching tools, general instructions, opener and override permissions |
-| Customer administrator | Review and save prompt or opener changes through an authenticated management interface |
+- 0.1.2 moved chat, knowledge, and tool decisions to one Convinced `gpt-6-luna` conversation. Optional `gpt-live-1` adds speech through WebRTC and client delegation; it uses no ElevenLabs credentials or agent IDs.
+- 0.1.3 fixed large slide catalogs: chat receives a compact list of all available slide filenames for generic selection, while rich slide metadata stays local for rendering.
+- 0.1.4 fixes rejection of a second signed tool batch in one turn and allows Live to end while microphone permission is still pending. The public API is unchanged across these updates.
 
-The voice agent can differ from the organization's default widget agent. Match the descriptor's agent ID to the intended management binding. A public widget token or Campaign API key does not grant prompt-editing access.
+- Text and spoken turns share one `gpt-6-luna` conversation and its knowledge and tool decisions. Optional `gpt-live-1` adds full-duplex speech through WebRTC and client delegation; voice can stop while chat continues.
+- The browser uses the public Convinced `agentId` to select a deployment. It receives no OpenAI key or provider agent ID.
+- One `ClientToolRegistry` powers slides, forms, page actions, and WebMCP for both input modes. `client.publishToolsToWebMcp()` exposes that registry to supporting browsers.
+- Browser tool calls pause and resume through a short-lived signed capability. Convinced checks the session and exact calls, and accepts each continuation once.
+- An authenticated Convinced administrator can edit the deployment's saved `systemPrompt` and `firstMessage` with `ConvincedAgentAdmin`. The changes apply to future sessions.
 
-<Note>
-Use the exact `.3` package below with the deployed Convinced backend. Existing headless integrations must switch to `client.createVoiceController()`; upgrading the package alone does not attach a standalone controller to a session.
-</Note>
+## Enmovil ID for new pages
 
-## Prepare the implementation
+The **Enmo Buddy SDK** deployment uses:
 
-1. Install `@convinced/widget-sdk@0.1.1-webmcp.3` and commit the lockfile. Use the [quickstart module](https://raw.githubusercontent.com/Get-Convinced/docs/a9fbea271fd9f4dbba4387cc57712f56c3e3cb9e/examples/sdk-quickstart.ts) or [reviewed coding-agent prompt](https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-implementation-prompt.txt).
-2. Select the supplied widget, headless UI or hosted iframe. The hosted loader does not expose the SDK's page-tool bridge.
-3. Confirm your Convinced organization, allowed origin and any required widget token. Test a generic session before adding optional campaign attribution.
-4. Configure the actual ElevenLabs agent. Use the [managed callback definitions](/examples/elevenlabs-managed-tools.json) or [WebMCP callbacks](/examples/elevenlabs-webmcp-tools.json), matching only the capabilities your integration activates.
-5. Connect a public agent directly, or implement a private credential service on your own authenticated backend. The hosted `client.getVoiceCredential()` endpoint is not deployed.
-6. Keep one SDK owner across SPA routes. Expose page context and meaningful actions through application controllers; validate inputs and permissions at execution time.
-7. For a saved prompt editor, first verify Convinced ADMIN authentication and the exact agent's ownership. A customer-domain proxy needs a supported authentication integration, not just an API URL.
+```ts
+const client = new ConvincedClient({
+  orgSlug: 'enmovil',
+  agentId: 'c4b50540-3323-4037-a2e5-6807d0f1be17',
+  tools,
+})
+```
 
-See [current availability](/guides/widget-sdk/overview#current-availability) before depending on a hosted backend feature. In particular, do not assume signed session capabilities, complete chat-tool continuation or idempotent lead submission are deployed.
+Use this ID when duplicating the Transformation page's prompt and behavior on another Enmovil page. A different prompt should have its own Convinced deployment and ID. The generic **Test Widget** ID is not the Transformation agent. Add each new website origin to the deployment's allowed domains before testing it.
 
-## Add another page
+Pin `@convinced/widget-sdk@0.1.4`, build the host UI, and register only the slide, form, navigation, and WebMCP actions that the page can really perform. Test chat only, voice opt-in, voice with slides, typed input during voice, multiple signed tool batches in a turn, ending Live while microphone permission is pending, tool approval and denial, and explicit session completion in the deployed page.
 
-Register the new page's useful reads and actions, supply current context and remove stale registrations when the route leaves. Keep route names, product IDs and factual page content in tool observations rather than hardcoding them into general instructions.
-
-With WebMCP, reuse the same two discovery/execution callbacks and [generic instructions](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/webmcp-agent-prompt.txt). The website still needs to expose its own actions and the browser must support the tested API shape. Adding the SDK does not rewrite a page-specific prompt already saved on an agent.
-
-A new page normally needs no new SDK version or Convinced endpoint. A new protected backend operation still needs its own implementation and access checks. A separate voice agent needs its ownership and provider configuration provisioned once.
-
-## Test before launch
-
-| Area | Acceptance evidence |
-| --- | --- |
-| Basic setup | Configuration and session initialize successfully; errors appear when prerequisites are missing |
-| Real voice | Visitor microphone works, agent speech is audible, expected opener is used and the conversation can end and reconnect |
-| Website actions | One read and one visible action per page, plus navigation between pages without losing the owner |
-| Authorization | A denied action stays denied; tool output cannot grant new permission |
-| WebMCP | Discovery, schema retrieval, stale-handle recovery and visible outcomes in every browser you support |
-| Identity and history | Intended identity flow and persisted transcript/media history verified in your deployment |
-| Prompt management | Authorized read, one intended saved change, stale-revision rejection and a new conversation using the saved value |
-| Failure handling | Network loss, unavailable tools, invalid configuration and uncertain saves remain visible; mutations are not blindly retried |
-| UI and analytics | Mobile and desktop layouts, cleanup, consent and the analytics events you actually collect |
-
-Retain a reversible rollout switch and record the tested package version, website revision and agent configuration. Do not mount two widget integrations for one visitor session.
-
-## Record your acceptance results
-
-Record the package version, backend deployment, agent configuration and browser versions used for your launch. Verify the features your application enables, including real speech, visible page outcomes and saved state. Simulated callbacks and successful transport requests do not establish end-to-end task success.
-
-Use the [availability table](/guides/widget-sdk/overview#current-availability) to identify deployment requirements and the [WebMCP compatibility notes](/guides/widget-sdk/webmcp#compatibility-and-validation) for the experimental browser adapter. Keep customer acceptance reports with the customer implementation records.
-
-## Study WebMCP
-
-Follow the [WebMCP integration guide](/guides/widget-sdk/webmcp), including links to Chrome's setup and imperative API documentation, demo source, evaluation guidance and the draft specification.
+Start with the [SDK overview](/guides/widget-sdk/overview), [quickstart](/guides/widget-sdk/quickstart), and [WebMCP guide](/guides/widget-sdk/webmcp). Use the [migration guide](/guides/widget-sdk/migration) for an earlier SDK integration and the [prompt guide](/guides/widget-sdk/agent-prompts) for administrator edits.

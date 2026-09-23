@@ -11,7 +11,7 @@ export async function mountAgentEditor(root: HTMLElement, options: ConvincedAgen
   const status = document.createElement('p')
   prompt.setAttribute('aria-label', 'System prompt')
   firstMessage.setAttribute('aria-label', 'First message')
-  save.type = 'submit'; save.textContent = 'Save to ElevenLabs'
+  save.type = 'submit'; save.textContent = 'Save to Convinced'
   reload.type = 'button'; reload.textContent = 'Reload saved settings'
   status.setAttribute('role', 'status')
   form.append(prompt, firstMessage, save, reload, status)
@@ -35,7 +35,7 @@ export async function mountAgentEditor(root: HTMLElement, options: ConvincedAgen
       prompt.value = current.systemPrompt
       firstMessage.value = current.firstMessage
       uncertain = false
-      status.textContent = 'Loaded from ElevenLabs'
+      status.textContent = 'Loaded from Convinced'
     } catch {
       if (disposed) return
       uncertain = true
@@ -60,7 +60,7 @@ export async function mountAgentEditor(root: HTMLElement, options: ConvincedAgen
       current = saved
       prompt.value = current.systemPrompt
       firstMessage.value = current.firstMessage
-      status.textContent = 'Saved to ElevenLabs for future conversations'
+      status.textContent = 'Saved to Convinced for future conversations'
     } catch {
       if (disposed) return
       uncertain = true
