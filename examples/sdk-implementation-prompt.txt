@@ -1,6 +1,6 @@
-Build a Convinced Widget SDK 0.1.3 integration for this website.
+Build a Convinced Widget SDK 0.1.4 integration for this website.
 
-Install and pin @convinced/widget-sdk@0.1.3 and commit the lockfile. Use the existing application framework. Do not depend on private Convinced repositories or invent credentials, deployment IDs, routes, or product settings.
+Install and pin @convinced/widget-sdk@0.1.4 and commit the lockfile. Use the existing application framework. Do not depend on private Convinced repositories or invent credentials, deployment IDs, routes, or product settings.
 
 Create one ClientToolRegistry and one ConvincedClient({ orgSlug, agentId, tools, authorizeToolCall }). agentId is the public Convinced AgentDeployment ID. Keep every OpenAI key, provider identifier, management credential, and server secret out of browser code.
 

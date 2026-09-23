@@ -4,17 +4,17 @@ description: 'Choose the hosted iframe, the SDK managed renderer, or the SDK hea
 icon: 'window-maximize'
 ---
 
-The managed iframe is a separate hosted integration. Convinced owns its UI and release lifecycle. `@convinced/widget-sdk` 0.1.3 provides a headless core plus an optional managed renderer inside the host page.
+The managed iframe is a separate hosted integration. Convinced owns its UI and release lifecycle. `@convinced/widget-sdk` 0.1.4 provides a headless core plus an optional managed renderer inside the host page.
 
 | Need | Choose |
 | --- | --- |
 | Small embed with Convinced-hosted UI | Managed iframe |
 | SDK-managed Shadow DOM panel in the host page | `mountConvincedWidget({ client, voice: live })` |
-| Host-owned layout, theme, slides, forms, and controls | Widget SDK 0.1.3 headless core |
-| Direct access to `ClientToolRegistry` or WebMCP | Widget SDK 0.1.3 |
+| Host-owned layout, theme, slides, forms, and controls | Widget SDK 0.1.4 headless core |
+| Direct access to `ClientToolRegistry` or WebMCP | Widget SDK 0.1.4 |
 
 Do not mount the iframe and the SDK for the same visitor conversation. They create separate runtimes and can duplicate greetings, session records, or actions.
 
 The iframe's public embed token and the SDK's public Convinced `agentId` are different identifiers. Neither is an OpenAI key, provider ID, or administrative credential.
 
-For new SDK work, continue with the [quickstart](/guides/widget-sdk/quickstart). Existing iframe customers can migrate feature by feature with the [0.1.3 migration guide](/guides/widget-sdk/migration).
+For new SDK work, continue with the [quickstart](/guides/widget-sdk/quickstart). Existing iframe customers can migrate feature by feature with the [0.1.4 migration guide](/guides/widget-sdk/migration).
