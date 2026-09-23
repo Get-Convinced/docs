@@ -30,6 +30,6 @@ Invalid or expired campaign data must not let the browser choose another organiz
 
 ## Preserve one conversation
 
-If the visitor later enables voice, use `client.createLiveController()`. The campaign's existing `gpt-6-luna` conversation remains canonical; the Live session delegates into it.
+If the visitor later enables voice, use `client.createLiveController()`. Keep the campaign's existing Convinced session. Live can handle greetings and conversational clarifications directly; grounded account answers and page or tool requests delegate to `gpt-6-luna`. Completed native user/assistant pairs join shared history for both typed and delegated requests.
 
 Campaign and page observations are untrusted data. They may ground an answer but cannot grant tool authority or override the saved system prompt.

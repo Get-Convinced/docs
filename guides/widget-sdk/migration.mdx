@@ -1,20 +1,20 @@
 ---
-title: 'Migrate to 0.1.4'
-description: 'Upgrade the Widget SDK and fix large slide catalogs and Live lifecycle edge cases.'
+title: 'Migrate to 0.1.5'
+description: 'Upgrade to selective Live conversation, grounded Luna delegation, and recent spoken context transfer.'
 icon: 'arrow-right-arrow-left'
 ---
 
-This guide covers migrations from published SDK 0.1.0, the 0.1.1 WebMCP previews, and SDK 0.1.2 or 0.1.3. SDK 0.1.2 made the Convinced `gpt-6-luna` conversation canonical, with optional `gpt-live-1` speech through client delegation. SDK 0.1.3 fixed large slide catalogs by sending a compact list of all available filenames for generic selection and keeping rich metadata local for rendering. SDK 0.1.4 fixes rejection of a second signed tool batch and lets Live end cleanly while microphone permission is still pending. These releases do not change the public API.
+This guide covers migrations from published SDK 0.1.0, the 0.1.1 WebMCP previews, and SDK 0.1.2, 0.1.3, or 0.1.4. SDK 0.1.2 made the Convinced `gpt-6-luna` conversation canonical, with optional `gpt-live-1` speech through client delegation. SDK 0.1.3 fixed large slide catalogs by sending a compact list of all available filenames for generic selection and keeping rich metadata local for rendering. SDK 0.1.4 fixes rejection of a second signed tool batch and lets Live end cleanly while microphone permission is still pending. SDK 0.1.5 lets Live handle greetings and conversational clarifications directly, while grounded organization, page, slide, and tool work delegates to Luna. Completed native user/assistant pairs join shared client history for typed and delegated follow-ups. Existing client and tool setup remains applicable.
 
-If you already use 0.1.2 or 0.1.3, this is a patch-level package update; no API or integration changes are required. Upgrade and commit the lockfile:
+If you already use 0.1.2, 0.1.3, or 0.1.4, keep the existing client, Live controller, and tool registration. Upgrade, rebuild, and commit the lockfile. The new delegation behavior also requires the matching hosted Live configuration; start a fresh Live session after rollout:
 
 ```bash
-npm install --save-exact @convinced/widget-sdk@0.1.4
+npm install --save-exact @convinced/widget-sdk@0.1.5
 ```
 
 ## API mapping
 
-| Earlier SDK | 0.1.4 | Migration action |
+| Earlier SDK | 0.1.5 | Migration action |
 | --- | --- | --- |
 | `new ConvincedClient({ orgSlug, ... })` | `new ConvincedClient({ orgSlug, agentId, ... })` | Add the public Convinced `AgentDeployment` ID. It is not a provider ID. |
 | `new ConvincedVoiceController(...)` | `client.createLiveController()` | Let the initialized client own its single Live controller. |
@@ -22,7 +22,7 @@ npm install --save-exact @convinced/widget-sdk@0.1.4
 | `client.getVoiceCredential()` | Removed | Delete private-provider credential endpoints and factories. |
 | `voice.start(dynamicVariables/overrides)` | `live.start({ context?, startMuted? })` | Pass only bounded factual context. Prompts, models, knowledge, and credentials remain server-owned. |
 | `voice.sendUserMessage(text)` | `client.sendMessage(text)` | All typed turns enter the canonical `gpt-6-luna` chat. Connected Live speaks the result. |
-| Separate voice transcript | `client.state.messages` | Remove manual transcript buffers and merge logic. |
+| Separate provider conversation | Shared `client.state.messages` and optional Live captions | Render state updates, including completed native pairs. They do not emit duplicate client `message` events; do not replay captions as chat turns. |
 | `voice.conversationId` / provider IDs | `live.liveSessionId` | Treat it as transport metadata; the Convinced session remains canonical. |
 | `voice.on(...)`, `once()`, `off()` | `live.on(...)`, `live.subscribe(...)` | Retain the returned unsubscribe functions. Live has no `once()` or `off()`. |
 | Provider-specific client-tool bindings | Shared `ClientToolRegistry` | Register each action once with a `handler`. |
@@ -33,9 +33,11 @@ npm install --save-exact @convinced/widget-sdk@0.1.4
 | WebMCP shorthand calls | `client.publishToolsToWebMcp()` | Publish the shared registry with one call, await `ready`, and call `dispose()` on teardown. Use the lower-level bridge only to consume another component's tools. |
 | Prompt response `source: 'elevenlabs'`, branch/version/traffic fields | `source: 'convinced'`, `agentId`, prompt fields, revision | Remove provider branch UI. Persist only the Convinced live prompt version. |
 
-## Upgrade from 0.1.2 or 0.1.3
+## Upgrade from 0.1.2, 0.1.3, or 0.1.4
 
-Version 0.1.3 addressed the 0.1.2 large-catalog failure by sending a compact catalog of all available slide filenames with chat context and retaining rich metadata locally for rendering. Version 0.1.4 adds two runtime fixes: a second signed browser-tool batch in one turn is accepted, and ending Live while the browser's microphone permission request is pending completes cleanly. Upgrade to 0.1.4 and rebuild the website. No API, server configuration, or tool registration change is needed.
+Version 0.1.3 addressed the 0.1.2 large-catalog failure by sending a compact catalog of all available slide filenames with chat context and retaining rich metadata locally for rendering. Version 0.1.4 adds two runtime fixes: a second signed browser-tool batch in one turn is accepted, and ending Live while the browser's microphone permission request is pending completes cleanly. Version 0.1.5 changes which spoken requests delegate: Live handles greetings and conversational clarifications, while Luna handles grounded knowledge, page, slide, and tool work. Completed Live-native user/assistant pairs join `client.state.messages`, so typed and delegated Luna requests receive the available context.
+
+Upgrade to 0.1.5 and rebuild the website. Keep the existing public client and registry setup. Remove any host logic that forces every voice transcript through `client.sendMessage()`, and confirm the corresponding Convinced Live configuration is deployed. By default, session end includes completed native pairs in its transcript. This does not promise capture of every fragment or restoration after reloads or reconnections.
 
 ## Migrate the runtime
 
@@ -96,19 +98,22 @@ Before switching, export the old provider prompt and opener for rollback records
 
 ## Migration checklist
 
-- [ ] Pin `@convinced/widget-sdk@0.1.4` and commit the lockfile.
+- [ ] Pin `@convinced/widget-sdk@0.1.5` and commit the lockfile.
 - [ ] Replace provider IDs and descriptors with the public Convinced `agentId`.
 - [ ] Remove browser provider keys, signed URLs, conversation tokens, and credential factories.
 - [ ] Create one `ConvincedLiveController` from the initialized client and reuse it across enable/disable cycles.
 - [ ] Route every typed turn through `client.sendMessage()`.
-- [ ] Remove separate voice history, provider conversation linking, and teardown merging.
+- [ ] Remove provider conversation linking and teardown merging. Render completed native pairs through client state updates; keep Live caption callbacks separate and do not replay captions as chat turns.
 - [ ] Register each browser action once in one `ClientToolRegistry` with `handler`, schema, effect, consent, and timeout.
 - [ ] Publish the client registry through `client.publishToolsToWebMcp()`; await `ready` and retain its `dispose()` handle.
 - [ ] Render only `text`, `slide`, and `video` message parts. Keep forms in host UI/tools.
 - [ ] Decide between headless rendering and the optional managed renderer.
 - [ ] Move persistent prompt editing to the authenticated Convinced admin API or approved same-origin proxy.
 - [ ] Test chat-only and confirm no Live request or microphone prompt occurs.
-- [ ] Test spoken input, interruption, and a typed turn while Live is connected.
+- [ ] Test Live-native greetings and clarification, then both typed and delegated grounded follow-ups using the completed pair in shared history.
+- [ ] Verify that completed native pairs notify state subscribers without duplicate client `message` events and appear in the default session-end transcript.
+- [ ] Test interruption and typed input while Live is connected.
+- [ ] Start a fresh Live session after the matching hosted configuration is deployed.
 - [ ] End Live and prove chat remains active.
 - [ ] Test tool success, denial, timeout, stale WebMCP handles, slides, forms, SPA route changes, and explicit session completion.
 - [ ] Inspect browser code, storage, requests, and logs for provider IDs or secrets.
@@ -119,8 +124,8 @@ Prepare rollback before changing production traffic:
 
 1. Preserve the previous package version, lockfile, website build, provider configuration, and exported provider prompt as read-only rollback artifacts.
 2. Keep prompt migration separate from the website release. Record the Convinced revision and values before every admin edit.
-3. If speech fails, disable the voice control first. SDK 0.1.4 chat remains usable without Live.
-4. If the full website release must roll back, restore the previous package and integration together. Do not mix a 0.1.1 provider controller with a 0.1.4 session or registry.
+3. If speech fails, disable the voice control first. SDK 0.1.5 chat remains usable without Live.
+4. If the full website release must roll back, restore the previous package and integration together. Do not mix a 0.1.1 provider controller with a 0.1.5 session or registry.
 5. Restore provider-side prompt state only when the old runtime actually uses it. Do not overwrite the new Convinced prompt as part of an unrelated UI rollback.
 6. Start a fresh test session after rollback. Do not attempt to move active Live sessions or message history between runtimes.
 7. Repeat the old version's microphone, tool, prompt, and teardown acceptance checks before restoring traffic.
@@ -128,7 +133,7 @@ Prepare rollback before changing production traffic:
 ## Paste-ready coding-agent prompt
 
 ```text
-Migrate this website from an earlier @convinced/widget-sdk version to exactly 0.1.4.
+Migrate this website from an earlier @convinced/widget-sdk version to exactly 0.1.5.
 
 First inventory the current Convinced session owner, provider-specific voice
 controller, browser provider IDs or credentials, message stores, tool bindings,
@@ -147,11 +152,20 @@ the backend verifies the signature and exact call binding.
 
 Send every typed turn through client.sendMessage(). Create optional speech with
 const live = client.createLiveController(). Start it only from a user gesture.
-gpt-live-1 must client-delegate every spoken turn to the same gpt-6-luna chat.
+Let gpt-live-1 answer greetings and conversational clarifications directly.
+Delegate grounded organization, page, slide, and tool work to gpt-6-luna. Completed
+Live-native user/assistant pairs join client.state.messages and provide context
+for typed and delegated Luna requests. Do not manually send every transcript
+through client.sendMessage().
 A typed turn while Live is connected must be spoken. live.end() must leave chat
 active, and chat-only use must create no Live session.
 
-Use live.on() or live.subscribe(); do not call once() or off(). Render only text,
+Use live.on() or live.subscribe(); do not call once() or off(). Render shared
+history from client state updates. Completed native pairs notify state subscribers
+without duplicate client message events; Live onMessage and transcript events
+remain available for captions. The default session-end transcript includes
+completed pairs, not every partial fragment. Do not promise reload/reconnect
+recovery or merge captions into history at teardown. Render only text,
 slide, and video message content. Implement forms through host UI and registered
 tools. Choose either a headless UI or the optional
 mountConvincedWidget({ client, voice: live }) renderer.
@@ -166,7 +180,9 @@ management proxy. Updates change Convinced only. Preserve expectedRevision and
 reload on 409.
 
 Run typecheck, unit tests, and real-browser acceptance. Prove chat-only, voice
-opt-in, spoken input, typed input during voice, voice-off chat, tool success and
+opt-in, Live-native greeting/clarification followed by typed and delegated
+grounded requests with that context, completed pairs in the default session-end
+transcript, typed input during voice, voice-off chat, tool success and
 denial, WebMCP fallback, route continuity, slides, forms, prompt conflict, and
 awaited session end. Report exact files, commands, results, and anything blocked.
 Open a reviewable website pull request and record any production rollout decision.

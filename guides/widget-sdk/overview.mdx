@@ -4,17 +4,18 @@ description: 'Add one Convinced conversation to any website and render it with y
 icon: 'layer-group'
 ---
 
-`@convinced/widget-sdk` 0.1.4 has a headless core. It manages a Convinced conversation, optional speech I/O, host tools, and session lifecycle without requiring React. Build every visual surface in your application, or opt into the package's `mountConvincedWidget()` convenience renderer.
+`@convinced/widget-sdk` 0.1.5 has a headless core. It manages a Convinced conversation, optional speech I/O, host tools, and session lifecycle without requiring React. Build every visual surface in your application, or opt into the package's `mountConvincedWidget()` convenience renderer.
 
 The only agent identifier exposed in browser configuration is `agentId`, the public ID of a Convinced `AgentDeployment`. Do not put an OpenAI key, a model-provider ID, or any other provider credential in browser code.
 
 ## One conversation, two inputs
 
-Text and speech use one canonical Convinced conversation backed by `gpt-6-luna`.
+Text and speech share one Convinced session. `gpt-6-luna` handles typed input and requests that need grounded organization knowledge, page context, slides, or tools.
 
 - `client.sendMessage()` sends typed input directly to the `gpt-6-luna` conversation.
-- Optional `gpt-live-1` provides full-duplex microphone input and speech output.
-- Every spoken visitor turn is delegated to the same `gpt-6-luna` conversation.
+- Optional `gpt-live-1` provides full-duplex speech and answers greetings and conversational clarifications directly.
+- Live delegates requests that need organization knowledge, page context, slides, or tools to `gpt-6-luna`.
+- Completed Live-native user/assistant pairs enter `client.state.messages`, so typed and delegated Luna requests share the available conversation history.
 - When voice is active, a typed turn still enters the same conversation and its answer is spoken.
 - Disabling or ending voice leaves chat active.
 - A chat-only integration never creates an OpenAI Live session.
@@ -24,9 +25,9 @@ Convinced's backend owns OpenAI credentials, model selection, prompts, knowledge
 ```mermaid
 flowchart LR
   UI[Host website UI] --> SDK[Widget SDK]
-  SDK --> Chat[Canonical GPT-6 Luna conversation]
+  SDK --> Chat[Grounded GPT-6 Luna work]
   SDK -. optional audio .-> Live[gpt-live-1]
-  Live -->|client delegation| Chat
+  Live -->|grounded requests and recent spoken context| Chat
   Chat --> Tools[Signed tool continuation]
   Tools --> Registry[Shared ClientToolRegistry]
   Registry --> UI
@@ -53,5 +54,5 @@ Use one `ClientToolRegistry` for chat and voice. The Convinced backend pauses a 
   <Card title="Quickstart" icon="bolt" href="/guides/widget-sdk/quickstart">Create a chat-only conversation, then opt in to voice.</Card>
   <Card title="Custom UI" icon="palette" href="/guides/widget-sdk/custom-ui">Render state and content in your framework.</Card>
   <Card title="Voice" icon="microphone-lines" href="/guides/widget-sdk/voice">Understand Live delegation and channel behavior.</Card>
-  <Card title="SDK API map" icon="code" href="/guides/widget-sdk/api-reference">Find the public 0.1.4 surface.</Card>
+  <Card title="SDK API map" icon="code" href="/guides/widget-sdk/api-reference">Find the public 0.1.5 surface.</Card>
 </CardGroup>

@@ -1,10 +1,10 @@
 ---
 title: 'Optional Live voice'
-description: 'Add full-duplex speech without creating a second agent or conversation.'
+description: 'Let Live handle conversation naturally and delegate grounded knowledge and actions to Luna.'
 icon: 'microphone-lines'
 ---
 
-Voice in SDK 0.1.4 is an optional I/O layer over the same `gpt-6-luna` conversation used by chat. It is powered by OpenAI `gpt-live-1` and WebRTC.
+SDK 0.1.5 adds optional full-duplex voice through OpenAI `gpt-live-1` and WebRTC. Live handles greetings and conversational clarifications directly. It delegates requests that need grounded organization knowledge, page context, slides, or tools to `gpt-6-luna` in the existing Convinced session.
 
 ## Channel contract
 
@@ -12,12 +12,13 @@ Voice in SDK 0.1.4 is an optional I/O layer over the same `gpt-6-luna` conversat
 | --- | --- |
 | Initialize chat only | Creates a Convinced `gpt-6-luna` conversation; creates no Live session |
 | Start voice | Adds a Live WebRTC session to the existing conversation |
-| Speak | Live transcribes the turn and client-delegates it to the same `gpt-6-luna` chat |
+| Greet or clarify conversationally | Live responds directly without a Luna round trip |
+| Ask about the organization, page, slides, or a tool action | Live delegates the request to `gpt-6-luna`, including recent Live-native context |
 | Type while voice is active | `gpt-6-luna` answers in the same conversation; Live speaks the answer |
 | End or disable voice | Closes audio; chat stays active |
 | End the SDK session | Ends the canonical conversation and any active Live transport |
 
-`gpt-6-luna` remains authoritative for prompts, knowledge, reasoning, rich content, and tools. `gpt-live-1` handles full-duplex listening, interruption, and speech delivery. It does not become a second business agent.
+Convinced owns the prompts and provider configuration for both models. `gpt-6-luna` handles grounded business answers, rich content, and tool decisions. `gpt-live-1` handles conversational exchanges, listening, interruption, and speech delivery; it must delegate when an answer needs grounded information or an action.
 
 ## Start from a user gesture
 
@@ -52,9 +53,19 @@ Context updates are untrusted observations. They do not replace the saved Convin
 
 ## Delegation and tools
 
-Every spoken turn that needs an answer is client-delegated to the canonical `gpt-6-luna` conversation. If `gpt-6-luna` requests a browser tool, Convinced pauses that turn and returns an opaque signed continuation. The SDK runs the local registry checks and handler, while the backend verifies the signature and exact call binding before resuming `gpt-6-luna`. Live speaks the verified final answer.
+Live delegates when the request needs grounded organization knowledge, page context, slides, or tools. A greeting or conversational clarification can stay in Live. If `gpt-6-luna` requests a browser tool, Convinced pauses that turn and returns an opaque signed continuation. The SDK runs the local registry checks and handler, while the backend verifies the signature and exact call binding before resuming `gpt-6-luna`. Live speaks the verified final answer.
 
 This keeps tool authorization, form handling, page actions, slides, and knowledge consistent across input modes.
+
+## Carry clarification into the next request
+
+For example, Live can respond to “Help me understand this” with “Which workflow would you like to explore?” The SDK adds that completed user/assistant pair to the shared client history. If the visitor then says or types “Dispatch planning,” Luna can use the preceding clarification instead of treating the short answer as an isolated question.
+
+Completed Live-native user/assistant pairs are added to `client.state.messages` within the SDK's text and history limits. Client state subscribers are notified, but the SDK does not emit duplicate client `message` events for these pairs. Render the shared conversation from state; Live's `onMessage`, `message`, and `message_delta` events remain available for captions. Do not replay captions through `client.sendMessage()`.
+
+By default, `client.endSession()` includes the completed pairs in its `/session/end` payload. This covers completed exchanges, not every partial transcript fragment. It does not promise restoration across page reloads or Live reconnections. See [Conversation sessions](/guides/widget-sdk/sessions#persisted-history).
+
+The behavior requires the matching Convinced Live configuration as well as SDK 0.1.5. Start a fresh Live session after the release. Test a greeting and clarification followed by both a typed question and a spoken grounded request on your deployed page.
 
 ## Render voice state
 

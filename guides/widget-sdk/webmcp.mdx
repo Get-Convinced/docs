@@ -70,7 +70,7 @@ If any registration fails, `ready` rejects and the publisher aborts the registra
 
 ## One governed execution path
 
-Whether a tool was registered directly, adapted from MCP, or discovered through WebMCP, typed and spoken turns use the same `gpt-6-luna` flow:
+Whether a tool was registered directly, adapted from MCP, or discovered through WebMCP, requests that need a browser tool use the same `gpt-6-luna` flow, whether they begin as typed input or delegated speech:
 
 1. `gpt-6-luna` requests a named browser tool.
 2. Convinced pauses the canonical turn and returns an opaque signed continuation plus the exact calls.

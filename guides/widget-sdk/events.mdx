@@ -17,7 +17,7 @@ Common client events include:
 | Event | Use |
 | --- | --- |
 | `state` | Render a complete immutable snapshot |
-| `message` | Append a completed user or assistant message |
+| `message` | Observe completed chat messages; Live-native pairs arrive through state updates instead |
 | `message_delta` | Render streaming assistant text |
 | `content` | Render structured `text`, `slide`, or `video` parts |
 | `client_tool_call` | Show a requested browser action |
@@ -37,7 +37,9 @@ const stopLive = live.on('state', state => renderVoiceState(state))
 const stopLiveError = live.on('error', error => showVoiceError(error.message))
 ```
 
-Live state covers connection, microphone mute, listening, speaking, and errors. Message history still comes from the client. Do not append a separate Live transcript to the conversation.
+Live state covers connection, microphone mute, listening, speaking, and errors. Completed Live-native user/assistant pairs are added to `client.state.messages` and notify client state subscribers. They do not emit duplicate client `message` events; use state to render the full shared history.
+
+Live's `onMessage`, `message`, and `message_delta` events still provide captions, including fragments that may not form a completed pair. Do not replay captions as chat requests. Typed and delegated Luna requests can use the completed pairs in shared history. By default, `client.endSession()` includes them in the session-end transcript; it does not capture every partial fragment or guarantee reload/reconnect recovery.
 
 ## Typed input during voice
 

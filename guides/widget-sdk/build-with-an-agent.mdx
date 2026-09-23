@@ -1,13 +1,13 @@
 ---
 title: 'Build with a coding agent'
-description: 'Give a coding agent a precise 0.1.4 implementation brief.'
+description: 'Give a coding agent a precise 0.1.5 implementation brief.'
 icon: 'wand-magic-sparkles'
 ---
 
 Use this brief when an AI coding agent is implementing the website integration:
 
 ```text
-Install @convinced/widget-sdk@0.1.4.
+Install @convinced/widget-sdk@0.1.5.
 
 Build an integration for this website using the headless core. The host
 application owns layout, theme, responsive behavior, controls, slide
@@ -26,8 +26,12 @@ Send all typed turns with client.sendMessage(). Chat is the canonical gpt-6-luna
 conversation.
 
 If voice is required, call client.createLiveController() and start it only from
-a user gesture. gpt-live-1 is optional speech I/O. Every spoken turn delegates
-to the same gpt-6-luna chat. Typed input while Live is connected stays in that chat
+a user gesture. Let gpt-live-1 handle greetings and conversational clarification
+directly. Delegate grounded organization, page, slide, and tool requests to
+gpt-6-luna. Completed Live-native user/assistant pairs join client.state.messages
+and provide context for both typed and delegated requests. Render shared history
+from state updates; native pairs do not emit duplicate client message events.
+Typed input while Live is connected stays in that chat
 and its answer is spoken. live.end() must leave chat active. A chat-only path
 must never start Live.
 
@@ -50,8 +54,10 @@ management proxy. The API updates Convinced only.
 
 Update SPA page context, render sanitized structured content, and end the
 session explicitly. Add real-browser acceptance for chat-only, voice opt-in,
-typed-during-voice, voice shutdown, tool success/denial, media, forms, and
-teardown.
+a Live-native greeting and clarification followed by typed and delegated requests
+with that context, typed-during-voice, voice shutdown, tool success/denial, media,
+forms, and teardown. Verify completed native pairs in the default session-end
+transcript, without assuming every fragment or reload/reconnect recovery.
 ```
 
 Give the agent the website's actual `orgSlug`, Convinced `agentId`, route API, design system, tool allowlist, consent requirements, and acceptance URL. Do not give it provider credentials.
