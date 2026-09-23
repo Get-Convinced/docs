@@ -1,10 +1,10 @@
 ---
 title: 'Conversation sessions'
-description: 'Keep text, speech, tools, routes, and persistence in one canonical session.'
+description: 'Keep chat, optional Live speech, page context, and tools attached to one Convinced session.'
 icon: 'messages'
 ---
 
-`client.initialize()` creates one Convinced session for a live `AgentDeployment`. Its `gpt-6-luna` conversation is canonical for every typed and spoken turn.
+`client.initialize()` creates one Convinced session for a live `AgentDeployment`. Typed input and grounded delegated work use its `gpt-6-luna` conversation. Optional Live voice can answer greetings and conversational clarifications directly.
 
 ## Session rules
 
@@ -14,7 +14,7 @@ icon: 'messages'
 - Use one shared `ClientToolRegistry` for the session.
 - End the session explicitly when the visitor finishes.
 
-Starting voice does not create a second conversation. Reconnecting Live restores recent canonical history and continues delegating into `gpt-6-luna`. A Live session ID is transport metadata, not the conversation identity exposed to the host.
+Starting voice attaches a Live transport to the same Convinced session. Luna remains responsible for grounded organization, page, slide, and tool requests. Completed Live-native user/assistant pairs join the shared client history, which supplies context to typed and delegated Luna requests. A Live session ID identifies the transport, not a new host-owned conversation.
 
 ## Update page context
 
@@ -39,6 +39,8 @@ Do not send new turns into a completed session. Session renewal preserves permit
 
 ## Persisted history
 
-Convinced stores canonical messages and tool receipts on the backend. The host may render a local projection, but it should not merge a separate voice transcript at teardown. Spoken input already passed through the same `gpt-6-luna` conversation.
+`client.state.messages` includes Luna turns and completed Live-native user/assistant pairs, within the SDK's text and history limits. Native pairs notify state subscribers without duplicate client `message` events. Live's `onMessage` and transcript events can still drive captions; do not replay them as new chat requests or merge them into history at teardown.
+
+By default, `await client.endSession()` sends the completed pairs with the session transcript to `/session/end`. If you supply `clientMessages` explicitly, that replaces the default transcript; preserve the messages you intend to submit. Session-end capture covers completed pairs rather than every partial speech fragment. It does not establish reload or reconnect recovery.
 
 See [Lifecycle events](/guides/widget-sdk/events) for observable state and [Security](/guides/widget-sdk/security) for session capabilities.

@@ -39,13 +39,16 @@ Verify:
 
 1. Chat-only initialization sends no Live session request.
 2. Voice starts only after a user gesture.
-3. One spoken turn appears in the canonical client history.
+3. Live answers a greeting and conversational clarification directly. The completed user/assistant pair appears in `client.state.messages` through state updates, without duplicate client `message` events. Both a typed follow-up and a delegated spoken request receive the available context.
 4. A typed turn while Live is active is spoken.
 5. `live.end()` stops audio and leaves `client.sendMessage()` working.
 6. A shared registry tool follows signed pause/execute/resume for both inputs.
 7. Tool rejection and timeout produce a visible, recoverable result.
 8. Slides and forms render according to host UI rules.
 9. WebMCP works when supported and degrades safely when absent.
-10. `client.endSession()` persists the ordered conversation once.
+10. Await `client.endSession()` and verify that its default transcript includes completed Live-native pairs. Do not expect every partial speech fragment or infer reload/reconnect recovery from session-end capture.
+11. Speak a grounded request that uses a slide and page tool. Confirm the visual appears inline, the target is visible before Live claims it opened, and the spoken answer matches the tool result.
+12. Interrupt speech with a brief backchannel or “stop talking” and confirm the underlying Luna task continues. Separately correct the task before its next browser action and confirm stale narration and later actions stop.
+13. End voice during a paused browser-tool turn, then send a typed request. Confirm the prior turn cannot resume after the new request and that the typed answer remains usable.
 
 Inspect browser source, requests, storage, and logs to confirm that no OpenAI key or provider ID is exposed.

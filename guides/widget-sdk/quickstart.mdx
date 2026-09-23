@@ -4,19 +4,19 @@ description: 'Start a headless Convinced chat on any website and optionally add 
 icon: 'bolt'
 ---
 
-## 1. Install 0.1.4
+## 1. Install 0.1.7
 
 <CodeGroup>
 ```bash npm
-npm install @convinced/widget-sdk@0.1.4
+npm install @convinced/widget-sdk@0.1.7
 ```
 
 ```bash pnpm
-pnpm add @convinced/widget-sdk@0.1.4
+pnpm add @convinced/widget-sdk@0.1.7
 ```
 
 ```bash bun
-bun add @convinced/widget-sdk@0.1.4
+bun add @convinced/widget-sdk@0.1.7
 ```
 </CodeGroup>
 
@@ -42,13 +42,15 @@ tools.register({
   consent: 'per_call',
   timeoutMs: 5_000,
   handler: async () => {
-    document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
-    return { ok: true }
+    const section = document.querySelector('#pricing')
+    if (!section) return { status: 'not_found' }
+    section.scrollIntoView({ behavior: 'smooth' })
+    return { status: 'scroll_requested' }
   },
 })
 ```
 
-The registry is the sole browser execution boundary for chat, voice, forms, slides, page actions, and WebMCP.
+The registry is the sole browser execution boundary for chat, voice, forms, slides, page actions, and WebMCP. This handler reports that scrolling was requested; to report the section as visible, wait until the page confirms it is in view.
 
 ## 3. Initialize chat
 
@@ -84,13 +86,18 @@ const live = client.createLiveController()
 
 live.on('state', state => renderVoiceState(state))
 
-talkButton.addEventListener('click', () => live.start())
-stopTalkingButton.addEventListener('click', () => live.end())
+talkButton.addEventListener('click', () => {
+  void live.start().catch(error => showVoiceError(error))
+})
+
+endVoiceButton.addEventListener('click', () => {
+  void live.end().catch(error => showVoiceError(error))
+})
 ```
 
-Call `start()` only after a visitor action. The SDK asks the Convinced backend to create a short-lived `gpt-live-1` WebRTC session. The browser never receives an OpenAI API key. Spoken turns are delegated to `client`'s existing `gpt-6-luna` conversation.
+Call `start()` only after a visitor action. Show the pending state and any connection error. `endVoiceButton` ends the voice session; a spoken “stop talking” should only interrupt speech, not end the underlying task. The SDK asks the Convinced backend to create a short-lived `gpt-live-1` WebRTC session. The browser never receives an OpenAI API key. Live answers greetings and conversational clarifications directly. It delegates grounded organization, page, slide, and tool requests to `client`'s `gpt-6-luna` conversation. Completed Live-native user/assistant pairs join `client.state.messages` and provide context for both typed and delegated requests.
 
-Continue using `client.sendMessage()` for typed input while voice is active. The response is appended to the same history and spoken through the active Live session. `live.end()` stops audio without ending chat.
+Continue using `client.sendMessage()` for typed input while voice is active. A new typed request supersedes an unfinished delegated voice turn, then its answer joins the same conversation and can be spoken through Live. `live.end()` stops audio without ending chat.
 
 ## 5. End the conversation
 

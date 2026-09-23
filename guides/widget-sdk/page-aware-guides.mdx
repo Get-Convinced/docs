@@ -19,14 +19,22 @@ const removePricingTool = tools.register({
   consent: 'per_call',
   timeoutMs: 5_000,
   handler: async () => {
-    document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
-    return { ok: true, route: location.pathname }
+    const section = document.querySelector('#pricing')
+    if (!section) return { status: 'not_found', route: location.pathname }
+    section.scrollIntoView({ behavior: 'smooth' })
+    return { status: 'scroll_requested', route: location.pathname }
   },
 })
 
 router.onChange(({ url, title }) => {
-  client.updatePage({ url, title })
-  live?.sendContextualUpdate(`Current page: ${title} (${url})`, 'current-page')
+  void client.updatePage({ url, title }).catch(showContextError)
+  if (live?.state.status === 'connected') {
+    try {
+      live.sendContextualUpdate(`Current page: ${title} (${url})`, 'current-page')
+    } catch (error) {
+      showContextError(error)
+    }
+  }
 })
 
 // When the route no longer supports the action:
@@ -43,6 +51,6 @@ A tool result should report the observed outcome, such as the final route or vis
 
 ## One guide across inputs
 
-The same `gpt-6-luna` conversation answers typed and spoken visitors. Optional Live delegates speech to it, and both inputs use the same registry. This prevents route actions, slides, and forms from drifting between two agents.
+The same `gpt-6-luna` path handles grounded page answers and tool requests from typed or spoken input, using one registry. Live handles greetings and conversational clarifications directly. Completed user/assistant pairs enter shared client history for subsequent typed or delegated page work. Keep route actions, slides, and forms on the Luna tool path.
 
-Enmovil, for example, can register tools for a public fleet workflow and render a matched case-study slide. Another site can register different tools without changing the SDK architecture or exposing provider configuration.
+One site can register a public workflow action and a matched case-study slide; another can register different capabilities without changing the SDK architecture or exposing provider configuration.

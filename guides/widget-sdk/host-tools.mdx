@@ -4,7 +4,7 @@ description: 'Run bounded website actions through one registry and one signed co
 icon: 'screwdriver-wrench'
 ---
 
-Create one `ClientToolRegistry` before the client. Typed and spoken turns use it automatically.
+Create one `ClientToolRegistry` before the client. Typed requests and delegated spoken requests that need browser actions use this registry.
 
 ```ts
 const tools = new ClientToolRegistry()
@@ -47,7 +47,7 @@ const client = new ConvincedClient({
 
 `gpt-6-luna` never calls browser JavaScript directly. Convinced pauses the turn and returns an opaque, signed, short-lived capability with the pending calls. The SDK does not verify the server signature in the browser. It checks each call against the local registry, schema, bounds, expiry hint, and host authorization, executes the registered `handler`, then returns the result with the opaque capability.
 
-The backend verifies the capability's signature and its organization, session, turn, call IDs, names, arguments, expiry, and call count before resuming `gpt-6-luna`. The browser cannot mint another call, change its arguments, or reuse the continuation for another turn. Live uses this exact path because its spoken turns delegate to `gpt-6-luna`.
+The backend verifies the capability's signature and its organization, session, turn, call IDs, names, arguments, expiry, and call count before resuming `gpt-6-luna`. The browser cannot mint another call, change its arguments, or reuse the continuation for another turn. Spoken requests that need tools delegate to `gpt-6-luna` and use this same path. Live-native greetings and conversational clarifications do not require a tool turn.
 
 ## MCP adapters
 

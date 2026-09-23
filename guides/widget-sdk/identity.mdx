@@ -21,7 +21,7 @@ Use `identify()` when your application already knows an authenticated user. Use 
 
 A conversation may ask the UI to show or prefill a form through a registered host tool. Prefilling is not consent to submit. Keep durable submission behind a visible visitor action or a fresh `per_call` authorization for that exact request.
 
-Typed and spoken requests use the same form tool and the same policy because they share one registry and one `gpt-6-luna` conversation.
+Typed requests and spoken requests that need a form use the same registry and authorization policy. Live delegates form actions to `gpt-6-luna`; answering a greeting or clarification directly does not authorize an action.
 
 ## Data handling
 

@@ -16,8 +16,8 @@ Common client events include:
 
 | Event | Use |
 | --- | --- |
-| `state` | Render a complete immutable snapshot |
-| `message` | Append a completed user or assistant message |
+| `state` | Render the current state snapshot |
+| `message` | Observe completed chat messages; Live-native pairs arrive through state updates instead |
 | `message_delta` | Render streaming assistant text |
 | `content` | Render structured `text`, `slide`, or `video` parts |
 | `client_tool_call` | Show a requested browser action |
@@ -26,7 +26,7 @@ Common client events include:
 | `identity` | Confirm a durable identity update |
 | `error` | Show a recoverable failure |
 
-`paused` means `gpt-6-luna` is waiting for a client tool result. Do not start a second turn until the SDK resumes the first one.
+`paused` means `gpt-6-luna` is waiting for a client tool result. Let the SDK resume it; do not manually submit a duplicate continuation. A deliberate typed correction through `client.sendMessage()` can supersede an unfinished delegated voice turn.
 
 ## Live events
 
@@ -37,7 +37,9 @@ const stopLive = live.on('state', state => renderVoiceState(state))
 const stopLiveError = live.on('error', error => showVoiceError(error.message))
 ```
 
-Live state covers connection, microphone mute, listening, speaking, and errors. Message history still comes from the client. Do not append a separate Live transcript to the conversation.
+Live state covers connection, microphone mute, listening, speaking, and errors. Completed Live-native user/assistant pairs are added to `client.state.messages` and notify client state subscribers. They do not emit duplicate client `message` events; use state to render the full shared history.
+
+Live's `onMessage`, `message`, and `message_delta` events still provide captions, including fragments that may not form a completed pair. Do not replay captions as chat requests. Typed and delegated Luna requests can use the completed pairs in shared history. By default, `client.endSession()` includes them in the session-end transcript; it does not capture every partial fragment or guarantee reload/reconnect recovery.
 
 ## Typed input during voice
 
@@ -45,7 +47,7 @@ Live state covers connection, microphone mute, listening, speaking, and errors. 
 await client.sendMessage(input.value)
 ```
 
-This remains the only typed-input path. If Live is connected, the SDK sends the canonical `gpt-6-luna` answer to Live for speech.
+This remains the only typed-input path. In SDK 0.1.7, typed input supersedes an unfinished delegated voice task before that task performs another browser action. If Live is connected, the SDK sends the backend's short verified briefing to Live for speech when available, or a bounded complete-sentence fallback. The full client message is unchanged; see [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
 
 ## Teardown
 
