@@ -1,194 +1,34 @@
 ---
-title: 'Identity and voice modes'
-description: 'Control which channel leads, when voice unlocks, and how the widget asks for visitor details.'
-icon: 'address-card'
+title: 'Identity and forms'
+description: 'Collect visitor details through host-owned UI and the canonical Convinced session.'
+icon: 'user-shield'
 ---
 
-Voice mode is deployment policy. Identity collection is a value exchange within that policy, not a separate fixed step in every conversation.
-
-The SDK reads `voiceMode`, `allowModeToggle`, and the pill warmup configuration from the initialized widget session.
-
-## Voice modes
-
-Visitor identity and customer administrator access are separate. Capturing an email does not authorize agent edits. [Prompt administration](/guides/widget-sdk/agent-prompts) requires an authenticated organization ADMIN session.
-
-| Mode | Initial channel | When voice can start | Separate chat channel |
-| --- | --- | --- | --- |
-| `text_only` | Chat | Voice is disabled | Yes |
-| `smart_gate` | Chat | After `pillsConfig.warmupExchanges` completed assistant exchanges and the managed identity gate | Yes, when `allowModeToggle` permits it |
-| `email_gate` | Chat | After identity capture includes a work email | Yes, when `allowModeToggle` permits it |
-| `always_voice` | Voice | Immediately from the visitor's voice gesture; identity is collected in the live conversation | Yes, when `allowModeToggle` permits it |
-| `voice_only` | Voice | Immediately from the visitor's voice gesture; identity is collected in the live conversation | No separate chat channel |
-
-The supplied `managed-v2` preset enforces this table. In voice-led modes, ElevenLabs connects before the identity enquiry. The managed `set_visitor_field` and `request_email_capture` tools let the agent fill and reveal the canonical spoken fields—email, name, phone, and company—without starting a second conversation; email remains required and the other fields are optional. Custom SDK identity forms may additionally collect the supported fields below.
-
-`set_visitor_field` fills a managed field; `request_email_capture` opens the identity interface. Neither submits the form. The normal persistence path is the visitor submitting that form. `confirm_visitor_form` declares `per_call` consent and is denied unless your `ConvincedVoiceController.authorizeToolCall` callback grants that exact invocation after a real visitor confirmation. Never cache that grant as session consent: a model tool call by itself is not permission to store personal data.
-
-`preset: 'minimal'` does not apply the managed voice identity gate. Use an `identityPolicy` or your own UI when you choose that preset.
-
-<Note>
-  The hosted widget has richer voice-only onboarding and mobile interactions. The SDK preset preserves the channel and identity policy, but does not claim pixel parity with those screens.
-</Note>
-
-## Configure an identity policy
-
-With the supplied renderer, `identityPolicy` can add a contextual enquiry after completed assistant messages and customize a voice-unlock or server-requested profile gate.
+In a headless integration, your website owns the form layout, field order, validation messages, consent copy, and submission timing. The optional managed renderer supplies its own identity UI.
 
 ```ts
-const widget = mountConvincedWidget({
-  client,
-  voice,
-  preset: 'managed-v2',
-  identityPolicy: ({ state, assistantMessages, userMessages }) => {
-    if (state.identity) return false
-    if (assistantMessages < 2 || userMessages === 0) return false
-
-    return {
-      title: 'Keep the context for a follow-up',
-      description: 'Share your work details to associate them with this conversation.',
-      submitLabel: 'Save my details',
-      fields: ['email', 'name', 'company', 'role'],
-    }
-  },
+await client.captureIdentity({
+  email,
+  name,
+  company,
+  phone,
 })
 ```
 
-The policy receives:
+Use `identify()` when your application already knows an authenticated user. Use `setIdentity()` for bounded session context that should not force the durable email-capture path.
 
-<ParamField path="state" type="ConvincedClientState">
-  The current configuration, session, messages, media, identity, status, and error.
-</ParamField>
+## Forms as tools
 
-<ParamField path="assistantMessages" type="number">
-  Completed assistant messages with text in the SDK chat transcript.
-</ParamField>
+A conversation may ask the UI to show or prefill a form through a registered host tool. Prefilling is not consent to submit. Keep durable submission behind a visible visitor action or a fresh `per_call` authorization for that exact request.
 
-<ParamField path="userMessages" type="number">
-  Visitor messages in the SDK chat transcript.
-</ParamField>
+Typed and spoken requests use the same form tool and the same policy because they share one registry and one `gpt-6-luna` conversation.
 
-Return `false`, `null`, or `undefined` to keep the current UI. Return a decision object to display the form. The policy may also return a promise.
+## Data handling
 
-## Supported fields
+- Collect only fields the experience needs.
+- Explain why each durable field is requested.
+- Keep raw values out of analytics, URLs, page context, WebMCP manifests, and tool results.
+- Never use a Live transcript as a second identity record.
+- Provide access, correction, and deletion paths required by your product and jurisdiction.
 
-The supplied form supports:
-
-- `email`
-- `name`
-- `company`
-- `phone`
-- `industry`
-- `role`
-- `title`
-
-Email is inserted when omitted and is always required. Other fields are optional unless your own application adds stronger validation.
-
-```ts
-return {
-  title: 'Keep my details for a follow-up',
-  description: 'We will use this only to keep the conversation specific.',
-  submitLabel: 'Save details',
-  fields: ['email', 'name', 'company', 'industry', 'role'],
-}
-```
-
-## Handle runtime profile gates
-
-The chat runtime can emit a `profile_gate` activity. The supplied renderer shows a safe email-first fallback form. When the event sets `disableInput: true`, the composer remains locked until `captureIdentity()` succeeds.
-
-A headless renderer receives the same activity:
-
-```ts
-client.on('activity', (event) => {
-  if (event.type !== 'profile_gate') return
-
-  showIdentityForm({
-    reason: event.reason,
-    lockComposer: event.disableInput === true,
-  })
-})
-```
-
-## Capture identity in a custom UI
-
-```ts
-const response = await client.captureIdentity({
-  email: 'priya@acme.com',
-  name: 'Priya Rao',
-  company: 'Acme Logistics',
-  industry: 'Logistics',
-  role: 'VP Operations',
-})
-
-console.log(response.visitorId)
-```
-
-`captureIdentity()` adds the current session ID, updates `client.state.identity`, and emits the `identity` event.
-
-The SDK creates a random, opaque, organization-scoped first-party browser visitor key and sends it during both session creation and identity capture. The same key is reused for up to 90 days so a later session can join the same governed visitor history without putting email or another personal field in browser storage. Once identity has been accepted, the backend associates that key with the canonical visitor; later sessions can then restore return-visitor continuity and history for that visitor.
-
-The browser key is a continuity hint, not authentication and not the durable `visitorId`. The backend refuses to use one reused browser key to merge two already-known, conflicting identities. The server-issued visitor ID remains the only identifier sent to PostHog.
-
-Customer-origin storage contains only that opaque key and bounded timestamps; the SDK does not store name, email, phone, company, or conversation topic there. Give visitors a way to clear every SDK-owned continuity record when your privacy controls require one:
-
-```ts
-import { forgetBrowserVisitorKey } from '@convinced/widget-sdk'
-
-forgetVisitorButton.addEventListener('click', () => {
-  forgetBrowserVisitorKey('acme')
-})
-```
-
-Clearing the key starts new browser continuity for future sessions. It does not delete an already-stored visitor or session history; use your normal data-deletion process for that.
-
-PostHog should identify the same visitor with the opaque server-issued `visitorId`, never the email address. See [PostHog, session history, and real-browser testing](/guides/widget-sdk/analytics-and-testing).
-
-In `managed-v2`, a successful identity capture starts a bounded visitor-intelligence poll. When the session-scoped endpoint returns approved company context, the renderer sends that context into the same live ElevenLabs conversation rather than starting another call. A headless interface can own the same presentation flow with `client.getVisitorIntel()` and `voice.sendContextualUpdate()`; treat `unknown`, `queued`, `failed`, and `unavailable` as normal recoverable states.
-
-When your signed-in application already knows the visitor, call `identify()`:
-
-```ts
-await client.identify({
-  email: currentUser.email,
-  name: currentUser.name,
-  company: currentAccount.name,
-  role: currentUser.role,
-})
-```
-
-With an email, `identify()` calls the durable identity endpoint by default. To set only browser/session context without forcing email capture, use either form:
-
-```ts
-await client.identify({ company: 'Acme Logistics' }, { capture: false })
-await client.setIdentity({ company: 'Acme Logistics' })
-```
-
-## Use asynchronous application policy
-
-```ts
-identityPolicy: async ({ assistantMessages }) => {
-  if (assistantMessages < 3) return false
-
-  const preference = await loadConsentPreferenceForSignedInUser()
-  if (preference === 'never_ask') return false
-
-  return {
-    title: 'Continue with a specialist',
-    fields: ['email', 'name', 'company', 'phone'],
-  }
-}
-```
-
-Do not fetch a server secret or place private CRM data in the policy result. The decision controls presentation; your privacy notice, lawful basis, retention, and deletion process remain your responsibility.
-
-## Test every configured mode
-
-For each deployment mode, verify:
-
-- The initial channel is correct.
-- `smart_gate` and `email_gate` do not start voice before their warmup or identity requirement.
-- `always_voice` and `voice_only` connect before showing the in-conversation identity enquiry.
-- `allowModeToggle: false` removes the channel switch.
-- `voice_only` cannot switch to the separate SDK chat channel.
-- A failed identity request leaves a visible, recoverable error.
-- A successful identity submission unlocks a gated voice path or updates the already-live voice-led path without creating a second session.
+If voice is disabled or fails, the same host form and typed conversation remain available.

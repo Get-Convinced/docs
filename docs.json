@@ -36,6 +36,7 @@
               "guides/widget-sdk/custom-ui",
               "guides/widget-sdk/managed-iframe",
               "guides/widget-sdk/campaigns",
+              "guides/widget-sdk/sessions",
               "guides/widget-sdk/identity",
               "guides/widget-sdk/media"
             ]

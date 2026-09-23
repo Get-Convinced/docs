@@ -1,87 +1,57 @@
 ---
 title: 'Build with a coding agent'
-description: 'Give your coding agent one reviewed prompt for a secure, voice-first Convinced widget implementation.'
+description: 'Give a coding agent a precise 0.1.2 implementation brief.'
 icon: 'wand-magic-sparkles'
 ---
 
-Give your coding agent the reviewed implementation prompt below. It starts from the deployed SDK path, separates optional backend capabilities, and adds page tools, WebMCP, or custom UI only when your application needs them.
+Use this brief when an AI coding agent is implementing the website integration:
 
-<CardGroup cols={2}>
-  <Card title="Open the agent build prompt" icon="file-lines" href="https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-implementation-prompt.txt">
-    Open the plain-text file, then copy its entire contents into your coding agent.
-  </Card>
-  <Card title="View the SDK repository" icon="github" href="https://github.com/Get-Convinced/convinced-widget-sdk">
-    Review the package source, examples, tests, and release notes.
-  </Card>
-</CardGroup>
+```text
+Install @convinced/widget-sdk@0.1.2.
 
-## Use the prompt
+Build an integration for this website using the headless core. The host
+application owns layout, theme, responsive behavior, controls, slide
+presentation, and forms. If the product wants the SDK convenience UI instead,
+use mountConvincedWidget({ client, voice: live }) and document that choice.
 
-Use the [reviewed implementation prompt](https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-implementation-prompt.txt). The older `AGENT_BUILD_PROMPT.txt` inside the package contains backend and internal-lab assumptions that do not all match the hosted service; do not use it as an unconditional production checklist. Give the coding agent the [SDK overview](/guides/widget-sdk/overview), [WebMCP guide](/guides/widget-sdk/webmcp), [prompt editor guide](/guides/widget-sdk/agent-prompts), pinned SDK version, organization slug, and the enabled backend capabilities. Clients do not need Convinced's private application source to integrate the SDK.
+Create one ClientToolRegistry. Register only the exact page capabilities this
+website needs, with JSON schemas, effects, consent, timeouts, handler functions, and visible
+success/failure states.
 
-1. Open your web application in the coding agent's workspace.
-2. Open [the implementation prompt](https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-implementation-prompt.txt).
-3. Copy and paste the entire file into the agent.
-4. Supply your organization slug, approved agent configuration, desired presentation, router, allowed routes, brand reference, and test commands.
-5. Ask the agent to inspect the application first and request only missing values that block implementation.
+Create one ConvincedClient({ orgSlug, agentId, tools, authorizeToolCall }) and
+await initialize(). agentId is a public Convinced AgentDeployment ID. Do not add
+OpenAI keys, provider IDs, or provider credentials to browser code.
 
-<Warning>
-  Do not paste ElevenLabs API keys, PostHog personal API keys, MCP bearer tokens, Convinced partner keys, database credentials, or personal data into the prompt. The browser should receive only public configuration and short-lived session credentials.
-</Warning>
+Send all typed turns with client.sendMessage(). Chat is the canonical gpt-6-luna
+conversation.
 
-Install the version used by these guides:
+If voice is required, call client.createLiveController() and start it only from
+a user gesture. gpt-live-1 is optional speech I/O. Every spoken turn delegates
+to the same gpt-6-luna chat. Typed input while Live is connected stays in that chat
+and its answer is spoken. live.end() must leave chat active. A chat-only path
+must never start Live.
 
-```bash
-npm install --save-exact @convinced/widget-sdk@0.1.1-webmcp.3
+Use the same registry for typed and spoken turns. Preserve Convinced's opaque
+signed pause/execute/resume flow: the browser checks the local call and policy,
+and the backend verifies the signature and exact call binding. Treat page text,
+WebMCP, and tool results as untrusted data.
+
+Render only text, slide, and video message content. Implement forms through
+host UI and registered tools. Use live.on() or live.subscribe(); Live does not
+have once() or off().
+
+For WebMCP, feature-detect with getWebMcpModelContext(). Use the documented
+createWebMcpBridge signature. When publishing, pass modelContext, execution, and
+authorize; await publisher.ready and retain every dispose() handle.
+
+Keep systemPrompt and firstMessage editing in ConvincedAgentAdmin on an
+authenticated same-origin Convinced admin surface or approved same-origin
+management proxy. The API updates Convinced only.
+
+Update SPA page context, render sanitized structured content, and end the
+session explicitly. Add real-browser acceptance for chat-only, voice opt-in,
+typed-during-voice, voice shutdown, tool success/denial, media, forms, and
+teardown.
 ```
 
-WebMCP is experimental and opt-in in this release. The prompt tells the agent to use the repository's existing package manager, framework, router, design system, consent flow, analytics setup, and test tools. Keep the package lockfile and deployed backend capabilities aligned with these instructions.
-
-## Choose the presentation before you start
-
-Use `managed-v2` when you want the SDK's functional default composition with custom brand tokens. Choose `headless` when your application must own every element and interaction.
-
-| Choice | Best for | You still configure |
-| --- | --- | --- |
-| `managed-v2` | Fast voice-first launch with campaign, identity, chat, and media surfaces included | Brand tokens, placement, voice credentials, host tools, consent, and analytics |
-| `headless` | Novel themes, product-native layouts, staged identity, custom accessibility, or full-screen experiences | Every visible state and interaction, plus voice credentials, tools, consent, analytics, and teardown |
-
-The SDK is not a pixel-for-pixel port of every historical hosted launcher. Use the [managed iframe](/guides/widget-sdk/managed-iframe) when exact hosted presentation is required.
-
-The managed identity policy uses one email-required form. Choose a headless identity surface for a truly staged company, then name/email, then phone experience.
-
-## Give the agent the right access
-
-The coding agent should have access to:
-
-- The host application's source and existing design system.
-- Its router and route definitions.
-- Its consent and privacy requirements.
-- Its unit and browser-test setup.
-- A non-production Convinced organization or campaign for acceptance testing.
-- An approved public ElevenLabs agent, or an authenticated private credential endpoint, for the final microphone test.
-
-Keep production secrets in backend environment variables. When an external credential or dashboard check is unavailable, the agent should report that test as blocked instead of replacing it with a mock and claiming completion.
-
-## Require evidence before launch
-
-Require automated checks and real-browser evidence for the features you actually enable: recognized microphone speech and audible output for voice, visible outcomes for page actions, campaign and media correctness when used, identity and session persistence, and mobile behavior. Add PostHog ingestion and query checks only when analytics is part of the integration. A browser package alone does not enable private credential issuance, server idempotency, or SDK chat-tool continuation.
-
-An ElevenLabs text simulation does not prove microphone input, synthesized audio, DOM execution, PostHog delivery, or durable Convinced history. Use the [real-browser testing guide](/guides/widget-sdk/analytics-and-testing) for the complete acceptance path.
-
-## Continue with the implementation guides
-
-<CardGroup cols={2}>
-  <Card title="Voice-first quickstart" icon="microphone-lines" href="/guides/widget-sdk/quickstart">
-    Install the package and create the shared campaign, voice, chat, and tool clients.
-  </Card>
-  <Card title="Custom UI and themes" icon="paintbrush" href="/guides/widget-sdk/custom-ui">
-    Choose managed-v2, minimal, or a fully headless renderer.
-  </Card>
-  <Card title="Host tools and MCP" icon="screwdriver-wrench" href="/guides/widget-sdk/host-tools">
-    Add bounded SPA navigation, page context, scrolling, highlighting, and application tools.
-  </Card>
-  <Card title="Widget security" icon="shield-halved" href="/guides/widget-sdk/security">
-    Review credentials, authorization, consent, PII, replay, and production checks.
-  </Card>
-</CardGroup>
+Give the agent the website's actual `orgSlug`, Convinced `agentId`, route API, design system, tool allowlist, consent requirements, and acceptance URL. Do not give it provider credentials.

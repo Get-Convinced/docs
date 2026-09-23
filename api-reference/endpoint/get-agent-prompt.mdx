@@ -1,61 +1,30 @@
 ---
 title: 'Get agent prompt'
-description: 'Read the live ElevenLabs system prompt and first message for an authorized SDK agent.'
+description: 'Read the live Convinced prompt for an authorized AgentDeployment.'
 ---
 
 ```http
 GET /api/org/{orgSlug}/sdk-agents/{agentId}/prompt
 ```
 
-Use `https://app.getconvinced.ai`. This management endpoint is deployed. The SDK administrator helper is available in `@convinced/widget-sdk@0.1.1-webmcp.3`.
-
-## Authorization
-
-Requires an authenticated Convinced organization `ADMIN` session. The server verifies the selected agent's organization ownership binding. The agent must be registered to that organization by Convinced; an arbitrary provider ID is not sufficient. Public widget credentials and Campaign API partner keys are not accepted. The server holds the ElevenLabs key.
-
-## Parameters
-
-| Path field | Meaning |
-| --- | --- |
-| `orgSlug` | The administrator's organization slug |
-| `agentId` | The exact ElevenLabs agent ID used by the SDK |
-
-## SDK request
+Requires an authenticated Convinced organization `ADMIN` session, either on the Convinced application origin or through an approved same-origin management proxy that authenticates and authorizes the administrator server-side. `agentId` is the Convinced `AgentDeployment` ID. A public widget token, Campaign API key, or provider identifier is not accepted.
 
 ```ts
-// Use the admin instance configured by the authenticated editor setup.
-const current = await admin.getPrompt()
+const prompt = await admin.getPrompt()
 ```
-
-## Response
 
 ```json
 {
-  "source": "elevenlabs",
-  "agentId": "agent_123",
-  "systemPrompt": "Help visitors understand this website using its available tools.",
-  "firstMessage": "Hi! What would you like to explore?",
-  "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "branchId": "agtbrch_live",
-  "versionId": "agtvrsn_current",
-  "trafficPercentage": 100
+  "source": "convinced",
+  "agentId": "adpl_public_example",
+  "promptVersionId": "prv_live_example",
+  "systemPrompt": "Help visitors understand this website.",
+  "firstMessage": "What are you trying to improve today?",
+  "revision": "<sha256>",
+  "updatedAt": "2026-09-22T08:30:00.000Z"
 }
 ```
 
-`revision` is an opaque hash from the actual response; the example value is illustrative. Include the received value in your next PATCH. Responses use `Cache-Control: private, no-store`.
+Responses use `Cache-Control: private, no-store`. Common errors are `403 admin_required`, `404 agent_not_found`, and `404 prompt_not_found`.
 
-The server reads the sole branch receiving 100% of live traffic. It does not return a cached Convinced prompt or assume Main is live. Split traffic and incomplete branch discovery return `409 agent_traffic_conflict`.
-
-## Errors
-
-| HTTP | Meaning |
-| --- | --- |
-| `400` | Invalid agent identifier |
-| `401` | Sign in; the authentication middleware rejected the request |
-| `403` | Missing organization access or ADMIN role |
-| `404` | No ownership binding for this organization and agent |
-| `409` | Shared agent or ambiguous live traffic |
-| `502` | Provider/configuration read could not be completed |
-| `503` | Server provider key or ownership configuration is missing or invalid |
-
-See [update agent prompt](/api-reference/endpoint/update-agent-prompt) and [editor setup](/guides/widget-sdk/agent-prompts).
+Use the returned `revision` when updating the prompt.

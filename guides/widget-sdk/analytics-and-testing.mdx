@@ -1,163 +1,51 @@
 ---
-title: 'PostHog, session history, and real-browser testing'
-description: 'Add optional PostHog correlation and verify voice, page actions, identity, and session history in your application.'
+title: 'Analytics and testing'
+description: 'Observe one canonical conversation and verify chat, voice, tools, and UI in a real browser.'
 icon: 'chart-user'
 ---
 
-Use Convinced session records for conversation history and identity, and verify privileged actions with the backend that performs them. PostHog is the observational layer for product events and privacy-masked session replay. Link the two with opaque IDs instead of copying visitor details or transcripts into analytics.
+Convinced is the source of truth for session state, messages, identity, and tool results. Product analytics may observe opaque events, but it must not become the authority for a completed action.
 
-## Initialize PostHog privately
+## Keep analytics private
 
-Verify WebMCP transport, actual page outcomes, provider persistence, and autonomous voice behavior separately. A successful callback or provider GET/PATCH does not prove speech or website task quality. Start from the [SDK overview](/guides/widget-sdk/overview) and test the features your application uses.
-
-PostHog is optional. Install `posthog-js` in the host application and initialize it with your public project token. The example below assumes your application already routes `/ingest` to its PostHog project; use your project's ingestion host if you do not configure that proxy. Keep passive capture off until the visitor has consented:
+- Correlate by opaque Convinced session ID.
+- Exclude names, email addresses, phone numbers, form contents, prompts, and transcripts.
+- Mask identity and conversation surfaces in replay tools.
+- Strip sensitive query strings before capture.
+- Treat browser analytics as lossy and forgeable.
 
 ```ts
-import posthog from 'posthog-js'
+client.on('state', state => {
+  analytics.capture('convinced_state_changed', {
+    session_id: state.session?.sessionId,
+    status: state.status,
+  })
+})
 
-posthog.init('YOUR_PUBLIC_POSTHOG_PROJECT_TOKEN', {
-  api_host: '/ingest',
-  ui_host: 'https://us.posthog.com',
-  person_profiles: 'identified_only',
-  capture_pageview: false,
-  capture_pageleave: false,
-  autocapture: false,
-  capture_performance: false,
-  disable_session_recording: true,
-  opt_out_capturing_by_default: true,
-  respect_dnt: true,
-  session_recording: {
-    maskAllInputs: true,
-    blockClass: 'ph-no-capture',
-    maskTextClass: 'ph-mask',
-    recordHeaders: false,
-    recordBody: false,
-    maskCapturedNetworkRequestFn(request) {
-      const url = new URL(request.name, window.location.origin)
-      url.search = ''
-      url.hash = ''
-      return {
-        ...request,
-        name: url.toString(),
-        requestHeaders: undefined,
-        responseHeaders: undefined,
-        requestBody: undefined,
-        responseBody: undefined,
-      }
-    },
-  },
+live?.on('state', state => {
+  analytics.capture('convinced_live_state_changed', {
+    status: state.status,
+  })
 })
 ```
 
-Proxying `/ingest` through your own origin is optional, but it reduces blocker-related loss and gives you one place to apply a connection allowlist. The PostHog project token is public; a PostHog personal API key is not and must never enter browser code.
+Use the analytics API's privacy hooks to remove undefined values and sensitive properties before transmission.
 
-## Link PostHog after consent
+## Test the complete contract
 
-Create one bridge in the same module as the initialized `client` and `posthog`. Provide a visible consent button and status message:
+Automated unit tests are useful for registry schemas and renderer state. A real-browser acceptance test must also cover WebRTC, microphone permissions, audio, focus, host page actions, and responsive UI.
 
-```html
-<button id="enable-analytics" type="button">Enable analytics and replay</button>
-<p id="analytics-status" role="status"></p>
-```
+Verify:
 
-```ts
-import { createPostHogBridge } from '@convinced/widget-sdk'
+1. Chat-only initialization sends no Live session request.
+2. Voice starts only after a user gesture.
+3. One spoken turn appears in the canonical client history.
+4. A typed turn while Live is active is spoken.
+5. `live.end()` stops audio and leaves `client.sendMessage()` working.
+6. A shared registry tool follows signed pause/execute/resume for both inputs.
+7. Tool rejection and timeout produce a visible, recoverable result.
+8. Slides and forms render according to host UI rules.
+9. WebMCP works when supported and degrades safely when absent.
+10. `client.endSession()` persists the ordered conversation once.
 
-const analytics = createPostHogBridge({ client, posthog })
-const consentButton = document.querySelector<HTMLButtonElement>('#enable-analytics')
-const analyticsStatus = document.querySelector<HTMLElement>('#analytics-status')
-if (!consentButton || !analyticsStatus) throw new Error('Analytics controls are missing')
-let analyticsEnabled = false
-
-consentButton.addEventListener('click', async () => {
-  if (analyticsEnabled) return
-  consentButton.disabled = true
-  posthog.opt_in_capturing()
-
-  try {
-    const link = await analytics.start()
-    analyticsEnabled = true
-    analyticsStatus.textContent = `Analytics linked to session ${link.convincedSessionId}`
-  } catch {
-    analytics.stop()
-    posthog.opt_out_capturing()
-    analyticsStatus.textContent = 'Analytics could not start. You can retry.'
-    consentButton.disabled = false
-  }
-})
-
-async function recordProofSlide(slide: string) {
-  if (!analyticsEnabled) return
-  await analytics.capture('proof_slide_opened', { slide })
-}
-
-// Call from your consent-revocation or owning-view teardown path.
-const stopAnalytics = () => {
-  analyticsEnabled = false
-  analytics.stop()
-  posthog.opt_out_capturing()
-  consentButton.disabled = false
-}
-```
-
-`start()` registers the Convinced session ID with PostHog, starts explicit replay, emits `widget.session_linked`, and writes an `analytics_session_linked` event through the Convinced session-context API. The SDK forwards a signed session capability when the backend supplies one; the current hosted response does not supply one.
-
-The bridge listens for successful identity captures after `start()` and calls `posthog.identify()` with the opaque Convinced `visitorId`. It does not send email, name, phone, or company by default. If identity was captured before the bridge started, retain the accepted `IdentityResponse` and explicitly call `analytics.identify(input, response)` after consent. Do not invent a visitor ID or use email as the distinct ID.
-
-`analytics.capture()` sends the event to PostHog and the Convinced behavior timeline. Pass `{ authoritative: false }` as its third argument only for an event that is intentionally PostHog-only. Do not send raw form values or transcript text in properties. If you opt into person properties with `identityProperties`, apply your application's consent and data-minimization policy.
-
-After `start()`, the bridge also observes the SDK demo-request lifecycle:
-
-| PostHog event | Safe properties |
-| --- | --- |
-| `widget.demo_opened` | Form surface |
-| `widget.demo_submitted` | Optional opaque request correlation, timestamp, retry flag, identity-linked flag, and field-presence booleans |
-| `widget.demo_failed` | Failure stage, safe error code, and field-presence booleans |
-
-Do not emit these events a second time in the host application. The current hosted demo endpoint does not provide a `requestId` or server-side idempotency, so correlation and retry fields are not proof of exactly-once delivery. See [demo-request behavior](/guides/widget-sdk/custom-ui#use-managed-marketing-surfaces).
-
-## Separate SDK emission from PostHog ingestion
-
-PostHog's browser `before_send` hook proves that an event passed the SDK's final client-side filter and was offered to the transport. It does not prove that the request reached your proxy, that PostHog accepted it, or that the event is queryable in the project.
-
-Use three distinct acceptance checks:
-
-1. Observe `before_send` only as SDK emission evidence.
-2. Require every relevant `/ingest` request to complete successfully.
-3. Query PostHog by the opaque `convinced_session_id`, require the expected `widget.demo_opened` and `widget.demo_submitted` events, and assert that email, name, phone, company, form context, and transcript content are absent.
-
-Cross-check the same opaque session in the Convinced dashboard. Do not mark the full analytics path accepted until both the authoritative session record and the PostHog query succeed.
-
-<Warning>
-  Browser analytics can be blocked or spoofed. Do not use a PostHog event as proof that identity was captured, a tool was authorized, or a session ended. Read those facts from Convinced.
-</Warning>
-
-## Test your own application
-
-Use a test organization, an allowed test origin, and a provider agent configured for the callbacks your page implements. Convinced's internal acceptance scripts are not required for a client integration and are not included in the public npm package.
-
-The [tagged SDK repository examples](https://github.com/Get-Convinced/convinced-widget-sdk/tree/v0.1.1-webmcp.3/examples) demonstrate the APIs. Mock conversations in a sample verify UI and transport plumbing only; they are not live speech evidence.
-
-Run these checks in your actual browser:
-
-1. Initialize one Convinced session and record its opaque session ID. Check a generic URL and a ready campaign URL when campaigns are used.
-2. Start voice from a visitor gesture. Speak a request and verify recognized speech, audible output, and the linked ElevenLabs conversation ID.
-3. Ask for one read action and one permitted page mutation. Check the returned result and the final visible page state. Deny an action and verify that the page does not change.
-4. Navigate through your SPA, select a page item manually during an agent action, and confirm that the visitor's latest selection remains authoritative.
-5. Verify configured identity, media, and meeting-request behavior, including visible failures. Use test data; do not automatically retry an ambiguous form submission.
-6. Enable analytics only after consent. Inspect replay masking and request completion, then query PostHog by the opaque Convinced session ID.
-7. Await `widget.endSession()` for a supplied renderer. For headless voice created by `client.createVoiceController()`, await `client.endSession({ slidesViewed })`; the SDK supplies captured turns and provider IDs, while your renderer supplies only the media it displayed. Check the actual Convinced session record.
-8. Repeat the relevant flows on mobile and with microphone permission denied, a network failure, and a disabled or unavailable tool.
-
-For automated microphone testing, use a supported browser's fake-microphone input with a test WAV file and assert recognition plus output audio. A text-only simulation does not prove those paths. Keep test credentials on trusted infrastructure and record blockers honestly when provider or dashboard access is unavailable.
-
-## Production acceptance checklist
-
-- The agent ID is intentionally public, or the private credential endpoint is deployed and verified. The hosted `getVoiceCredential()` route is not currently available.
-- Browser voice callbacks, WebMCP discovery, and backend chat continuation are tested separately. The current hosted chat route does not execute the SDK continuation protocol.
-- The page's Content Security Policy permits the required media and provider connections; microphone permission starts from a visitor gesture.
-- Replay begins after consent, masks inputs, blocks sensitive transcript and identity containers, and omits network bodies and headers.
-- Successful ingestion is observed and the expected PostHog events are queryable without personal fields or transcript text.
-- Every mutating page tool passes its registry authorization and any additional handler policy.
-- Session history contains the actual conversation ID, transcript, identity, and shown media expected from the chosen renderer.
-- Server signing, webhook validation, quotas, and idempotency are checked with the backend operator rather than inferred from optional SDK response fields.
+Inspect browser source, requests, storage, and logs to confirm that no OpenAI key or provider ID is exposed.

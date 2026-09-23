@@ -1,242 +1,56 @@
 ---
 title: 'Host tools and MCP'
-description: 'Let ElevenLabs voice and chat navigate an SPA, inspect the page, or call a bounded application or MCP tool.'
+description: 'Run bounded website actions through one registry and one signed continuation flow.'
 icon: 'screwdriver-wrench'
 ---
 
-Host tools are explicit capabilities that run in the page containing the SDK. They let the agent observe or act, return a structured result, and continue the same voice or chat turn.
-
-The same `ClientToolRegistry` can supply voice callbacks and the SDK chat-continuation protocol. Voice callbacks execute directly in the browser; chat requires a compatible backend, as described below. The Convinced runtime remains the owner of conversation behavior; your page remains the owner of DOM access, application state, consent, and MCP connectivity.
-
-<Tip>
-  Building a guide that understands named products, roles, or sections? Use [Build a page-aware guide](/guides/widget-sdk/page-aware-guides) for the semantic manifest, discovery-first tool pattern, observed receipts, and visitor-wins arbitration.
-</Tip>
-
-<Warning>
-  Never expose arbitrary JavaScript evaluation, unrestricted DOM access, a generic authenticated fetch proxy, or privileged credentials as a browser tool.
-</Warning>
-
-## Register the supplied DOM tools
-
-For tools already exposed through browser WebMCP, use [the WebMCP adapter](/guides/widget-sdk/webmcp). It consumes two registry entries while discovering the underlying website catalog. `createMcpTools()` below connects an already-authorized MCP client and serves a different interface.
-
-Every DOM capability is off by default:
+Create one `ClientToolRegistry` before the client. Typed and spoken turns use it automatically.
 
 ```ts
-import {
-  ClientToolRegistry,
-  ConvincedClient,
-  registerDomTools,
-} from '@convinced/widget-sdk'
-
 const tools = new ClientToolRegistry()
 
-const removeDomTools = registerDomTools(tools, {
-  capabilities: {
-    pageContext: true,
-    navigate: true,
-    scroll: true,
-    highlight: true,
-  },
-  allowedNavigationOrigins: ['https://checkout.acme.com'],
-
-  // Required for host_navigate. This callback must not unload the page.
-  navigate: (url) => appRouter.navigate(url),
-
-  authorize: ({ action, target }) => {
-    if (action === 'pageContext') return true
-    return window.confirm(`Allow ${action}${target ? `: ${target}` : ''}?`)
-  },
-  highlightColor: '#ff5c35',
-})
-
-const client = new ConvincedClient({
-  orgSlug: 'acme',
-  tools,
-  authorizeToolCall: ({ tool }) => {
-    if (tool.effect === 'read') return true
-    return window.confirm(`Allow ${tool.description}?`)
-  },
-})
-```
-
-| SDK tool | Effect | Consent | Boundary |
-| --- | --- | --- | --- |
-| `host_get_page_context` | `read` | `session` | Compact visible-page summary; excludes form values and editable or executable nodes |
-| `host_navigate` | `navigate` | `per_call` | Explicit non-unloading SPA callback; current origin plus exact allowed origins; HTTP(S) only |
-| `host_scroll_to` | `mutate` | `per_call` | One safe selector |
-| `host_highlight` | `mutate` | `per_call` | One safe selector; temporary style restored after 500 ms to 10 seconds |
-
-The helper rejects broad, executable, or invalid selectors. Add `selectorValidator` when your application needs a smaller allowlist.
-
-Call `removeDomTools()` when the current page no longer offers those capabilities.
-
-## Bind the tools to ElevenLabs voice
-
-The name on the left must exactly match the client tool configured on the ElevenLabs agent:
-
-```ts
-const voice = client.createVoiceController({
-  descriptor: {
-    agentId: 'agent_123',
-    exactClientTools: {
-      host_navigate: 'host_navigate',
-      host_get_page_context: 'host_get_page_context',
-      host_scroll_to: 'host_scroll_to',
-      host_highlight: 'host_highlight',
-    },
-    genericClientTool: { name: 'host_extension_call' },
-  },
-  tools,
-  authorizeToolCall: ({ tool }) => {
-    if (tool.effect === 'read') return true
-    return window.confirm(`Allow voice to use ${tool.description}?`)
-  },
-})
-```
-
-Enable **Wait for response** on the ElevenLabs client tools. The agent then receives a success or failure result after navigation, scrolling, highlighting, or application logic completes.
-
-## Keep SPA navigation alive
-
-`host_navigate` requires an explicit router callback because a full-page navigation would destroy the active SDK and prevent the tool result from returning.
-
-```ts
-navigate: async (url) => {
-  const target = new URL(url)
-  await router.push(`${target.pathname}${target.search}${target.hash}`)
-  await client.updatePage({ url: target.href, title: document.title })
-}
-```
-
-The helper allows the current origin. Add exact extra origins only when your SPA router can move there without unloading the SDK.
-
-If navigation happens outside the tool, keep the live voice session current:
-
-```ts
-router.onChange(({ url, title }) => {
-  void client.updatePage({ url, title })
-
-  if (voice.state.status === 'connected') {
-    voice.sendContextualUpdate(`Current page: ${title} (${url})`, 'current-page')
-  }
-})
-```
-
-## Define a custom application tool
-
-```ts
-import { HOST_TOOL_PROTOCOL_VERSION } from '@convinced/widget-sdk'
-
-const unregister = client.registerTool({
-  version: HOST_TOOL_PROTOCOL_VERSION,
-  name: 'host_open_pricing',
-  description: 'Open the pricing panel for one named plan.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      plan: {
-        type: 'string',
-        enum: ['starter', 'growth', 'enterprise'],
-      },
-    },
-    required: ['plan'],
-    additionalProperties: false,
-  },
+tools.register({
+  version: 1,
+  name: 'host_get_page_context',
+  description: 'Read the current public page title and route.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   locality: 'host',
-  effect: 'mutate',
-  consent: 'per_call',
+  effect: 'read',
+  consent: 'none',
   timeoutMs: 2_000,
-  constraints: {
-    allowedPlans: ['starter', 'growth', 'enterprise'],
-  },
-  handler: async ({ plan }) => {
-    if (typeof plan !== 'string') throw new Error('Invalid plan')
-    openPricingPanel(plan)
-    return { opened: true, plan }
-  },
-})
-```
-
-Names must start with `host_` or `client_` and use lowercase letters, numbers, and underscores. Call `unregister()` when the action is no longer available.
-
-The registry validates the manifest, JSON Schema, arguments, declared effect and consent, timeout, and serialized result. Handler-level checks remain useful because they can enforce live application state that a static schema cannot express.
-
-## Use the generic voice gateway
-
-One ElevenLabs client tool named `host_extension_call` can dispatch to any bounded tool already registered for the session:
-
-```json
-{
-  "name": "host_open_pricing",
-  "arguments_json": "{\"plan\":\"enterprise\"}"
-}
-```
-
-The canonical ElevenLabs schema uses `arguments_json`, a JSON object encoded as a string. The SDK parser also tolerates an `arguments` object for existing custom configurations. The gateway still applies the target tool's schema, consent, and timeout. Unknown tool names fail with a structured result.
-
-Set `genericClientTool: false` when the agent does not define this gateway. Exact ElevenLabs bindings plus the gateway are capped at 16 callbacks.
-
-## Adapt an MCP client
-
-`createMcpTools()` converts tools from a caller-supplied MCP client into SDK registry entries. Your application must create, connect, and authenticate that client.
-
-```ts
-import { createMcpTools } from '@convinced/widget-sdk'
-
-const mcpTools = await createMcpTools(mcpClient, {
-  allow: ['find_product', 'check_inventory'],
-  policy: (tool) => ({
-    effect: tool.name === 'check_inventory' ? 'read' : 'mutate',
-    consent: tool.name === 'check_inventory' ? 'session' : 'per_call',
-    timeoutMs: 10_000,
+  handler: async () => ({
+    title: document.title,
+    url: location.origin + location.pathname,
   }),
 })
-
-client.tools.registerMany(mcpTools)
 ```
 
-Adapted names use the `client_mcp_` prefix by default. An explicit `allow` list or predicate is required. If you omit `policy`, the adapter uses `effect: 'mutate'` and `consent: 'per_call'` because MCP discovery does not provide a trustworthy read/write classification.
+Tool names should be stable, namespaced, and specific. Keep schemas shallow, reject unknown properties, bound results, and avoid raw HTML or form values.
 
-An ElevenLabs agent can reach an adapted tool through `host_extension_call`:
+## Authorization
 
-```json
-{
-  "name": "client_mcp_check_inventory",
-  "arguments_json": "{\"sku\":\"A-42\"}"
-}
+```ts
+const client = new ConvincedClient({
+  orgSlug,
+  agentId,
+  tools,
+  authorizeToolCall: ({ tool }) => {
+    if (tool.effect === 'read') return true
+    return showConsentDialog(tool.description)
+  },
+})
 ```
 
-<Warning>
-  The adapter does not create an MCP transport and never accepts credentials. Keep MCP bearer tokens on your backend, or use an OAuth flow designed for a public browser client. The [Convinced KB MCP server](/guides/mcp/overview) is a separate credentialed surface; never put its partner key in widget code.
-</Warning>
+`none` is appropriate only for harmless public reads. Use `session` for a remembered approval within the current session and `per_call` for consequential or sensitive work.
 
-## Chat continuation
+## Signed pause, execute, resume
 
-The published SDK implements a chat host-tool continuation protocol, but the current hosted chat route does not implement it. Use ElevenLabs voice callbacks for page actions on the hosted service today.
+`gpt-6-luna` never calls browser JavaScript directly. Convinced pauses the turn and returns an opaque, signed, short-lived capability with the pending calls. The SDK does not verify the server signature in the browser. It checks each call against the local registry, schema, bounds, expiry hint, and host authorization, executes the registered `handler`, then returns the result with the opaque capability.
 
-With a compatible backend, the client advertises the registry manifest with the turn. When the runtime requests a tool, it pauses the stream with an opaque signed capability. The SDK executes the approved handlers, returns their results with the capability unchanged, and resumes the same turn.
+The backend verifies the capability's signature and its organization, session, turn, call IDs, names, arguments, expiry, and call count before resuming `gpt-6-luna`. The browser cannot mint another call, change its arguments, or reuse the continuation for another turn. Live uses this exact path because its spoken turns delegate to `gpt-6-luna`.
 
-Do not persist, inspect, construct, or replay that capability. If a resume was claimed and its network response is lost, start a new chat turn instead of retrying the mutation.
+## MCP adapters
 
-## Limits
+`createMcpTools()` adapts an application-managed MCP client into registry entries. Discovery is deny-by-default. Keep MCP authentication and network credentials outside the public bundle.
 
-| Boundary | Limit |
-| --- | --- |
-| Registered client tools | 16 (a WebMCP bridge occupies two entries) |
-| Calls in one continuation round | 16 |
-| Chat continuation rounds | 4 |
-| Total calls in one chat continuation chain | 64 |
-| Arguments | 16 KiB, depth 8 |
-| Result | 32 KiB, depth 8 |
-| Full manifest | 48 KiB |
-| Individual schema and constraints | 12 KiB, depth 8 |
-| Tool timeout | Up to 30 seconds |
-
-These are SDK protocol limits; they do not imply that every hosted backend implements chat continuation.
-
-The supported schema subset includes primitive, object, and array types; properties and required fields; additional properties; enums and constants; uniform or tuple items; length, count, and numeric bounds; and `anyOf`, `oneOf`, and `allOf`. Unsupported keywords such as `$ref`, `format`, `pattern`, and custom annotations are rejected.
-
-## Managed iframe equivalent
-
-The current production loader does not expose page-tool registration, a router callback, or cross-origin WebMCP discovery. Use the SDK in the host document when the agent needs these actions. See [Managed iframe loader](/guides/widget-sdk/managed-iframe#add-page-actions-with-the-sdk).
+Use [WebMCP](/guides/widget-sdk/webmcp) for tools exposed by the current webpage. WebMCP annotations are hints, not authorization.

@@ -1,169 +1,61 @@
 ---
-title: 'Widget security'
-description: 'Protect ElevenLabs credentials, browser capabilities, MCP access, visitor data, and custom rendering code.'
-icon: 'shield-halved'
+title: 'Widget SDK security'
+description: 'Keep credentials, conversation authority, and browser actions on the correct side of the trust boundary.'
+icon: 'shield'
 ---
 
-The Widget SDK and managed loader run in a visitor's browser. Treat their configuration, bundled source, campaign tokens, public embed tokens, tool definitions, and tool results as visible to that visitor.
+## Public browser configuration
 
-## Keep credentials off the page
+The browser may contain:
 
-Never add these secrets to browser code or public build variables:
+- `orgSlug`;
+- `agentId`, a public Convinced `AgentDeployment` ID;
+- a public embed token when the deployment requires one;
+- public presentation metadata returned by Convinced.
 
-- A Convinced Campaign API key.
-- A Convinced KB MCP partner key.
-- An ElevenLabs API key.
-- A private service bearer token.
-- A long-lived MCP credential.
+An `agentId` selects a deployment. It is not an ownership credential and cannot authorize prompt edits.
 
-| Browser value | Safe use |
-| --- | --- |
-| Convinced `widgetToken` / loader `data-token` | Public embed access for an organization and allowed origin |
-| Campaign target token in `c` | Public routing to one prepared campaign experience |
-| ElevenLabs public `agentId` | An agent intentionally configured for public browser access |
-| ElevenLabs `signedUrl` | Short-lived private WebSocket session credential minted by your backend |
-| ElevenLabs `conversationToken` | Short-lived private WebRTC session credential minted by your backend |
+## Server-owned configuration
 
-The SDK rejects voice descriptors that contain API-key-shaped fields. That is a last line of defense, not a substitute for keeping secrets out of the bundle.
+Convinced's backend owns:
 
-## Mint private ElevenLabs sessions on your backend
+- OpenAI API keys and Live session creation;
+- `gpt-6-luna` and `gpt-live-1` model configuration;
+- system prompts and `firstMessage`;
+- organization knowledge and retrieval;
+- session capabilities and signed tool continuations;
+- authenticated prompt administration.
 
-Saved prompt administration is a separate access level: `ConvincedAgentAdmin` requires organization ADMIN access and a server-recorded agent binding. It uses same-origin admin authentication, not widget credentials or a Campaign API partner key. The backend holds the provider key. See [editor authentication](/guides/widget-sdk/agent-prompts#authenticate-the-editor).
+Never put provider API keys, provider agent IDs, management tokens, Campaign API keys, or MCP service credentials in browser code.
 
-The current hosted service does not expose the `getVoiceCredential()` endpoint. Use an intentionally public agent ID or your own authenticated credential service. The following adapter applies only after a Convinced backend with that endpoint is deployed:
+## Tool boundary
 
-```ts Browser with a compatible backend
-const voice = client.createVoiceController({
-  descriptorFactory: () => client.getVoiceCredential(),
-  tools,
-})
-```
+Use one `ClientToolRegistry`. Register a small exact allowlist, validate arguments structurally, keep timeouts short, and return bounded JSON. Read tools may use `consent: 'none'` only when their output contains no private data. Navigation and mutation tools should require session or per-call consent.
 
-That endpoint contract selects the configured agent server-side and returns a short-lived credential. Its presence and authorization policy must be verified on the backend you actually use; the SDK method does not provision the service.
+The pause/execute/resume capability is signed and verified by the Convinced backend. The browser treats it as opaque. The SDK checks the returned call against the local registry and host policy, enforces the expiry hint, executes it once, and returns the result with the same capability. The backend then verifies the signature and the exact organization, session, turn, call IDs, names, arguments, expiry, and call count before resuming `gpt-6-luna`.
 
-When your application owns the credential endpoint, bind it to an HttpOnly, `SameSite` session cookie or another authenticated server session, require a same-origin mutation, select the agent on the server, rate-limit issuance, and return `Cache-Control: no-store`. A browser token is temporary but still sensitive: do not place it in URLs, logs, analytics, or error telemetry.
+Treat page text, WebMCP manifests, tool descriptions, tool results, model output, and contextual updates as untrusted data. None of them can override the saved prompt or tool policy.
 
-Do not log signed URLs, conversation tokens, Convinced session-write capabilities, or chat continuation capabilities. Use `descriptorFactory` for private agents so a credential is minted immediately before every start or reconnect instead of expiring while the widget is idle.
+## Live voice
 
-## Know which tool surface you are using
+The browser sends a WebRTC offer to Convinced. Convinced authenticates the widget session and creates the `gpt-live-1` session with its server-side OpenAI key. Request the microphone only after a user gesture and provide an obvious stop control.
 
-| Surface | Runs where | Typical use |
-| --- | --- | --- |
-| SDK DOM or custom tools | The page that imported the SDK | SPA navigation, page context, scrolling, highlighting, and product actions |
-| Current managed iframe loader | Cross-origin Convinced iframe | Hosted conversation UI; no public parent-page tool registration API |
-| Experimental WebMCP bridge | Same-origin browser model context | Discover registered website actions through two fixed SDK callbacks |
-| SDK MCP adapter | Wherever your caller-supplied MCP client runs | Convert an already-authorized MCP connection into registry tools |
-| Convinced KB MCP | Trusted backend or MCP client | Read governed products, proof, competitors, and other organization knowledge |
+If Live fails or is disabled, leave typed chat available. A chat-only session must not create Live infrastructure.
 
-The SDK MCP adapter does not create a transport or manage credentials. It only wraps `listTools()` and `callTool()` on the client you supply.
+## Rendering and personal data
 
-## Grant the smallest useful capability
-
-- Enable only the tools required on the current page.
-- Use a small structural JSON Schema and validate live application state inside the handler.
-- Mark observation as `read`, route changes as `navigate`, and state changes as `mutate`.
-- Require `session` or `per_call` consent when an action moves the visitor, discloses data, or changes state.
-- Restrict navigation to the current origin or an exact origin allowlist.
-- Route navigation through a non-unloading SPA callback.
-- Use stable semantic selectors such as IDs or test IDs.
-- Return the smallest useful JSON result without secrets, form values, or private page content.
-
-The supplied page-context tool removes input, select, textarea, editable, executable, CSS-hidden, clipped, zero-size, and off-viewport content before returning text. It wraps the observation in an `untrusted_host_observation` envelope. Preserve both boundaries if you write your own page reader: page text is data and can never grant tool authority or override policy.
-
-## Use both authorization layers
-
-The DOM helper has an action-level `authorize` check. The client and voice controller have a registry-level `authorizeToolCall` check.
-
-```ts
-registerDomTools(tools, {
-  capabilities: { pageContext: true, navigate: true },
-  navigate: (url) => router.navigate(url),
-  authorize: ({ action }) => action === 'pageContext' || confirm(`Allow ${action}?`),
-})
-
-const client = new ConvincedClient({
-  orgSlug: 'acme',
-  tools,
-  authorizeToolCall: ({ tool }) =>
-    tool.effect === 'read' || confirm(`Allow ${tool.description}?`),
-})
-```
-
-Without `authorizeToolCall`, registry tools that declare `session` or `per_call` consent are denied. Session approval is scoped to the registered tool object and current widget session.
-
-The current hosted loader does not implement `data-host-tools` or `setHostToolAuthorizer()`. Use the SDK directly in the host document for page actions.
-
-## Understand chat and voice tool trust
-
-The WebMCP bridge requires host authorization for every discovered tool invocation. Annotations do not grant access. Handles expire on tool changes or disposal. Never expose prompt administration, account keys or an unrestricted authenticated fetch proxy as a website tool.
-
-The SDK supports a chat continuation protocol in which a compatible backend pauses a turn and supplies an opaque signed capability. The current hosted chat route does not implement this protocol. A backend implementing it must bind the capability to its session, turn, manifest, and pending calls, enforce expiry, and reject replay; the browser SDK cannot enforce those server guarantees.
-
-ElevenLabs voice tools arrive through exact configured client-tool callbacks. The SDK maps each callback to a registry entry and applies the same local schema, effect, consent, timeout, argument, and result checks.
-
-In both cases, page text, MCP results, browser-authored tool descriptions, and tool results are untrusted observations. They may inform the runtime, but they do not become trusted instructions or canonical product truth.
-
-## Protect custom rendering
-
-When you build a headless interface:
-
-- Render assistant and transcript text with text nodes or a trusted Markdown pipeline.
-- Never assign model output directly to `innerHTML`.
-- Render only exact HTTP(S) media URLs from the initialized Convinced catalog; keep unknown model directives inert.
-- Use `toSafeVideoEmbedUrl()` for supported video hosts.
-- Restrict script, frame, image, media, and connection origins with Content Security Policy.
-- Preserve visible consent, pending, cancellation, and failure states for tools.
-- Unsubscribe event listeners and end voice when a component unmounts.
-
-## Treat identity as personal data
-
-Collect only fields you need. Explain why you are asking. Do not include identity values in page-context results, analytics properties, URLs, tool descriptions, or tool results.
-
-Model tools may populate a visible identity draft, but they do not establish consent. Keep visitor form submission as the default durable-write path. If you support spoken confirmation, require a fresh `per_call` host authorization for that exact `confirm_visitor_form` invocation and never cache the grant.
-
-The SDK's customer-origin storage contains only a random organization-scoped continuity key and bounded timestamps. It deletes the legacy managed record that held names, emails, and conversation topics. Call `forgetBrowserVisitorKey(orgSlug)` from your privacy controls to remove both current and legacy SDK records.
-
-Your privacy notice, lawful basis, retention schedule, deletion process, and access controls remain your responsibility. See [Identity and voice modes](/guides/widget-sdk/identity).
-
-## Understand backend guarantees
-
-Browser tool authorization protects the local callback. It does not authorize an API mutation, make browser identity trustworthy, or replace server-side tenant checks. A custom tool that writes account data must use an authenticated, authorized server endpoint.
-
-The SDK forwards a session-write capability when the session response contains one. The current hosted response does not provide one; do not describe every widget request as signed or authenticated merely because it was made through the SDK.
-
-The current demo-request endpoint stores a follow-up enquiry and returns `ok` and `submittedAt`. It does not provide server-side idempotency or opaque request correlation. SDK coalescing applies only to the current client instance. Avoid automatic retries after an uncertain result, and do not promise exactly-once lead creation. Configure a real `meetingCtaUrl` when the visitor should book a calendar slot.
-
-Customer administrators can edit shared ElevenLabs instructions through [the separate management API](/guides/widget-sdk/agent-prompts). It checks authenticated organization ADMIN access and an agent binding. Public widget credentials never authorize those edits.
-
-## Keep PostHog observational
-
-PostHog browser events can be blocked or forged. Keep Convinced as the source of truth for identity, conversation history, authorization, and session completion.
-
-- Begin replay only after the visitor's consent.
-- Set `maskAllInputs: true`, use `ph-no-capture` on identity and transcript surfaces, and never record request or response bodies or headers.
-- Strip URL query strings and fragments before capture.
-- Correlate with the opaque Convinced session and visitor IDs; do not send email, name, phone, company, or transcript text.
-- Treat the PostHog replay link as privileged dashboard data.
-- Treat `before_send` as browser-emission evidence only. Require successful ingest responses and a PostHog query by opaque `convinced_session_id` before claiming delivery; assert the queried events contain no identity, form, or transcript fields.
-
-The SDK's optional bridge implements the correlation contract. See [PostHog, session history, and real-browser testing](/guides/widget-sdk/analytics-and-testing).
-
-## Verify provider and server integrations
-
-Webhook verification, credential issuance, quota enforcement, database access, and outbound webhook delivery are responsibilities of the backend operator. Installing this browser SDK does not configure or harden those services. Confirm their deployed behavior before relying on a server-side security guarantee.
-
-If your application operates these services, verify provider signatures before processing payloads, reject expired requests, keep webhook secrets server-side, restrict outbound destinations, and enforce authentication and rate limits on credential issuance. Use an authenticated server record rather than browser analytics as evidence that a privileged action occurred.
+- Render text with text nodes or sanitized Markdown.
+- Resolve slides and videos from the deployment catalog.
+- Never render unknown model HTML.
+- Keep raw form values out of page context, analytics, URLs, and tool results.
+- Make durable form submission and other consequential actions visibly consented.
+- End sessions through an awaited application action.
 
 ## Production checklist
 
-- Use an intentionally public ElevenLabs agent, or a verified private credential endpoint with a server-selected agent.
-- Keep ElevenLabs, Campaign API, KB MCP, and private service keys out of the browser.
-- Start microphone access from an intentional visitor gesture.
-- Match every provider client-tool name and schema to the callback implemented by the page.
-- Enable **Wait for response** when the agent needs the action result.
-- Keep DOM and MCP tool lists explicit; use an allowlisted SPA router that does not unload the session owner.
-- Authorize consented tools in both the voice or chat controller and any additional handler policy.
-- Keep form values, secrets, and hidden personal data out of page context and tool results.
-- Treat WebMCP and chat continuation as separately tested capabilities; neither is enabled by installing the SDK alone.
-- Verify identity, media, allowed and denied tools, microphone/audio, retry states, and session teardown in the actual browser and deployment.
-- For private credentials, signed session writes, server idempotency, and webhook guarantees, retain evidence from the deployed backend rather than inferring support from SDK types.
+- Allowed origins match every host website.
+- Browser code contains only Convinced public config.
+- Chat and voice share one registry and one canonical session.
+- Tool names, schemas, effects, consent, and timeouts are reviewed.
+- Prompt editing requires an authenticated organization administrator.
+- Real-browser tests cover chat-only, voice opt-in, typed input during voice, interruption, tool denial, Live failure, and teardown.

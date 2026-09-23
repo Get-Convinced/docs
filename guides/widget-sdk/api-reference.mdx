@@ -1,88 +1,97 @@
 ---
 title: 'SDK API map'
-description: 'Find the public SDK classes, methods, tool adapters and lifecycle helpers.'
+description: 'Public classes and methods in @convinced/widget-sdk 0.1.2.'
 icon: 'code'
 ---
 
-Import public APIs from `@convinced/widget-sdk@0.1.1-webmcp.3` using the module name `@convinced/widget-sdk`. The installed package's TypeScript declarations are the exact signature reference; this page groups them by the work they perform.
+Import from `@convinced/widget-sdk`. The installed TypeScript declarations are the exact signature reference.
 
-## Session and chat
-
-`ConvincedClient({ orgSlug, apiBase?, widgetToken?, tools?, fetch?, authorizeToolCall?, ... })` owns widget session and chat state.
-
-| Operation | Methods |
-| --- | --- |
-| Initialize and read configuration | `initialize()`, `getConfig()`, `createSession()`, `renewSession()`, `state` |
-| Converse | `sendMessage()`, `cancelActiveTurn()` |
-| Identity and enrichment | `captureIdentity()`, `identify()`, `setIdentity()`, `getVisitorIntel()` |
-| Voice ownership | `createVoiceController()` |
-| Low-level voice association | `getVoiceCredential()` (hosted endpoint unavailable), `markVoiceUpgrade()`, `linkElevenLabsConversation()` |
-| Media | `getSlides()`, `getSlideMetadata()` |
-| Site and session context | `updatePage()`, `updateSessionContext()` |
-| Lifecycle events | `track()`, `sendEvent()`, `on()`, `once()`, `off()` |
-| Application tools | `registerTool()`, `tools` |
-| Lead handoff | `reportDemoRequestOpened()`, `submitDemoRequest()` |
-| Teardown | `endSession()`, `destroy()` |
-
-The hosted service currently lacks the private `voice-token` endpoint and the complete signed chat-tool continuation protocol. Package methods describe the SDK interface, not backend availability. See [current availability](/guides/widget-sdk/overview#current-availability).
-
-Use `browserSessionInput()` and `resolveWidgetSessionAttribution()` to prepare attribution. `forgetBrowserVisitorKey()` clears the SDK continuity key for privacy controls. See [campaigns](/guides/widget-sdk/campaigns), [identity](/guides/widget-sdk/identity) and [events](/guides/widget-sdk/events).
-
-## ElevenLabs conversation
-
-`ConvincedVoiceController` accepts either a browser-safe `descriptor` or a fresh `descriptorFactory`, plus tools and optional session linkage.
-
-| Operation | Methods or fields |
-| --- | --- |
-| Connect or end | `start(context?)`, `end()` |
-| Observe | `state`, `subscribe()`, `on()`, `once()`, `off()` |
-| Input and context | `sendUserMessage()`, `sendContextualUpdate()`, `sendUserActivity()` |
-| Audio | `setMuted()`, `setVolume()`, `startPushToTalk()`, `stopPushToTalk()` |
-| Voice tool contract | Descriptor `exactClientTools` and `genericClientTool` |
-
-`buildManagedVoiceStartContext()` assembles the managed session, campaign and page context for a headless start. `buildVoiceOutreachContext()` prepares outreach data. These are conversation inputs; they do not persist agent settings. See [voice](/guides/widget-sdk/voice).
-
-## Saved agent configuration
-
-Available in `0.1.1-webmcp.3` with the deployed authenticated management API. This example shows the call shape; supply your organization, agent ID and management origin:
+## `ConvincedClient`
 
 ```ts
-const admin = new ConvincedAgentAdmin({ orgSlug, agentId, apiBase })
-const current = await admin.getPrompt()
-const saved = await admin.updatePrompt({
-  systemPrompt: 'Your agent instructions',
-  firstMessage: 'Your opening message',
-  expectedRevision: current.revision,
+const client = new ConvincedClient({
+  orgSlug,
+  agentId?,
+  tools?,
+  authorizeToolCall?,
 })
 ```
 
-Both methods return `AgentPrompt`. `UpdateAgentPromptInput` accepts either field or both, with `expectedRevision` required. Use this only through authenticated management access. See [prompts and first message](/guides/widget-sdk/agent-prompts).
+`agentId` is a public Convinced `AgentDeployment` ID. It is optional when the organization has one default live widget deployment.
 
-## Tool adapters
-
-| API | Role |
+| Work | API |
 | --- | --- |
-| `ClientToolRegistry` | Register, list, validate and execute explicit client tools |
-| `createDomTools()` / `registerDomTools()` | Opt-in page context, SPA navigation, scrolling and highlighting |
-| `createMcpTools()` | Adapt tools from an already-connected caller-owned MCP client |
-| `getWebMcpModelContext()` | Detect the optional browser model context |
-| `publishRegistryToWebMcp()` | Publish existing registry handlers; returns `ready` and `dispose()` |
-| `createWebMcpBridge()` | Discover browser tools; returns two registry tools plus `listTools()`, `executeTool()` and `dispose()` |
-| `WEBMCP_VOICE_BINDINGS` | The two fixed ElevenLabs-to-SDK callback mappings |
+| Start | `initialize()`, `state` |
+| Text | `sendMessage()`, `cancelActiveTurn()` |
+| Voice | `createLiveController()` |
+| WebMCP publishing | `publishToolsToWebMcp()` |
+| Identity | `captureIdentity()`, `identify()`, `setIdentity()` |
+| Context | `updatePage()`, `updateSessionContext()`, `track()` |
+| Lifecycle | `renewSession()`, `endSession()`, `destroy()` |
+| Events | `on()`, `once()`, `off()` |
 
-The WebMCP helpers require the prerelease and a compatible browser implementation. Ordinary registry limits remain in place; the bridge uses two entries to access a discovered catalog. See [host tools](/guides/widget-sdk/host-tools) and [WebMCP](/guides/widget-sdk/webmcp).
+`sendMessage()` is always the typed-input API. When Live is connected, the same canonical `gpt-6-luna` result is also sent to Live for speech.
 
-## Rendering and analytics
+## `ConvincedLiveController`
 
-- `mountConvincedWidget()` returns the mounted UI owner, including `open()`, `close()`, `startVoice()`, `endVoice()`, `endSession()`, `destroy()` and `host`.
-- `parseAssistantContent()`, `stripAssistantDirectives()` and `toSafeVideoEmbedUrl()` support safe custom media rendering.
-- `createPostHogBridge()` / `ConvincedPostHogBridge` correlate consented analytics with SDK sessions.
-- `ConvincedApiError` carries HTTP status, API code and response details; `ConvincedSdkError` represents SDK-level failures.
+Create it from the initialized client:
 
-The mounted renderer owns its transcript/media bookkeeping. Headless controllers created through the client capture turns automatically; the renderer supplies shown slide filenames when used.
+```ts
+const live = client.createLiveController()
+```
 
-## Session ownership API
+| Work | API |
+| --- | --- |
+| Connect | `start({ context?, startMuted? })` |
+| Microphone | `setMuted(boolean)` |
+| Page observation | `sendContextualUpdate(text, contextId?)` |
+| Disconnect audio | `end()` |
+| Events | `on()`, `subscribe()` |
 
-SDK `0.1.1-webmcp.3` adds `client.createVoiceController(options?)`. It returns a `ConvincedVoiceController` attached to that client and exports `SessionVoiceOptions`. These options omit caller-owned `orgSlug` and `sessionId`, accept an optional tool registry, exact mappings and generic gateway setting, and retain descriptor/descriptor-factory and UI callbacks.
+`end()` closes the Live transport and leaves the client ready for chat. `client.endSession()` ends the canonical conversation.
 
-Use `client.endSession()` to stop attached voice and submit the captured mixed transcript. Provider IDs are internal to this flow. The matching backend is required. See [migration, limits and release requirements](/guides/widget-sdk/events#session-owned-headless-voice).
+`subscribe(listener)` immediately receives the current `ConvincedLiveState` and returns an unsubscribe function. `on(event, listener)` returns an unsubscribe function for a named event. `ConvincedLiveController` does not expose `once()` or `off()`.
+
+## `ClientToolRegistry`
+
+| Work | API |
+| --- | --- |
+| Add | `register()`, `registerMany()` |
+| Remove | `unregister()`, `clear()` |
+| Inspect | `has()`, `get()`, `definitions()` |
+
+Pass the same registry to `ConvincedClient`. Its Live controller automatically uses that registry for client-delegated turns.
+
+Adapters include `createDomTools()`, `registerDomTools()`, `createMcpTools()`, and `createWebMcpBridge()`. The client offers `publishToolsToWebMcp()` for normal WebMCP publishing; `publishRegistryToWebMcp()` is the lower-level API.
+
+Registered tools use `handler`, not `execute`:
+
+```ts
+tools.register({
+  version: 1,
+  name: 'host_open_pricing',
+  description: 'Open the pricing section.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  locality: 'host',
+  effect: 'navigate',
+  consent: 'per_call',
+  timeoutMs: 5_000,
+  handler: async () => ({ ok: true }),
+})
+```
+
+## Optional managed renderer
+
+`mountConvincedWidget({ client, voice: live, ... })` adds the package's optional managed UI. Its `preset`, `placement`, `theme`, identity policy, and lifecycle methods are presentation conveniences. They do not change the headless conversation contract.
+
+## `ConvincedAgentAdmin`
+
+```ts
+const admin = new ConvincedAgentAdmin({ orgSlug, agentId, apiBase })
+```
+
+Use `getPrompt()` and `updatePrompt()` only from an authenticated same-origin Convinced admin application or an approved same-origin management proxy that authenticates and authorizes the administrator server-side. They read and update Convinced prompt state only.
+
+## Content helpers
+
+`parseAssistantContent()`, `stripAssistantDirectives()`, `toSafeVideoEmbedUrl()`, and `isSafeHttpUrl()` help custom renderers process typed content. `MessageContentPart` is `text | slide | video`; forms remain host UI driven by application state or tools. Presentation decisions remain with the host UI.

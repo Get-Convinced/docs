@@ -49,7 +49,7 @@ To correct or retry a target, POST its full desired record to the same endpoint 
 
 ## What campaign data does not change
 
-Campaign upserts do not edit the saved ElevenLabs system prompt or opening message. Use [agent administration](/guides/widget-sdk/agent-prompts) for persistent agent settings.
+Campaign upserts do not edit the saved Convinced system prompt or opening message. Use [agent administration](/guides/widget-sdk/agent-prompts) for persistent agent settings.
 
 `additionalContext` is stored and used during auto-enrichment. It is not currently appended verbatim to the live session prompt. For structured partner intel, put account facts into the supported intel fields rather than relying on `additionalContext` as a runtime instruction.
 

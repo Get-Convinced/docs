@@ -1,262 +1,85 @@
 ---
-title: 'ElevenLabs voice'
-description: 'Connect public or private ElevenLabs agents, bind client tools, and preserve voice-session continuity.'
-icon: 'waveform-lines'
+title: 'Optional Live voice'
+description: 'Add full-duplex speech without creating a second agent or conversation.'
+icon: 'microphone-lines'
 ---
 
-`ConvincedVoiceController` is the voice adapter for the Widget SDK. It wraps the ElevenLabs browser client, exposes transport and push-to-talk controls, and executes client tools through the same `ClientToolRegistry` used by chat.
+Voice in SDK 0.1.2 is an optional I/O layer over the same `gpt-6-luna` conversation used by chat. It is powered by OpenAI `gpt-live-1` and WebRTC.
 
-Create the Convinced session before the voice controller. This gives the voice session a stable Convinced session ID, campaign context, and a place to link the ElevenLabs conversation ID.
+## Channel contract
 
-<Note>
-For headless integrations, use `client.createVoiceController()` to capture spoken and typed turns and link the conversation automatically. See [session ownership](/guides/widget-sdk/events#session-owned-headless-voice). The standalone constructor remains available for low-level integrations and the managed renderer.
-</Note>
+| Action | Result |
+| --- | --- |
+| Initialize chat only | Creates a Convinced `gpt-6-luna` conversation; creates no Live session |
+| Start voice | Adds a Live WebRTC session to the existing conversation |
+| Speak | Live transcribes the turn and client-delegates it to the same `gpt-6-luna` chat |
+| Type while voice is active | `gpt-6-luna` answers in the same conversation; Live speaks the answer |
+| End or disable voice | Closes audio; chat stays active |
+| End the SDK session | Ends the canonical conversation and any active Live transport |
 
-## Choose a browser-safe descriptor
+`gpt-6-luna` remains authoritative for prompts, knowledge, reasoning, rich content, and tools. `gpt-live-1` handles full-duplex listening, interruption, and speech delivery. It does not become a second business agent.
 
-The descriptor must contain exactly one credential:
-
-| Credential | Use it for | Transport | Browser exposure |
-| --- | --- | --- | --- |
-| `agentId` | An ElevenLabs agent intentionally configured as public | WebRTC or WebSocket | Public by design |
-| `signedUrl` | A private agent with a short-lived server-issued URL | WebSocket only | Safe to return for the intended session |
-| `conversationToken` | A private agent with a short-lived server-issued token | WebRTC only | Safe to return for the intended session |
-
-```ts Public agent
-const descriptor = {
-  agentId: 'agent_123',
-  connectionType: 'webrtc' as const,
-}
-```
-
-<Warning>
-  Never put an ElevenLabs API key in a browser descriptor, public environment variable, or bundled MCP client. The controller rejects descriptor objects that contain API-key-shaped fields.
-</Warning>
-
-For a private agent, your application must implement an authenticated backend endpoint that selects an approved agent and returns `{ conversationToken: string }`. The following complete factory assumes you implement **`POST /api/voice-session` on your application's origin**. It is an example of your endpoint contract, not an existing Convinced route:
+## Start from a user gesture
 
 ```ts
-import type { ElevenLabsVoiceDescriptorFactory } from '@convinced/widget-sdk'
+const live = client.createLiveController()
 
-const descriptorFactory: ElevenLabsVoiceDescriptorFactory = async ({ signal }) => {
-  const response = await fetch('/api/voice-session', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-    cache: 'no-store',
-    redirect: 'error',
-    signal,
-  })
-  if (!response.ok) throw new Error(`Voice credentials unavailable (${response.status})`)
-  const data: unknown = await response.json()
-  if (
-    !data || typeof data !== 'object' ||
-    !('conversationToken' in data) ||
-    typeof data.conversationToken !== 'string' ||
-    !data.conversationToken.trim()
-  ) throw new Error('Voice endpoint returned an invalid credential')
+enableVoiceButton.addEventListener('click', async () => {
+  await live.start({ startMuted: false })
+})
 
-  return { conversationToken: data.conversationToken, connectionType: 'webrtc' }
-}
-```
-
-Pass this factory as `descriptorFactory` in `ConvincedVoiceController` instead of the public `descriptor`. Your server must authenticate and authorize the visitor, enforce request limits, select the permitted agent server-side, and mint the token with its server-held provider key. Keep the token out of logs and analytics. See ElevenLabs' [JavaScript sessions](https://elevenlabs.io/docs/eleven-agents/libraries/java-script) and [client tools](https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools).
-
-`client.getVoiceCredential()` is a separate SDK helper for a session-scoped Convinced credential endpoint. That endpoint is **not deployed on the current hosted service** and returns `404`. Use the public-agent path or your own authenticated factory above until that backend capability is explicitly enabled.
-
-## Pass campaign and page context
-
-The supplied `managed-v2` renderer builds its ElevenLabs start context automatically. It includes the Convinced session ID, campaign opener and research, governed knowledge, current page, identity, recent transcript, ranked slides, and recommended videos. A headless renderer can build the same context explicitly:
-
-```ts
-import { buildManagedVoiceStartContext } from '@convinced/widget-sdk'
-
-await voice.start(buildManagedVoiceStartContext(client.state, {
-  pageUrl: window.location.href,
-  pageTitle: document.title,
-  referrer: document.referrer,
-}))
-```
-
-Dynamic-variable names are part of your ElevenLabs agent contract. Configure the same names in the agent prompt before relying on them.
-
-Enable **First message** in the ElevenLabs agent's conversation-override settings before using the managed renderer. It passes an override for any resolved nonempty greeting, including a return-visitor greeting, campaign opener, or configured welcome message. This requirement applies to generic sessions as well as campaigns.
-
-A headless interface that does not enable first-message overrides can instead put a variable such as `{{FIRST_MESSAGE}}` in the agent's saved opener and pass it in `dynamicVariables`. In that case, omit `overrides.agent.firstMessage`; the managed renderer supplies its own resolved override automatically.
-
-Campaign research, host-page observations, and browser transcript fields are labeled as untrusted data inside this context. They can ground a reply but cannot override the agent prompt, grant tool authority, or change consent policy. Descriptor-level `dynamicVariables` and `overrides` are merged with the per-start context when a custom agent needs additional fields.
-
-## Bind exact client tools
-
-For a website-independent WebMCP agent, use `WEBMCP_VOICE_BINDINGS` and `genericClientTool: false`; see [WebMCP](/guides/widget-sdk/webmcp). Exact application tools and the extension gateway remain supported.
-
-`exactClientTools` maps an ElevenLabs client-tool name to one registered SDK tool:
-
-```ts
-const voice = client.createVoiceController({
-  descriptor: {
-    agentId: 'agent_123',
-    connectionType: 'webrtc',
-    exactClientTools: {
-      host_navigate: 'host_navigate',
-      host_get_page_context: 'host_get_page_context',
-      host_scroll_to: 'host_scroll_to',
-      host_highlight: 'host_highlight',
-    },
-  },
-  tools,
-  authorizeToolCall: ({ tool }) => {
-    if (tool.effect === 'read') return true
-    return window.confirm(`Allow ${tool.description}?`)
-  },
+disableVoiceButton.addEventListener('click', async () => {
+  await live.end()
+  // client remains ready for typed turns
 })
 ```
 
-In this example, the canonical `host_*` name configured in ElevenLabs is also the registered SDK name. The mapped SDK name must already exist in `tools`.
+The SDK sends a WebRTC offer to Convinced. The backend authenticates the current widget session, loads its `AgentDeployment`, and creates the Live session with the server's OpenAI key. The browser receives the WebRTC answer, never the key. Browser tools stay on the canonical Luna chat path; they are not registered with Live.
 
-The registry validates arguments, consent, timeout, and result size before and after every voice tool call. A tool result is serialized back to ElevenLabs so the agent can react to what actually happened.
-
-## Use the generic extension gateway
-
-The controller enables one generic callback named `host_extension_call` by default. Configure an ElevenLabs client tool with this input shape:
-
-```json
-{
-  "name": "client_mcp_check_inventory",
-  "arguments_json": "{\"sku\":\"A-42\"}"
-}
-```
-
-`arguments_json` is a JSON object encoded as a string because that is the schema used by the canonical ElevenLabs tool. The SDK also accepts an `arguments` object for manually configured agents, but new agents should use `arguments_json`.
-
-The gateway dispatches only to a tool already present in the registry. It does not evaluate JavaScript or bypass the mapped tool's schema and consent policy.
-
-Rename or disable it in the descriptor:
+## Controls and context
 
 ```ts
-genericClientTool: { name: 'host_extension_call' }
+live.setMuted(true)
+live.setMuted(false)
+
+live.sendContextualUpdate(
+  `Current page: ${document.title} (${location.href})`,
+  'current-page',
+)
 ```
+
+Context updates are untrusted observations. They do not replace the saved Convinced prompt or grant tool permissions.
+
+## Delegation and tools
+
+Every spoken turn that needs an answer is client-delegated to the canonical `gpt-6-luna` conversation. If `gpt-6-luna` requests a browser tool, Convinced pauses that turn and returns an opaque signed continuation. The SDK runs the local registry checks and handler, while the backend verifies the signature and exact call binding before resuming `gpt-6-luna`. Live speaks the verified final answer.
+
+This keeps tool authorization, form handling, page actions, slides, and knowledge consistent across input modes.
+
+## Render voice state
 
 ```ts
-genericClientTool: false
-```
+live.on('state', state => {
+  renderVoiceStatus(state.status)
+  renderMuted(state.muted)
+  renderMode(state.mode) // listening, speaking, or overlap
+})
 
-Exact bindings plus the generic gateway are capped at 16 callbacks. Disable the gateway when the ElevenLabs agent does not define it or when you need all 16 slots for exact bindings.
-
-## Configure the provider tools
-
-Use the [downloadable managed tool definitions](/examples/elevenlabs-managed-tools.json) when configuring your ElevenLabs agent. Enable **Wait for response** for each tool whose observed result should affect the next reply. Register only callbacks your page can execute.
-
-`managed-v2` supplies six callbacks when voice starts: `show_slide`, `show_youtube_embed`, `set_visitor_field`, `request_email_capture`, `show_book_demo_cta`, and `confirm_visitor_form`. These are voice-runtime tools; they do not appear in the shared page registry. A descriptor's explicit mapping takes precedence over a managed callback with the same name.
-
-The four `host_*` DOM callbacks require `registerDomTools()` and exact bindings. `host_extension_call` requires a configured gateway and the underlying registered tools. `confirm_visitor_form` additionally requires fresh authorization for the particular invocation; visitor submission of the visible form is the default identity-confirmation path.
-
-A dedicated WebMCP agent uses the [two WebMCP tool definitions](/examples/elevenlabs-webmcp-tools.json) instead. The browser SDK does not create or update the provider's tool catalog.
-
-## Start from a visitor gesture
-
-Saved `systemPrompt` and `firstMessage` edits belong to [the authenticated management client](/guides/widget-sdk/agent-prompts). Start-time `overrides` apply only to that conversation and can take precedence over saved settings.
-
-Browsers require microphone and audio access to begin from a visitor gesture:
-
-```ts
-startButton.addEventListener('click', async () => {
-  await client.markVoiceUpgrade(
-    client.state.messages.map(({ role, text: content }) => ({ role, content })),
-  )
-  await voice.start(buildManagedVoiceStartContext(client.state, {
-    pageUrl: window.location.href,
-    pageTitle: document.title,
-  }))
+live.on('error', error => {
+  showVoiceError(error.message)
+  showChatComposer() // chat remains available
 })
 ```
 
-`start()` is single-flight while it is connecting. Calling it again after a connected session is active returns an error instead of creating a second call.
+Use `live.subscribe(listener)` when the renderer needs an immediate state snapshot plus later state updates. Use `live.on(event, listener)` for named events. Both return an unsubscribe function; the Live controller does not expose `once()` or `off()`.
 
-### Managed text-only recovery
+Request microphone access only after a clear visitor action. Show listening and speaking state, support interruption, and provide an obvious way to stop audio.
 
-Voice remains the primary path in `managed-v2`. If microphone access, the media device, WebRTC/WebSocket startup, or another recoverable transport condition prevents audio from starting, the preset retries once as an ElevenLabs text-only conversation and clearly labels the resulting state. Typed messages stay in that live ElevenLabs conversation; the SDK does not switch to an unrelated chat session.
+## Official study links
 
-The retry is intentionally not used for authentication, invalid agent or token configuration, quota, concurrency, or capacity failures. Those conditions remain visible errors so an unavailable or misconfigured production voice deployment cannot look healthy.
+- [GPT-Live getting started](https://developers.openai.com/api/docs/guides/live)
+- [Delegation and tools in GPT-Live](https://developers.openai.com/api/docs/guides/live-delegation)
+- [Prompting GPT-Live](https://developers.openai.com/api/docs/guides/live-prompting)
+- [Managing GPT-Live sessions](https://developers.openai.com/api/docs/guides/live-conversations)
 
-## Build voice controls
-
-```ts
-muteButton.addEventListener('click', () => {
-  voice.setMuted(!voice.state.muted)
-})
-
-pttButton.addEventListener('pointerdown', () => voice.startPushToTalk())
-pttButton.addEventListener('pointerup', () => voice.stopPushToTalk())
-pttButton.addEventListener('pointercancel', () => voice.stopPushToTalk())
-
-volumeSlider.addEventListener('input', () => {
-  voice.setVolume(Number(volumeSlider.value)) // 0 to 1
-})
-
-endButton.addEventListener('click', async () => {
-  await client.endSession({
-    slidesViewed: shownSlideFilenames,
-  })
-})
-```
-
-That headless controller belongs to the client, which captures its spoken and typed turns. The application supplies shown media. When you use `mountConvincedWidget()`, prefer `await widget.endSession()` instead: the mounted renderer ends voice and supplies its merged chat/voice history and shown slide filenames automatically.
-
-The controller also exposes:
-
-- `sendUserMessage(text)` for typed input inside the live ElevenLabs conversation.
-- `sendContextualUpdate(text, contextId?)` for page or application context that should not appear as a visitor utterance.
-- `sendUserActivity()` to signal interaction to the active conversation.
-
-## Render state and transcript
-
-```ts
-const stopState = voice.subscribe((state) => {
-  status.textContent = state.status
-  mode.textContent = state.mode ?? '' // listening or speaking
-  muteButton.setAttribute('aria-pressed', String(state.muted))
-})
-
-const stopMessages = voice.on('message', ({ source, message }) => {
-  appendTranscript(source === 'user' ? 'You' : 'Agent', message)
-})
-
-const stopToolTrace = voice.on('client_tool_result', ({ result }) => {
-  recordToolResult(result)
-})
-
-// When the owning view unmounts:
-stopState()
-stopMessages()
-stopToolTrace()
-await voice.end()
-```
-
-Voice events are `state`, `message`, `client_tool_call`, `client_tool_result`, and `error`. `on()` and `once()` return unsubscribe functions.
-
-## Preserve SPA and session continuity
-
-When your router changes the page outside a voice tool, update both Convinced and the live ElevenLabs session:
-
-```ts
-router.onChange(async ({ url, title }) => {
-  await client.updatePage({ url, title })
-
-  if (voice.state.status === 'connected') {
-    voice.sendContextualUpdate(
-      `The current page is ${title}: ${url}`,
-      'current-page',
-    )
-  }
-})
-```
-
-`client.createVoiceController()` keeps provider conversation IDs internal and captures typed and spoken turns. Await `client.endSession()` in headless integrations; pass `slidesViewed` only for media your UI displayed. For a mounted renderer, use `widget.endSession()`.
-
-<Note>
-  ElevenLabs' text simulation is useful for testing prompt and tool selection, but it does not prove microphone input, synthesized audio, or DOM execution. Test those paths in a real browser before launch.
-</Note>
-
-Use the [browser acceptance checklist](/guides/widget-sdk/analytics-and-testing) to verify speech recognition, audible output, page tools, identity, media, analytics, and final session persistence in your own application.
+These links explain the underlying OpenAI transport and delegation model. Integrators do not call OpenAI directly; Convinced owns that backend integration.

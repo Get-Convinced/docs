@@ -1,67 +1,33 @@
 ---
 title: 'Update agent prompt'
-description: 'Persist the system prompt, first message, or both to the SDK agent’s live ElevenLabs branch.'
+description: 'Persist the system prompt, first message, or both in Convinced.'
 ---
 
 ```http
 PATCH /api/org/{orgSlug}/sdk-agents/{agentId}/prompt
-Content-Type: application/json
 ```
 
-The authorization and path parameters match [GET agent prompt](/api-reference/endpoint/get-agent-prompt). Use an authenticated same-origin administrator session. The endpoint does not accept cross-origin browser writes or visitor widget credentials.
-
-## Request body
-
-| Field | Required | Validation |
-| --- | --- | --- |
-| `systemPrompt` | At least one editable field | Non-empty string, at most 100,000 UTF-8 bytes |
-| `firstMessage` | At least one editable field | String, at most 10,000 UTF-8 bytes; empty string is allowed |
-| `expectedRevision` | Yes | The 64-character lowercase hexadecimal revision returned by GET |
-
-Unknown fields and `null` prompt values are rejected. Omitted fields are preserved. The encoded request body is capped at 700,000 bytes to bound escaped JSON input as well as decoded text.
+Use an authenticated Convinced administrator session on the Convinced application origin, or a narrow same-origin management proxy that authenticates and authorizes the administrator before forwarding the request server-side. The proxy must not accept visitor credentials or forward arbitrary paths.
 
 ```ts
-// Use the admin instance configured by the authenticated editor setup.
 const current = await admin.getPrompt()
+
 const saved = await admin.updatePrompt({
-  firstMessage: 'Hi! How can I help?',
+  systemPrompt: nextSystemPrompt,
+  firstMessage: nextFirstMessage,
   expectedRevision: current.revision,
 })
 ```
 
-This example changes only the opener. Add `systemPrompt` to update both in the same provider request. Set `firstMessage: ''` to let the visitor speak first.
+At least one editable field is required. `systemPrompt` must be non-empty and at most 100,000 UTF-8 bytes. `firstMessage` may be empty and is limited to 10,000 UTF-8 bytes. The encoded body is limited to 700,000 bytes.
 
-## Provider behavior
+Omitted fields are preserved. The server updates the current live Convinced prompt version, reads it back, and returns the same shape as GET. It does not update any third-party provider.
 
-The server checks ownership, discovers the fully live branch, compares the revision, PATCHes the requested fields on ElevenLabs, then reads the live branch again. It verifies both prompt fields and the branch identity before returning the same response shape as GET. No new provider write is needed when both desired values already match.
-
-Only `conversation_config.agent.prompt.prompt` and `conversation_config.agent.first_message` are eligible for this PATCH. Tool configuration, voice, model and traffic allocation are not editable through this endpoint.
-
-Saved settings affect subsequent unpinned conversations. Per-session overrides and active conversations can retain other values. See [prompt scope](/guides/widget-sdk/agent-prompts#understand-what-future-visitors-use).
-
-## Failure behavior
-
-| HTTP / code | Meaning |
+| Status | Meaning |
 | --- | --- |
-| `400 invalid_prompt_update` / `invalid_json` | Correct the request fields or JSON |
-| `401` | Sign in; the authentication middleware rejected the request |
-| `403` / `admin_required` / `origin_not_allowed` | Use authorized same-origin administrator access |
-| `404 agent_not_found` | The exact SDK agent needs a server-side ownership binding |
-| `409 prompt_conflict` | The editor is stale; reload before saving |
-| `409 agent_traffic_conflict` / `shared_agent` | Resolve live traffic or ownership separately |
-| `413 request_too_large` | Encoded body exceeds the limit |
-| `415 invalid_content_type` | Send `application/json` |
-| `503 provider_not_configured` / `ownership_not_configured` | Convinced must correct the server provider key or ownership configuration |
-| `502 provider_update_unconfirmed` | Provider write outcome is unknown |
-| `502 provider_verification_failed` | Provider accepted the write, but verification failed |
-| `502 prompt_management_failed` / `provider_request_failed` | The operation could not be completed |
-
-```json
-{
-  "error": "The ElevenLabs update could not be confirmed. Reload the prompt before retrying.",
-  "code": "provider_update_unconfirmed",
-  "providerUpdate": "unknown"
-}
-```
-
-`providerUpdate`, when present, is `not_attempted`, `unknown`, or `applied`. Never infer from an HTTP failure that the old prompt remains active. Neither the SDK nor backend automatically retries a save. Revision checking detects stale edits but is not an atomic lock against concurrent provider-dashboard changes.
+| `400` | Invalid JSON, fields, or revision shape |
+| `403` | Admin or same-origin requirement failed |
+| `404` | Deployment or live prompt was not found |
+| `409 prompt_conflict` | The prompt changed; reload before saving |
+| `413` | Request body is too large |
+| `502 prompt_verification_failed` | The saved value could not be verified |

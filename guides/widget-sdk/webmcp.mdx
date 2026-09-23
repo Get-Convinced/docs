@@ -1,142 +1,92 @@
 ---
 title: 'WebMCP website tools'
-description: 'Use two fixed agent callbacks to discover and execute actions exposed by an opted-in website.'
+description: 'Publish or consume browser tools through the same registry used by chat and speech.'
 icon: 'globe'
 ---
 
-WebMCP lets a website register structured tools in the browser. The experimental SDK bridge exposes them through two fixed voice callbacks:
+WebMCP lets a website expose structured JavaScript tools to agents. The SDK maps WebMCP to `ClientToolRegistry`; it does not create a second execution or authorization system.
 
-| ElevenLabs callback | SDK registry tool |
-| --- | --- |
-| `webmcp_list_tools` | `host_webmcp_list_tools` |
-| `webmcp_execute_tool` | `host_webmcp_execute_tool` |
+<Warning>
+  WebMCP is an evolving Community Group draft. Feature-detect it, choose the browser's supported argument encoding deliberately, and keep direct registry tools available when WebMCP is absent.
+</Warning>
 
-Each website defines its useful actions, schemas and handlers. The agent discovers those actions instead of requiring a separate static callback mapping for every action on every website.
+## Consume same-origin WebMCP tools
 
-## Prerequisites and browser support
-
-Install `@convinced/widget-sdk@0.1.1-webmcp.3` and use a compatible browser. The recorded native experiment used Chrome 152 with the WebMCP testing flag and JSON-string arguments. The current [Chrome overview](https://developer.chrome.com/docs/ai/webmcp) documents its origin trial and local testing setup.
-
-The bridge detects `document.modelContext`, with support for the older `navigator.modelContext` location. Check for registration and discovery methods separately. Keep your ordinary page interface or a tested [explicit-tool integration](/guides/widget-sdk/host-tools) available when support is absent.
-
-The SDK bridge currently restricts discovery to same-origin tools. The browser standard has broader cross-origin mechanisms, but this SDK does not enable them. An uninstrumented website has no WebMCP actions to discover.
-
-## Configure the voice agent
-
-Download the [two ElevenLabs tool definitions](/examples/elevenlabs-webmcp-tools.json) and [generic website-agent instructions](https://raw.githubusercontent.com/Get-Convinced/docs/9b40f1192b70035d7577f38ae2313487b75db166/examples/webmcp-agent-prompt.txt). Each JSON entry contains a `tool_config`. Create those client tools in ElevenLabs, attach their tool IDs to the intended agent and enable **Wait for response**. Save the generic instructions on its live configuration.
-
-A standalone WebMCP voice controller needs those two callbacks. If you also use `managed-v2`, configure its six [managed UI callbacks](/guides/widget-sdk/voice#configure-the-provider-tools); the renderer adds them when it starts voice. Adding WebMCP does not remove an existing page-specific saved prompt or tool catalog.
-
-The definitions and instructions are plain downloadable files; no private repository or backend sync script is needed. The public SDK source also provides `bun run export:webmcp:agent` after building from the matching release tag.
-
-## Connect existing page tools
-
-Save [sdk-handoff.ts](https://raw.githubusercontent.com/Get-Convinced/docs/e515f5a17e6f3cea9bed118b92de377b55a91129/examples/sdk-handoff.ts) in your application. Its typed helpers publish a registry and create a session-owned public-agent voice bridge. The following browser module uses those helpers after the DOM exists:
+Use `getWebMcpModelContext()` to detect `document.modelContext` and the legacy `navigator.modelContext` shape. `createWebMcpBridge()` requires the model context, the host-selected origin, an authorizer, and an explicit argument encoding.
 
 ```ts
-import { ClientToolRegistry, ConvincedClient, registerDomTools } from '@convinced/widget-sdk'
-import { publishPageTools, createWebsiteVoice } from './sdk-handoff'
+import {
+  ClientToolRegistry,
+  createWebMcpBridge,
+  getWebMcpModelContext,
+} from '@convinced/widget-sdk'
 
-export async function mountWebsiteVoice(publicAgentId: string, orgSlug: string) {
-  const tools = new ClientToolRegistry()
-  registerDomTools(tools, {
-    capabilities: { pageContext: true, highlight: true },
-    authorize: ({ action }) => action === 'pageContext' ||
-      window.confirm(`Allow ${action} on this page?`),
-  })
-  const client = new ConvincedClient({ orgSlug })
-  await client.initialize({ loadMedia: false })
-  const published = await publishPageTools({
-    tools, orgSlug, sessionId: () => client.state.session?.sessionId ?? null,
-    authorize: ({ tool }) => tool.effect === 'read' ||
-      window.confirm(`Allow ${tool.description}?`),
-  })
-  let integration: ReturnType<typeof createWebsiteVoice>
-  try {
-    integration = createWebsiteVoice({
-      client, publicAgentId,
-      argumentEncoding: 'json-string', // Tested Chrome 152 setup
-      // Explicit allowlist for the two handlers we just registered.
-      authorize: (tool) => ['host_get_page_context', 'host_highlight'].includes(tool.name),
+const tools = new ClientToolRegistry()
+const modelContext = getWebMcpModelContext()
+
+const webmcp = modelContext
+  ? createWebMcpBridge({
+      modelContext,
+      origin: window.location.origin,
+      // Chrome <=154 uses JSON strings. Use 'object' only after verifying the
+      // newer browser API; never retry a mutation with another encoding.
+      argumentEncoding: 'json-string',
+      authorize: async (tool, input) => {
+        return showWebsiteToolConsent({ tool, input })
+      },
     })
-  } catch (error) {
-    published.dispose()
-    throw error
-  }
-  const talk = document.createElement('button')
-  talk.textContent = 'Start voice'
-  const stop = document.createElement('button')
-  stop.textContent = 'End session'
-  const status = document.createElement('p')
-  status.setAttribute('role', 'status')
-  const onTalk = async () => {
-    talk.disabled = true
-    try { await integration.voice.start(); status.textContent = 'Connected' }
-    catch { status.textContent = 'Voice could not start. Check browser support and agent configuration.' }
-    finally { talk.disabled = false }
-  }
-  const onStop = async () => {
-    try { await client.endSession(); talk.disabled = true; status.textContent = 'Conversation saved' }
-    catch { status.textContent = 'Save failed. Select End session to retry.' }
-  }
-  talk.addEventListener('click', onTalk)
-  stop.addEventListener('click', onStop)
-  document.body.append(talk, stop, status)
-  return {
-    async dispose() {
-      await integration.dispose()
-      {
-        published.dispose()
-        client.destroy()
-        talk.removeEventListener('click', onTalk)
-        stop.removeEventListener('click', onStop)
-        talk.remove(); stop.remove(); status.remove()
-      }
-    },
-  }
-}
+  : null
+
+if (webmcp) tools.registerMany(webmcp.tools)
 ```
 
-Call `await mountWebsiteVoice('YOUR_PUBLIC_AGENT_ID', 'YOUR_ORG_SLUG')` once and keep the returned owner until application teardown. This example creates a Convinced session and uses session-owned voice. The SDK captures spoken and typed turns and saves them on End session. A failed save retains the owner for retry. To start another conversation after success, renew the client session before starting voice again.
+The bridge registers two fixed client tools: `host_webmcp_list_tools` and `host_webmcp_execute_tool`. Discovery returns opaque handles. Handles expire when the browser reports a tool change or when the bridge is disposed. Only same-origin tools are exposed.
 
-The allowlist admits only the two registered handlers; mutations still pass through the publisher's registry policy and the DOM action policy. A website with its own native tools can skip publication and supply its own per-tool authorization to `createWebsiteVoice()`.
+Browser names, descriptions, schemas, annotations, and results are untrusted data. The mandatory `authorize(tool, input)` callback runs for the actual discovered tool on every execution. An annotation never grants permission.
 
-## Discovery and execution
+Dispose the bridge when its owning route or integration unmounts:
 
-1. Call `webmcp_list_tools({})` for up to eight summaries and `next_offset`.
-2. Request more catalog pages with `offset` when needed.
-3. Request one full schema with `webmcp_list_tools({ names: ['selected_name'] })`.
-4. Send the returned tool entry's `id` as `tool_id`, alongside schema-matching `arguments_json`, to `webmcp_execute_tool`.
-5. Inspect the returned business state before reporting success.
+```ts
+webmcp?.dispose()
+```
 
-Local methods are `listTools(names?, offset?)`, `executeTool(id, input, signal?)` and `dispose()`.
+## Publish the registry to browser agents
 
-## Browser API changes and lifecycle
+`client.publishToolsToWebMcp()` publishes the client's existing registry, session context, and authorization policy without duplicating handlers. It returns an object with `ready` and `dispose`, or `null` when WebMCP is unavailable.
 
-The SDK defaults to `argumentEncoding: 'json-string'`, matching the tested Chrome 152 transport. Chrome's [imperative API guide](https://developer.chrome.com/docs/ai/webmcp/imperative-api) now documents object arguments and deprecation of stringified input from Chrome 155. Select `argumentEncoding: 'object'` for an implementation requiring that shape and run your acceptance tests; that mode has not been validated across a native browser matrix. The SDK never retries a mutation using a different encoding.
+```ts
+const published = client.publishToolsToWebMcp()
+await published?.ready
 
-Publishers register a snapshot. Dispose and republish when registry membership changes. Keep the voice bridge mounted across SPA routes, remove page actions when they leave, and rediscover after `toolchange` or a stale-handle error. Handles are bound to origin, browser window, schema and lifecycle.
+// On route or integration teardown:
+published?.dispose()
+```
 
-## Limits and trust
+If any registration fails, `ready` rejects and the publisher aborts the registration lifecycle. Always await it before claiming that tools are available.
 
-The bridge occupies two registry entries regardless of catalog size; the ordinary 16-entry limit still applies. Discovery returns eight summaries per page or one full schema per request. Registry-dispatched voice callbacks enforce the SDK's argument, result and timeout bounds. Calling `bridge.listTools()` or `bridge.executeTool()` directly bypasses that registry layer; a caller using those methods must enforce its own input and output budgets and cancellation deadline.
+`publishRegistryToWebMcp()` is available when a host intentionally manages the registry execution context and authorization outside `ConvincedClient`.
 
-Annotations such as `readOnlyHint` do not grant permission. Validate arguments, enforce the visitor's authority in each handler and use server checks for protected operations. Treat tool descriptions and results as untrusted data.
+## One governed execution path
 
-<span id="what-has-been-tested" />
+Whether a tool was registered directly, adapted from MCP, or discovered through WebMCP, typed and spoken turns use the same `gpt-6-luna` flow:
 
-## Compatibility and validation
+1. `gpt-6-luna` requests a named browser tool.
+2. Convinced pauses the canonical turn and returns an opaque signed continuation plus the exact calls.
+3. The SDK checks each call against the local registry, schema, limits, timeout, and host authorization.
+4. `ClientToolRegistry` runs the registered `handler` once.
+5. The SDK returns the result and opaque continuation to Convinced.
+6. The backend verifies the signature, organization, session, turn, call IDs, tool names, arguments, expiry, and call count before resuming `gpt-6-luna`.
+7. If Live is connected, `gpt-live-1` speaks the verified canonical answer.
 
-SDK `.3` includes native Chrome transport tests and session finalization tests. A real provider test on Chrome 153 also exercised typed input through the live model and WebMCP callbacks. These checks do not establish microphone recognition quality or compatibility across browsers.
+The browser does not verify the server signature itself. It treats the continuation as opaque and cannot mint, alter, or reuse it for another turn.
 
-Before enabling WebMCP for visitors, test it with your registered tools and supported browsers. Verify the requested page state after execution; transport success alone is insufficient. Include denied actions, stale handles, manual visitor interaction and cleanup. Follow the [browser acceptance guide](/guides/widget-sdk/analytics-and-testing) for real voice testing.
+Do not expose prompt administration, provider keys, unrestricted authenticated fetch, arbitrary DOM selectors, or destructive actions without fresh confirmation.
 
-## Study and implement
+## Official study links
 
-- [Chrome WebMCP overview](https://developer.chrome.com/docs/ai/webmcp): availability and local setup.
-- [Imperative API](https://developer.chrome.com/docs/ai/webmcp/imperative-api): tool registration, discovery, execution and lifecycle.
-- [GoogleChromeLabs examples](https://github.com/GoogleChromeLabs/webmcp-tools): working demo source.
-- [Browser evaluation guidance](https://developer.chrome.com/docs/ai/webmcp/evals): test task outcomes as well as transport.
-- [WebMCP draft](https://webmachinelearning.github.io/webmcp/): evolving standard details.
+- [WebMCP Community Group specification](https://webmachinelearning.github.io/webmcp/)
+- [WebMCP overview in Chrome](https://developer.chrome.com/docs/ai/webmcp)
+- [Build WebMCP tools](https://developer.chrome.com/docs/ai/webmcp/build-tools)
+- [WebMCP best practices](https://developer.chrome.com/docs/ai/webmcp/best-practices)
 
-WebMCP, `createMcpTools()` and ElevenLabs server-side MCP are separate integrations. An MCP server connection does not expose the visitor's browser tab.
+The specification defines the interoperable API. Chrome documentation is implementation guidance, not the source of the SDK's authorization policy.

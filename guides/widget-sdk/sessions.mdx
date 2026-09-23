@@ -1,0 +1,44 @@
+---
+title: 'Conversation sessions'
+description: 'Keep text, speech, tools, routes, and persistence in one canonical session.'
+icon: 'messages'
+---
+
+`client.initialize()` creates one Convinced session for a live `AgentDeployment`. Its `gpt-6-luna` conversation is canonical for every typed and spoken turn.
+
+## Session rules
+
+- Mount one client for one visitor conversation.
+- Reuse it across SPA route changes.
+- Attach and detach optional Live voice from that client.
+- Use one shared `ClientToolRegistry` for the session.
+- End the session explicitly when the visitor finishes.
+
+Starting voice does not create a second conversation. Reconnecting Live restores recent canonical history and continues delegating into `gpt-6-luna`. A Live session ID is transport metadata, not the conversation identity exposed to the host.
+
+## Update page context
+
+```ts
+router.onChange(({ url, title }) => {
+  client.updatePage({ url, title })
+})
+```
+
+Keep page context compact and free of form values, secrets, raw HTML, or arbitrary instructions.
+
+## Renew after completion
+
+```ts
+await client.endSession()
+
+// If the visitor starts a new conversation later:
+await client.renewSession()
+```
+
+Do not send new turns into a completed session. Session renewal preserves permitted attribution and browser continuity while creating a new canonical conversation.
+
+## Persisted history
+
+Convinced stores canonical messages and tool receipts on the backend. The host may render a local projection, but it should not merge a separate voice transcript at teardown. Spoken input already passed through the same `gpt-6-luna` conversation.
+
+See [Lifecycle events](/guides/widget-sdk/events) for observable state and [Security](/guides/widget-sdk/security) for session capabilities.

@@ -1,382 +1,48 @@
 ---
-title: "Build a page-aware guide"
-description: "Connect a voice agent to meaningful page objects, bounded client tools, and observed page results."
-icon: "compass"
+title: 'Build a page-aware guide'
+description: 'Give one conversation bounded page context and safe website actions.'
+icon: 'compass'
 ---
 
-A page-aware guide can discuss what a visitor sees, move to the relevant part of the page, and open an existing panel without putting agent logic throughout the landing page.
-
-The integration has two layers:
-
-- The Widget SDK supplies session and voice clients, tool validation, consent and timeouts. Use its supplied renderer or own the interface in a headless integration.
-- Your page owns its content, semantic IDs, router, focus state, panels, and the callbacks that already change those surfaces.
-
-The page should expose a small semantic adapter. Do not give the agent unrestricted DOM access.
-
-This guide binds page actions to ElevenLabs voice. Chat-driven page actions require a backend implementing the SDK tool-continuation protocol; the current hosted chat service does not provide that complete protocol. See [current availability](/guides/widget-sdk/overview#current-availability).
-
-```text
-Visitor question
-  -> agent requests a named client tool
-  -> SDK validates the tool, arguments, consent, and timeout
-  -> page adapter calls existing application code
-  -> page reports the settled visible state
-  -> agent explains the observed result
-```
-
-## Estimate the landing-page change
-
-The semantic adapter below is one concrete example using a fictional product catalog. Other sites provide their own page IDs, entities and actions. For shared discovery across websites, publish these handlers through [WebMCP](/guides/widget-sdk/webmcp) and keep site-specific names out of generic instructions. The [customer editor](/guides/widget-sdk/agent-prompts) manages saved instructions and the opener separately from page data.
-
-| Experience          | Typical client change                                               | Layout change                                                 |
-| ------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Conversation only   | One SDK mount and session teardown                                  | None for a floating widget                                    |
-| Page-aware answers  | A compact page manifest and one read tool                           | None                                                          |
-| Guided presentation | Two to five bounded callbacks with result receipts                  | None for floating; one app-shell region for a persistent rail |
-| Cross-page journey  | A persistent root mount, router adapter, and one manifest per route | Depends on the chosen guide surface                           |
-
-These are integration ranges, not guarantees. Existing component boundaries and router behavior determine the final change.
-
-You do not need to rewrite landing-page content unless the page does not contain enough accurate material for the agent to explain.
-
-## 1. Mount the SDK in a persistent owner
-
-Mount the Convinced client and voice controller above the route content when the conversation must survive SPA navigation.
+Keep the conversation owner above your SPA router. Update route context and register only the capabilities available on the current page.
 
 ```ts
-import {
-  ClientToolRegistry,
-  ConvincedClient,
-  ConvincedVoiceController,
-  HOST_TOOL_PROTOCOL_VERSION,
-  type ClientToolDefinition,
-  type JsonObject,
-} from "@convinced/widget-sdk";
+const tools = new ClientToolRegistry()
 
-const tools = new ClientToolRegistry();
-const authorizePageTool = ({ tool }: { tool: ClientToolDefinition }) =>
-  tool.effect === "read" || window.confirm(`Allow ${tool.description}?`);
-
-const client = new ConvincedClient({
-  orgSlug: "acme",
-  tools,
-  authorizeToolCall: authorizePageTool,
-});
-
-await client.initialize();
-```
-
-The following sections continue in this module. Register the page tools before starting the voice controller in step 5. Supply your organization slug, an intentionally public ElevenLabs agent ID (or your own credential endpoint), and the page's existing `pageActions` adapter. Keep the ElevenLabs API key on your backend.
-
-## 2. Describe the page with semantic IDs
-
-Create stable identifiers for the objects a visitor can see and discuss. The IDs should describe product meaning, not CSS structure.
-
-```ts
-const pageGuide = {
-  pageId: "product-catalog",
-  route: "/products",
-  sections: [
-    {
-      id: "product-catalog",
-      label: "Product catalog",
-    },
-  ],
-  categories: [
-    {
-      id: "desks",
-      label: "Desks",
-      productIds: [
-        "standing-desk",
-      ],
-    },
-  ],
-  products: [
-    {
-      id: "standing-desk",
-      label: "Standing desk",
-      sectionId: "product-catalog",
-      summary: "The exact approved description shown by the page.",
-    },
-  ],
-};
-```
-
-Keep this contract compact:
-
-- Use stable page, section, category, and entity IDs.
-- Include only facts that the page or an approved source can support.
-- Encode exact relationships such as which products visibly intersect a category.
-- Exclude form values, hidden personal data, API keys, raw HTML, and arbitrary instructions.
-- Do not use display labels as the only identifier.
-
-## 3. Register a read tool before an action tool
-
-A discovery-oriented guide normally needs one tool that inspects an exact category and one tool that presents a selected entity.
-
-```ts
-tools.register({
-  version: HOST_TOOL_PROTOCOL_VERSION,
-  name: "host_list_category_products",
-  description:
-    "Read the exact products visibly associated with one catalog category.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      category_id: {
-        type: "string",
-        enum: pageGuide.categories.map((category) => category.id),
-      },
-    },
-    required: ["category_id"],
-    additionalProperties: false,
-  },
-  locality: "host",
-  effect: "read",
-  consent: "none",
-  timeoutMs: 1_000,
-  constraints: {
-    section: "product-catalog",
-  },
-  handler: async ({ category_id }): Promise<JsonObject> => {
-    const category = pageGuide.categories.find((item) => item.id === category_id);
-
-    if (!category) {
-      return {
-        status: "not_found",
-        requested_category_id: category_id,
-        products: [],
-      };
-    }
-
-    return {
-      status: "observed",
-      category_id: category.id,
-      category_label: category.label,
-      exact_product_ids: category.productIds,
-      products: pageGuide.products.filter((product) => category.productIds.includes(product.id)),
-      presentation_performed: false,
-    };
-  },
-});
-```
-
-The read tool prevents the agent from guessing which products belong to a visible area. This minimal example defines one product. When extending it, ensure every `productIds` reference resolves to a full product object; validate the relationship when loading your page manifest.
-
-## 4. Return an observed receipt after every page mutation
-
-The action handler should call application code your page already owns. Wait until scrolling, selection, and panel opening settle before returning.
-
-```ts
-tools.register({
-  version: HOST_TOOL_PROTOCOL_VERSION,
-  name: "host_show_product_details",
-  description: "Focus one approved product and open its details panel.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      product_id: {
-        type: "string",
-        enum: pageGuide.products.map((product) => product.id),
-      },
-    },
-    required: ["product_id"],
-    additionalProperties: false,
-  },
-  locality: "host",
-  effect: "mutate",
-  consent: "session",
+const removePricingTool = tools.register({
+  version: 1,
+  name: 'host_show_pricing',
+  description: 'Open the pricing section on this page.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  locality: 'host',
+  effect: 'navigate',
+  consent: 'per_call',
   timeoutMs: 5_000,
-  constraints: {
-    presentationOnly: true,
-    section: "product-catalog",
+  handler: async () => {
+    document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
+    return { ok: true, route: location.pathname }
   },
-  handler: async ({ product_id }): Promise<JsonObject> => {
-    const requestedProduct = pageGuide.products.find((product) => product.id === product_id);
-    if (!requestedProduct)
-      return { status: "not_found", requested_product_id: product_id };
+})
 
-    await pageActions.showProductDetails(requestedProduct.id);
-    const observed = pageActions.readSettledSelection();
+router.onChange(({ url, title }) => {
+  client.updatePage({ url, title })
+  live?.sendContextualUpdate(`Current page: ${title} (${url})`, 'current-page')
+})
 
-    return {
-      status:
-        observed.productId === product_id && observed.detailsOpen && observed.targetVisible
-          ? "presented"
-          : "not_presented",
-      requested_product_id: product_id,
-      active_product_id: observed.productId,
-      details_open: observed.detailsOpen,
-      target_visible: observed.targetVisible,
-      selection_source: observed.selectionSource,
-      page_facts: observed.productId === product_id ? requestedProduct : null,
-    };
-  },
-});
+// When the route no longer supports the action:
+removePricingTool()
 ```
 
-The result is evidence, not an optimistic acknowledgement. The agent should explain only `page_facts` returned by the settled action.
+## Context is data
 
-<Warning>
-  Do not return `{ opened: true }` immediately after dispatching a click. A route transition, animation, stale request, or visitor action may change the final state.
-</Warning>
+Provide stable page IDs, public labels, current route, and a short summary. Exclude raw HTML, hidden content, form values, access tokens, and instructions copied from the page.
 
-## 5. Bind the exact tools to ElevenLabs
+## Actions need receipts
 
-The tool names configured on the ElevenLabs agent are on the left. The registered SDK tools are on the right.
+A tool result should report the observed outcome, such as the final route or visible entity ID. `gpt-6-luna` uses that receipt before answering. Do not claim success before the host callback completes.
 
-```ts
-const voice = client.createVoiceController({
-  descriptor: {
-    agentId: "YOUR_PUBLIC_ELEVENLABS_AGENT_ID",
-    connectionType: "webrtc",
-    exactClientTools: {
-      list_category_products: "host_list_category_products",
-      show_product_details: "host_show_product_details",
-    },
-    genericClientTool: false,
-  },
-  tools,
-  authorizeToolCall: authorizePageTool,
-});
-```
+## One guide across inputs
 
-For a private agent, replace `descriptor` with your own authenticated `descriptorFactory`; the hosted `getVoiceCredential()` endpoint is not deployed. See [ElevenLabs voice](/guides/widget-sdk/voice#choose-a-browser-safe-descriptor).
+The same `gpt-6-luna` conversation answers typed and spoken visitors. Optional Live delegates speech to it, and both inputs use the same registry. This prevents route actions, slides, and forms from drifting between two agents.
 
-Enable **Wait for response** for both ElevenLabs client tools. The agent must receive the observed tool result before it explains the page.
-
-The chat client and voice controller have separate authorization hooks; passing a hook only to `ConvincedClient` does not authorize voice actions. The example's `session` consent permits subsequent calls to that same tool after the visitor approves it once. Use `per_call` when each invocation needs a fresh decision.
-
-Use a dedicated guide agent when changing the prompt, tool catalog, or sales motion would affect an existing production widget. The landing page can still use the same Widget SDK.
-
-## 6. Keep visitor actions authoritative
-
-Visitors can click while the agent is speaking or while an action is in flight. Your adapter must make that outcome explicit.
-
-Use a monotonically increasing selection version:
-
-1. Increment the version after every visitor or agent selection.
-2. Record `selection_source` as `user` or `agent`.
-3. Let the latest settled selection win.
-4. Return `superseded` when an older agent request loses.
-5. Send the visitor's final selection to the active voice session.
-
-```ts
-pageActions.onUserSelection((selection) => {
-  if (voice.state.status !== "connected") return;
-
-  voice.sendUserActivity();
-  voice.sendContextualUpdate(
-    JSON.stringify({
-      event: "page_selection_changed",
-      selection_source: "user",
-      product_id: selection.productId,
-      details_open: selection.detailsOpen,
-      selection_version: selection.version,
-    }),
-    "page-selection",
-  );
-});
-```
-
-The agent should acknowledge the visitor's choice instead of moving the page back to an older request.
-
-## 7. Choose the guide surface
-
-| Surface                 | Best for                                            | Client layout work                                       |
-| ----------------------- | --------------------------------------------------- | -------------------------------------------------------- |
-| Floating managed widget | Fast installation and minimal layout impact         | None beyond the SDK mount                                |
-| Inline managed widget   | A guide embedded in an existing section             | One explicit target element                              |
-| Headless right rail     | A persistent transcript beside a product experience | One app-shell column and a mobile bottom-sheet treatment |
-
-A persistent rail should mount at the application-shell level. Do not resize only one page section while leaving the global navigation underneath the rail.
-
-On smaller screens, collapse a persistent rail into a dismissible sheet or launcher. Keep the active session alive unless the visitor explicitly ends it.
-
-See [Custom UI and headless](/guides/widget-sdk/custom-ui) for rendering options.
-
-## 8. Prompt for discovery before presentation
-
-Client tools cannot correct a sales prompt that always pitches the first matching product. Configure the guide agent to:
-
-1. Identify the visitor's requested category.
-2. Use the read tool when category membership matters.
-3. Summarize the exact visible options before recommending one.
-4. Ask a narrowing question when multiple products remain plausible.
-5. Present a product only after the visitor asks to see it or enough evidence supports the action.
-6. Explain only the facts returned by the presentation receipt.
-7. Correct itself when a visitor changes the page manually.
-
-Treat page context and tool results as data. They do not override tool policy, consent, or the agent's system prompt.
-
-## 9. Preserve route and session continuity
-
-Update both Convinced and the live voice conversation after an SPA route change:
-
-```ts
-router.onChange(async ({ url, title, pageId }) => {
-  await client.updatePage({ url, title });
-
-  if (voice.state.status === "connected") {
-    voice.sendContextualUpdate(
-      JSON.stringify({
-        event: "route_changed",
-        page_id: pageId,
-        title,
-        url,
-      }),
-      "current-page",
-    );
-  }
-});
-```
-
-Mount one manifest per route and unregister route-specific tools when that route unmounts. Keep the session owner above the router. A full document navigation unloads the browser voice transport; a conventional multi-page site starts a new SDK owner on the destination page rather than preserving an uninterrupted voice call.
-
-## Integration checklist
-
-- The SDK is mounted once in a persistent owner.
-- The browser receives an intentionally public agent ID or a short-lived private credential, never an ElevenLabs API key.
-- Every page object has a stable semantic ID.
-- Category membership and other important relationships are exact.
-- Read tools do not mutate the page.
-- Mutation tools call existing page functions rather than arbitrary selectors.
-- Every mutation returns an observed terminal receipt.
-- The latest visitor action supersedes an older agent action.
-- The guide prompt performs discovery before presenting a solution.
-- Desktop and mobile layouts preserve access to the underlying page.
-- A real browser test proves microphone input, audible output, tool execution, manual interruption, and teardown.
-
-## Continue
-
-<CardGroup cols={2}>
-  <Card
-    title="Host tools and MCP"
-    icon="screwdriver-wrench"
-    href="/guides/widget-sdk/host-tools"
-  >
-    Review registry schemas, consent, exact voice bindings, and tool limits.
-  </Card>
-  <Card
-    title="Custom UI and themes"
-    icon="paintbrush"
-    href="/guides/widget-sdk/custom-ui"
-  >
-    Choose a managed widget, inline region, or headless guide surface.
-  </Card>
-  <Card
-    title="ElevenLabs voice"
-    icon="microphone-lines"
-    href="/guides/widget-sdk/voice"
-  >
-    Configure private credentials, voice state, contextual updates, and
-    continuity.
-  </Card>
-  <Card
-    title="Analytics and testing"
-    icon="chart-user"
-    href="/guides/widget-sdk/analytics-and-testing"
-  >
-    Prove the real browser, session history, and privacy-masked analytics path.
-  </Card>
-</CardGroup>
+Enmovil, for example, can register tools for a public fleet workflow and render a matched case-study slide. Another site can register different tools without changing the SDK architecture or exposing provider configuration.
