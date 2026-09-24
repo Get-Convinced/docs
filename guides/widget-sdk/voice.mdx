@@ -6,6 +6,10 @@ icon: 'microphone-lines'
 
 SDK 0.1.7 offers optional full-duplex voice through OpenAI `gpt-live-1` and WebRTC. Live handles greetings and conversational clarifications directly. It delegates requests that need grounded organization knowledge, page context, slides, or tools to `gpt-6-luna` in the existing Convinced session. Luna can continue through multiple knowledge and browser steps for one request.
 
+<Warning>
+  Read the [availability and validation status](/guides/widget-sdk/overview#availability-and-validation-status) before enabling voice for customers. Full-duplex protocol support is not a claim that your deployed audio flow has passed acceptance.
+</Warning>
+
 ## Channel contract
 
 | Action | Result |
@@ -97,6 +101,20 @@ live.on('error', error => {
 Use `live.subscribe(listener)` when the renderer needs an immediate state snapshot plus later state updates. Use `live.on(event, listener)` for named events. Both return an unsubscribe function; the Live controller does not expose `once()` or `off()`.
 
 Request microphone access only after a clear visitor action. Show listening and speaking state, support interruption, and provide an obvious way to stop audio.
+
+## Known issue: false input during silence
+
+A local browser session produced repeated caller text while the visitor was silent; the visitor reported continued text and interruptions while muted. Ending the voice session stopped it. The root cause remains unresolved. A short isolated test with digital silence acknowledged mute and produced no transcript events, so it did not reproduce the report. Audio packets alone do not establish audible speech.
+
+If this occurs, end voice with `await live.end()` and continue through typed chat. Do not present a mute icon as proof that the full input path is working. Preserve the Convinced session identifier for diagnosis; do not publish transcripts or record microphone audio without the visitor's permission.
+
+Pending local fixes keep overlapping speakers' transcript buffers independent, ignore exact replayed event IDs while preserving intentional repeated words, and correlate mute acknowledgements with the latest request. These fixes are not in published 0.1.7 and do not prove the false-input issue is fixed.
+
+## Incremental context and snapshots in development
+
+The local SDK/backend pair can forward bounded, verified page findings before Luna's final answer, allowing Live to explain new facts while work continues. Live owns the spoken wording; private reasoning and unverified action claims must not be streamed as facts. This is not general token-by-token speech of every backend delta.
+
+A local screenshot method is described under [page-aware guides](/guides/widget-sdk/page-aware-guides#screen-inspection-experimental). A model can request inspection through a host tool, but it cannot grant browser capture permission. Structured page state is not pixel vision.
 
 ## Official study links
 

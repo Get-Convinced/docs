@@ -43,4 +43,6 @@ Do not send new turns into a completed session. Session renewal preserves permit
 
 By default, `await client.endSession()` sends the completed pairs with the session transcript to `/session/end`. If you supply `clientMessages` explicitly, that replaces the default transcript; preserve the messages you intend to submit. Session-end capture covers completed pairs rather than every partial speech fragment. It does not establish reload or reconnect recovery.
 
+Identity belongs to this canonical session: use [identity APIs](/guides/widget-sdk/identity#save-details-to-the-current-session), not a separate provider conversation. Ending voice does not end the Convinced chat session; an active chat record after `live.end()` is expected.
+
 See [Lifecycle events](/guides/widget-sdk/events) for observable state and [Security](/guides/widget-sdk/security) for session capabilities.

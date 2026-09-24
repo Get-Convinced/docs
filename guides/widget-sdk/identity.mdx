@@ -17,6 +17,16 @@ await client.captureIdentity({
 
 Use `identify()` when your application already knows an authenticated user. Use `setIdentity()` for bounded session context that should not force the durable email-capture path.
 
+## Save details to the current session
+
+The identity APIs remain supported independently of the voice provider. After initialization, `identify()` saves the supported fields as session context; if an email is supplied, it also uses the canonical identity endpoint to create or find a visitor and link that record to the session. `setIdentity()` saves session context without requiring that durable email-capture step. `captureIdentity()` requires an email and performs the durable visitor-link operation directly.
+
+Supported session identity fields are `name`, `email`, `company`, `industry`, `role`, `phone`, and `title`. The durable identity endpoint accepts email, name, company and phone; do not assume every session-context field becomes a visitor-record column.
+
+A custom headless page must actually render the form and handle the `profile_gate` activity event if its deployment requires one. The presence of an identity API does not automatically add a form to the host page. The managed renderer can request the form and fill supported fields through its registered voice tools; submission still follows its authorization policy.
+
+Use the same Convinced session ID for identity and conversation correlation. Customers do not need an OpenAI conversation ID or provider key to save details.
+
 ## Forms as tools
 
 A conversation may ask the UI to show or prefill a form through a registered host tool. Prefilling is not consent to submit. Keep durable submission behind a visible visitor action or a fresh `per_call` authorization for that exact request.

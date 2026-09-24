@@ -10,6 +10,24 @@ Version 0.1.7 lets the Convinced Luna agent carry a request through knowledge an
 
 The only agent identifier exposed in browser configuration is `agentId`, the public ID of a Convinced `AgentDeployment`. Do not put an OpenAI key, a model-provider ID, or any other provider credential in browser code.
 
+## Availability and validation status
+
+Reviewed September 24, 2026. The npm `latest` release is **0.1.7**. A local build with that same version label can contain unpublished changes; the version label alone does not establish which behavior is deployed.
+
+| Capability | Published 0.1.7 | Current local development |
+| --- | --- | --- |
+| Headless chat, optional managed UI, identity/forms, slides and WebMCP | Available; host integration and backend configuration still required | Preserved |
+| Live voice and short final voice briefings | Available, subject to real-browser acceptance | Further conversation and feedback changes under test |
+| Incremental verified findings during delegated work | Do not assume the local streaming changes are included | Implemented; requires matching SDK and backend |
+| `client.describeScreen()` | Not part of the published package | Experimental; matching authenticated backend and visitor-approved tab capture required |
+| Independent overlapping transcript buffers, replayed-event protection, correlated mute acknowledgements | Local fixes are not included in the immutable npm package | Automated checks pass; not an acoustic acceptance result |
+
+<Warning>
+  Voice release acceptance is blocked by an unresolved report of false caller transcriptions during silence, including while muted, with speech interruptions. Ending voice stopped the reported behavior. A short digital-silence probe did not reproduce the transcripts. Local transcript and mute-acknowledgement fixes do not establish that this issue is resolved. Keep text available; see [voice troubleshooting](/guides/widget-sdk/voice#known-issue-false-input-during-silence).
+</Warning>
+
+No new SDK version or production rollout is implied by these local changes. Use the [migration guide](/guides/widget-sdk/migration) to distinguish released upgrades from pending work.
+
 ## One conversation, two inputs
 
 Text and speech share one Convinced session. `gpt-6-luna` handles typed input and requests that need grounded organization knowledge, page context, slides, or tools.

@@ -49,6 +49,10 @@ await client.sendMessage(input.value)
 
 This remains the only typed-input path. In SDK 0.1.7, typed input supersedes an unfinished delegated voice task before that task performs another browser action. If Live is connected, the SDK sends the backend's short verified briefing to Live for speech when available, or a bounded complete-sentence fallback. The full client message is unchanged; see [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
 
+## Pending event handling improvements
+
+Local development forwards verified `voice_context` and `voice_thinking` SSE updates to Live during delegated work. These are bounded backend progress inputs, not new visitor messages or a reason to replay a turn. The published package should not be assumed to include this behavior. Caption buffering and mute acknowledgement fixes are also pending; see [availability](/guides/widget-sdk/overview#availability-and-validation-status).
+
 ## Teardown
 
 ```ts

@@ -66,6 +66,12 @@ live.on('state', state => {
 
 Render the shared conversation from `client.state.messages`, which includes Luna turns and completed Live-native user/assistant pairs. Native pairs notify client state subscribers without duplicate client `message` events, so a renderer that only appends `message` events will miss them. Live's `onMessage`, `message`, and `message_delta` events remain available for captions; do not replay them through `client.sendMessage()`. Ending Live leaves chat active. See [session-end capture](/guides/widget-sdk/sessions#persisted-history) for completed pairs and transcript limits.
 
+## Keep captions separate from completed history
+
+Caller and assistant audio can overlap. Do not close one speaker's caption solely because a fragment from the other speaker arrives, and do not assume packet arrival gaps are completed utterances. Preserve source timing and genuine repeated words. The local SDK caption and mute-acknowledgement fixes are [unreleased](/guides/widget-sdk/overview#availability-and-validation-status).
+
+Show pending voice startup and backend work without falsely labeling every wait as listening. Leave typed input and an explicit End voice control available. A page-only renderer may omit slide/video surfaces, but its backend policy must match; see [Slides and media](/guides/widget-sdk/media#pages-whose-content-is-already-interactive).
+
 ## Framework lifecycle
 
 Create one `ConvincedClient` above the portion of an SPA that changes routes. Unsubscribe component listeners on unmount. Call `client.updatePage()` when route context changes, and end the session only when the user finishes the conversation.

@@ -51,4 +51,8 @@ Verify:
 12. Interrupt speech with a brief backchannel or “stop talking” and confirm the underlying Luna task continues. Separately correct the task before its next browser action and confirm stale narration and later actions stop.
 13. End voice during a paused browser-tool turn, then send a typed request. Confirm the prior turn cannot resume after the new request and that the typed answer remains usable.
 
+Also run controlled silence and mute checks: keep the microphone open without speaking, interrupt naturally, then request mute and verify the acknowledgement and actual behavior. Separate late pre-mute transcript packets from new input where the available evidence permits; do not discard repeated words merely because they repeat. Confirm there are no false caller turns or speech interruptions before accepting voice.
+
+For page-only integrations, verify page selection and overlays rather than requiring a slide. For experimental snapshots, test denied sharing, approved capture, stopped sharing, stale/cancelled results and no screenshot claims before capture. Passing a synthetic-silence or mocked protocol test does not replace browser audio acceptance. See the [open voice limitation](/guides/widget-sdk/voice#known-issue-false-input-during-silence).
+
 Inspect browser source, requests, storage, and logs to confirm that no OpenAI key or provider ID is exposed.

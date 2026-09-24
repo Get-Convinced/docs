@@ -49,6 +49,22 @@ Provide stable page IDs, public labels, current route, and a short summary. Excl
 
 A tool result should report the observed outcome, such as the final route or visible entity ID. `gpt-6-luna` uses that receipt before answering. Do not claim success before the host callback completes.
 
+## Show useful content before asking for details
+
+Give the agent a compact summary of the visible page and the capabilities actually available there. A visitor's role or broad interest can be enough to show a relevant overview; do not require every qualification field before explaining one grounded capability. Ask a focused follow-up only after providing useful context.
+
+For navigation, prefer one bounded tool that resolves a canonical destination, performs the action and verifies its final visible state. A successful scroll does not prove a tab, scope filter or overlay was selected. Include the actual visible role or solution facts in the receipt, not just a generic section title. Keep screen-inspection answers on the current screen rather than navigating elsewhere.
+
+## Screen inspection (experimental)
+
+The local development SDK exposes `client.describeScreen(imageDataUrl, { signal? })`, returning `{ observation }` through a matching authenticated Convinced backend. **This is not available in the published 0.1.7 package.** It accepts one JPEG or PNG frame up to 1 MiB; the local route validates the session and image and returns a bounded textual observation. The route does not persist the submitted image. Do not assume equivalent provider-retention guarantees from that application behavior.
+
+The host owns capture. A model may request a snapshot through a registered tool. If no tab is shared, return a clear user-action-required result and show a share control. Calling `getDisplayMedia()` requires a visitor gesture and the browser's approval; a model tool call cannot bypass that picker. After approval, capture a frame only when requested, stop capture when the visitor stops sharing or the component unmounts, and discard stale results after cancellation.
+
+A page's structured labels, controls and state remain useful without capture. Explicitly distinguish that information from a screenshot observation. Screen inspection has no reason to collect the visitor's name, industry or other qualification details.
+
+See [availability](/guides/widget-sdk/overview#availability-and-validation-status) and [security](/guides/widget-sdk/security).
+
 ## One guide across inputs
 
 The same `gpt-6-luna` path handles grounded page answers and tool requests from typed or spoken input, using one registry. Live handles greetings and conversational clarifications directly. Completed user/assistant pairs enter shared client history for subsequent typed or delegated page work. Keep route actions, slides, and forms on the Luna tool path.

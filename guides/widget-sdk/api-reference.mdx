@@ -32,6 +32,10 @@ const client = new ConvincedClient({
 
 `sendMessage()` is always the typed-input API. When Live is connected, a short Luna briefing is sent to Live for speech; the full result stays in the client. Submitting typed input during an unfinished delegated voice turn stops that turn before later browser actions. See [Optional Live voice](/guides/widget-sdk/voice).
 
+## Unreleased API additions
+
+`client.describeScreen(imageDataUrl, { signal? })` exists only in the local development build and requires its matching backend. It returns `{ observation }` for one approved frame; it does not open a browser capture picker. Do not copy it into a project using the npm 0.1.7 package. See [screen inspection](/guides/widget-sdk/page-aware-guides#screen-inspection-experimental) and [availability](/guides/widget-sdk/overview#availability-and-validation-status).
+
 ## `ConvincedLiveController`
 
 Create it from the initialized client:
