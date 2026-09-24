@@ -51,6 +51,10 @@ If Live fails or is disabled, leave typed chat available. A chat-only session mu
 - Make durable form submission and other consequential actions visibly consented.
 - End sessions through an awaited application action.
 
+## Visitor-approved screen capture
+
+The [experimental screenshot path](/guides/widget-sdk/page-aware-guides#screen-inspection-experimental) sends a visitor-approved tab frame to a Convinced backend for interpretation. Explain that behavior before capture. A model request is not permission to inspect other tabs, windows or the entire desktop. Keep capture controls visible, stop tracks on teardown, and avoid screenshots in logs, analytics and persistent client state. Provider keys stay server-side.
+
 ## Production checklist
 
 - Allowed origins match every host website.

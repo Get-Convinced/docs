@@ -1,33 +1,33 @@
 ---
-title: 'SDK 0.1.7 client handoff'
-description: 'What changed in the new SDK and the Convinced agent ID for Enmovil pages.'
+title: 'SDK implementation handoff'
+description: 'Prepare a reusable SDK integration handoff with verified configuration and rollout status.'
 icon: 'clipboard-check'
 ---
 
-SDK 0.1.7 gives website teams a headless chat and voice client. The website owns its interface, slides, forms, and page actions. Convinced owns the prompt, knowledge, models, session, and provider credentials.
+Use the [SDK overview](/guides/widget-sdk/overview) to choose a headless or managed UI, then follow the [quickstart](/guides/widget-sdk/quickstart). Keep customer-specific deployment IDs, prompts, repository links and acceptance evidence in that customer's implementation handoff.
 
-## What changes for an existing SDK integration
+## Release status
 
-- Text and speech share one Convinced session. `gpt-6-luna` handles grounded answers and tool decisions; optional `gpt-live-1` handles full-duplex speech and conversational exchanges through WebRTC. This path uses no ElevenLabs credentials or agent IDs. Voice can stop while chat continues.
-- The same `ClientToolRegistry` serves slides, forms, page actions, and WebMCP in chat and voice. `client.publishToolsToWebMcp()` also makes registered actions available to supporting browsers. Luna can continue a request through knowledge and multiple signed browser-tool rounds while Convinced holds the run state server-side.
-- Grounded spoken responses can use a short voice briefing while the full answer stays in the chat. Backchannels can leave a task running; a new delegated correction or typed request stops unfinished work before later browser actions.
-- Large slide catalogs and page context use bounded Live updates. See [Live payload limits](/guides/widget-sdk/voice#live-payload-limits). Completed Live-native exchanges appear in shared client history and the default session-end transcript; partial fragments and reload/reconnect recovery are not guaranteed.
-- The browser uses the public Convinced `agentId` to select a deployment. It receives no OpenAI key. An authenticated Convinced administrator can edit the deployment's saved `systemPrompt` and `firstMessage` for future sessions.
+The published npm version is **0.1.7**. Local streaming, screenshot and transcript/mute fixes are not a new published release. The [availability table](/guides/widget-sdk/overview#availability-and-validation-status) distinguishes those changes. Voice rollout remains blocked by the unresolved false-input report; working chat and passing automated tests do not establish acoustic acceptance.
 
-## Enmovil ID for new pages
+## Configuration to supply
 
-The **Enmo Buddy SDK** deployment uses:
+- The customer's `orgSlug` and public Convinced `agentId`, plus permitted website origins.
+- The exact package pin and lockfile, backend environment and required hosted capabilities.
+- The chosen renderer and implemented page, form and media tools.
+- Who can administer `systemPrompt` and `firstMessage`, through authenticated Convinced administration.
+- Verified browser behavior, known limitations and rollback steps.
 
-```ts
-const client = new ConvincedClient({
-  orgSlug: 'enmovil',
-  agentId: 'c4b50540-3323-4037-a2e5-6807d0f1be17',
-  tools,
-})
-```
+The browser needs no provider key or provider agent ID. Reuse a Convinced deployment ID only when the new page should share its prompt and configuration; otherwise provision a separate deployment. Register capabilities that actually exist on each page rather than copying another page's tool names without handlers.
 
-Use this ID when duplicating the Transformation page's prompt and behavior on another Enmovil page. A different prompt should have its own Convinced deployment and ID. The generic **Test Widget** ID is not the Transformation agent. Add each new website origin to the deployment's allowed domains before testing it.
+## Preserve product capabilities
 
-Pin `@convinced/widget-sdk@0.1.7`, build the host UI, and register only the slide, form, navigation, and WebMCP actions that the page can really perform. Confirm the matching Convinced Live configuration is deployed and begin a fresh Live session. Test chat-only use, voice opt-in, a spoken page-and-slide walkthrough, a backchannel that leaves the task running, a clear mid-task correction that stops stale work, typed input during voice, multiple signed browser-tool rounds, tool denial and timeout, and explicit session completion. Confirm each claimed page or slide action against what is actually visible.
+Identity capture, session persistence, forms, slides and WebMCP remain supported. A headless host must wire its form UI to the [identity APIs](/guides/widget-sdk/identity); forms do not appear automatically. A page can instead use [page-owned visual tools](/guides/widget-sdk/page-aware-guides) without removing SDK slides from other integrations.
 
-Start with the [SDK overview](/guides/widget-sdk/overview), [quickstart](/guides/widget-sdk/quickstart), and [WebMCP guide](/guides/widget-sdk/webmcp). Use the [migration guide](/guides/widget-sdk/migration) for an earlier SDK integration and the [prompt guide](/guides/widget-sdk/agent-prompts) for administrator edits.
+Experimental snapshots require a matching unpublished SDK/backend pair and a visitor-controlled tab-sharing action. Do not promise screenshot support from the released package.
+
+## Acceptance and rollout
+
+Use [Analytics and testing](/guides/widget-sdk/analytics-and-testing) for chat, identity, tools, media, silence, mute, interruption and teardown checks. Record exactly what passed, failed or was not tested. Keep a local preview URL distinct from production and start a fresh session after a runtime change.
+
+Use the [migration guide](/guides/widget-sdk/migration) for existing integrations, [prompt guide](/guides/widget-sdk/agent-prompts) for saved prompt edits, and [WebMCP study links](/guides/widget-sdk/webmcp#official-study-links) for browser-tool implementation.

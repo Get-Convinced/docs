@@ -12,6 +12,14 @@ If you already use 0.1.2 through 0.1.6, keep the existing client, Live controlle
 npm install --save-exact @convinced/widget-sdk@0.1.7
 ```
 
+## Pending changes are not another release
+
+The current local work has no new published version. Reinstalling npm 0.1.7 will not install the local streaming, screenshot, overlapping-caption or mute-acknowledgement patches. Do not overwrite a published version or change customer pins to an invented version.
+
+Existing identity, forms, slides and WebMCP APIs remain supported. Choosing page-only visuals is a host/deployment policy, not removal of those SDK capabilities. Experimental screenshot code requires both the unpublished SDK method and its matching backend. No additional released API migration is established for these pending changes.
+
+Voice rollout remains blocked pending resolution and real-browser verification of the [false-input issue](/guides/widget-sdk/voice#known-issue-false-input-during-silence). Preserve the working text path and the previous lockfile while evaluating local builds.
+
 ## API mapping
 
 | Earlier SDK | 0.1.7 | Migration action |

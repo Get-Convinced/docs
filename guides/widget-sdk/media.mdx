@@ -17,6 +17,14 @@ client.on('content', ({ content }) => {
 
 In a headless integration, the host decides whether media appears inline, beside the conversation, in a modal, or in a carousel. It also owns transitions, navigation, captions, close behavior, mobile layout, and accessibility. The optional managed renderer supplies its own functional media presentation.
 
+## Pages whose content is already interactive
+
+A host can choose to show its own workflow panels and simulators through registry/WebMCP tools instead of inline slides. Preserve slide support for integrations that use it.
+
+`client.initialize({ loadMedia: false })` skips optional catalog loading. It is not a universal backend switch that prevents slide selection: the deployment's prompt/tool policy and host rendering must also agree on page-only visuals. There is no new public `disableSlides` option in published 0.1.7. Return a receipt confirming the destination is visible before the assistant claims it opened.
+
+An experimental, integration-scoped page-only policy exists in local development. Do not infer that it is deployed or automatically applies to every website. See [availability](/guides/widget-sdk/overview#availability-and-validation-status).
+
 ## Safety rules
 
 - Render only media resolved from the initialized Convinced catalog.

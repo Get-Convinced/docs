@@ -84,6 +84,12 @@ The browser does not verify the server signature itself. It treats the continuat
 
 Do not expose prompt administration, provider keys, unrestricted authenticated fetch, arbitrary DOM selectors, or destructive actions without fresh confirmation.
 
+## Page visuals and screen inspection
+
+Register page-owned navigation, selection and simulator actions when the website itself is the demonstration. WebMCP does not require slides and does not automatically discover every website capability: the host must implement and expose those actions.
+
+A screenshot request is another bounded host capability, not a browser permission grant. Keep screen sharing under a visitor-controlled gesture, return a permission-required result when needed, and never label structured page state as a captured image. See [page-aware guides](/guides/widget-sdk/page-aware-guides#screen-inspection-experimental) for the local experimental path.
+
 ## Official study links
 
 - [WebMCP Community Group specification](https://webmachinelearning.github.io/webmcp/)

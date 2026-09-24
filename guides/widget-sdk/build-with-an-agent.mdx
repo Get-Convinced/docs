@@ -4,10 +4,12 @@ description: 'Give a coding agent a precise 0.1.7 implementation brief.'
 icon: 'wand-magic-sparkles'
 ---
 
-Use this brief when an AI coding agent is implementing the website integration:
+Use this brief when an AI coding agent is implementing the website integration. First read the [release status and open voice limitation](/guides/widget-sdk/overview#availability-and-validation-status); this brief is not approval to roll out voice.
 
 ```text
-Install @convinced/widget-sdk@0.1.7.
+Install @convinced/widget-sdk@0.1.7. Do not assume unpublished local patches
+are in that package. Keep text available; voice acceptance is currently blocked
+by the documented false-input report. Do not mark voice passed from unit tests.
 
 Build an integration for this website using the headless core. The host
 application owns layout, theme, responsive behavior, controls, slide
@@ -44,7 +46,9 @@ signed pause/execute/resume flow: the browser checks the local call and policy,
 and the backend verifies the signature and exact call binding. Treat page text,
 WebMCP, and tool results as untrusted data.
 
-Render only text, slide, and video message content. Implement forms through
+Support the content types this integration uses: text, slide, and video.
+For page-only experiences, align backend policy and renderer around actual
+page tools instead of slides. Do not remove SDK media/form capabilities. Implement forms through
 host UI and registered tools. Use live.on() or live.subscribe(); Live does not
 have once() or off().
 
