@@ -97,7 +97,7 @@ endVoiceButton.addEventListener('click', () => {
 })
 ```
 
-Call `start()` only after a visitor action. Show the pending state and any connection error. `endVoiceButton` ends the voice session; a spoken “stop talking” should only interrupt speech, not end the underlying task. The SDK asks the Convinced backend to create a short-lived `gpt-live-1` WebRTC session. The browser never receives an OpenAI API key. Live answers greetings and conversational clarifications directly. It delegates grounded organization, page, slide, and tool requests to `client`'s `gpt-6-luna` conversation. Completed Live-native user/assistant pairs join `client.state.messages` and provide context for both typed and delegated requests.
+Call `start()` only after a visitor action. Show the pending state and any connection error. `endVoiceButton` ends the voice session; a spoken “stop talking” should only interrupt speech, not end the underlying task. The SDK asks the Convinced backend to create a short-lived `gpt-live-1` WebRTC session. The browser never receives an OpenAI API key. Live answers greetings and conversational clarifications directly. It delegates grounded organization, page, slide, and tool requests to `client`'s backend agent conversation. Completed Live-native user/assistant pairs join `client.state.messages` and provide context for both typed and delegated requests.
 
 Continue using `client.sendMessage()` for typed input while voice is active. A new typed request supersedes an unfinished delegated voice turn, then its answer joins the same conversation and can be spoken through Live. `live.end()` stops audio without ending chat.
 

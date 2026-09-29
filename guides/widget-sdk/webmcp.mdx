@@ -70,14 +70,14 @@ If any registration fails, `ready` rejects and the publisher aborts the registra
 
 ## One governed execution path
 
-Whether a tool was registered directly, adapted from MCP, or discovered through WebMCP, requests that need a browser tool use the same `gpt-6-luna` flow, whether they begin as typed input or delegated speech:
+Whether a tool was registered directly, adapted from MCP, or discovered through WebMCP, requests that need a browser tool use the same backend agent flow, whether they begin as typed input or delegated speech:
 
-1. `gpt-6-luna` requests a named browser tool.
+1. The backend agent requests a named browser tool.
 2. Convinced pauses the canonical turn and returns an opaque signed continuation plus the exact calls.
 3. The SDK checks each call against the local registry, schema, limits, timeout, and host authorization.
 4. `ClientToolRegistry` runs the registered `handler` once.
 5. The SDK returns the result and opaque continuation to Convinced.
-6. The backend verifies the signature, organization, session, turn, call IDs, tool names, arguments, expiry, and call count before resuming `gpt-6-luna`.
+6. The backend verifies the signature, organization, session, turn, call IDs, tool names, arguments, expiry, and call count before resuming the backend agent.
 7. If Live is connected, `gpt-live-1` receives the backend's short verified voice briefing when available, or a bounded complete-sentence fallback. The full result remains in the client; see [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
 
 The browser does not verify the server signature itself. It treats the continuation as opaque and cannot mint, alter, or reuse it for another turn.

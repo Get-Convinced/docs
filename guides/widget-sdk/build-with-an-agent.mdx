@@ -24,19 +24,19 @@ Create one ConvincedClient({ orgSlug, agentId, tools, authorizeToolCall }) and
 await initialize(). agentId is a public Convinced AgentDeployment ID. Do not add
 OpenAI keys, provider IDs, or provider credentials to browser code.
 
-Send all typed turns with client.sendMessage(). Chat is the canonical gpt-6-luna
+Send all typed turns with client.sendMessage(). Chat is the canonical backend
 conversation.
 
 If voice is required, call client.createLiveController() and start it only from
 a user gesture. Let gpt-live-1 handle greetings and conversational clarification
 directly. Delegate grounded organization, page, slide, and tool requests to
-gpt-6-luna. Completed Live-native user/assistant pairs join client.state.messages
+the backend agent. Completed Live-native user/assistant pairs join client.state.messages
 and provide context for both typed and delegated requests. Render shared history
 from state updates; native pairs do not emit duplicate client message events.
 Typed input while Live is connected stays in that chat
 and its answer is spoken. A typed request supersedes unfinished delegated work.
 Live should keep a task running through a backchannel or speech interruption;
-a clear correction can supersede it. Luna can use multiple knowledge and browser
+a clear correction can supersede it. The backend agent can use multiple knowledge and browser
 tools for one request. A short verified voice briefing may accompany the full
 written answer. live.end() must leave chat active. A chat-only path must never
 start Live.

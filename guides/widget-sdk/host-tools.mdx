@@ -45,9 +45,9 @@ const client = new ConvincedClient({
 
 ## Signed pause, execute, resume
 
-`gpt-6-luna` never calls browser JavaScript directly. Convinced pauses the turn and returns an opaque, signed, short-lived capability with the pending calls. The SDK does not verify the server signature in the browser. It checks each call against the local registry, schema, bounds, expiry hint, and host authorization, executes the registered `handler`, then returns the result with the opaque capability.
+The backend agent never calls browser JavaScript directly. Convinced pauses the turn and returns an opaque, signed, short-lived capability with the pending calls. The SDK does not verify the server signature in the browser. It checks each call against the local registry, schema, bounds, expiry hint, and host authorization, executes the registered `handler`, then returns the result with the opaque capability.
 
-The backend verifies the capability's signature and its organization, session, turn, call IDs, names, arguments, expiry, and call count before resuming `gpt-6-luna`. The browser cannot mint another call, change its arguments, or reuse the continuation for another turn. Spoken requests that need tools delegate to `gpt-6-luna` and use this same path. Live-native greetings and conversational clarifications do not require a tool turn.
+The backend verifies the capability's signature and its organization, session, turn, call IDs, names, arguments, expiry, and call count before resuming the backend agent. The browser cannot mint another call, change its arguments, or reuse the continuation for another turn. Spoken requests that need tools delegate to the backend agent and use this same path. Live-native greetings and conversational clarifications do not require a tool turn.
 
 ## MCP adapters
 

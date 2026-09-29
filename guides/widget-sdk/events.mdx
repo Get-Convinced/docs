@@ -26,7 +26,7 @@ Common client events include:
 | `identity` | Confirm a durable identity update |
 | `error` | Show a recoverable failure |
 
-`paused` means `gpt-6-luna` is waiting for a client tool result. Let the SDK resume it; do not manually submit a duplicate continuation. A deliberate typed correction through `client.sendMessage()` can supersede an unfinished delegated voice turn.
+`paused` means the backend agent is waiting for a client tool result. Let the SDK resume it; do not manually submit a duplicate continuation. A deliberate typed correction through `client.sendMessage()` can supersede an unfinished delegated voice turn.
 
 ## Live events
 
@@ -39,7 +39,7 @@ const stopLiveError = live.on('error', error => showVoiceError(error.message))
 
 Live state covers connection, microphone mute, listening, speaking, and errors. Completed Live-native user/assistant pairs are added to `client.state.messages` and notify client state subscribers. They do not emit duplicate client `message` events; use state to render the full shared history.
 
-Live's `onMessage`, `message`, and `message_delta` events still provide captions, including fragments that may not form a completed pair. Do not replay captions as chat requests. Typed and delegated Luna requests can use the completed pairs in shared history. By default, `client.endSession()` includes them in the session-end transcript; it does not capture every partial fragment or guarantee reload/reconnect recovery.
+Live's `onMessage`, `message`, and `message_delta` events still provide captions, including fragments that may not form a completed pair. Do not replay captions as chat requests. Typed and delegated backend agent requests can use the completed pairs in shared history. By default, `client.endSession()` includes them in the session-end transcript; it does not capture every partial fragment or guarantee reload/reconnect recovery.
 
 ## Typed input during voice
 
