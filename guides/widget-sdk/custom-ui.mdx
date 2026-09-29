@@ -64,7 +64,7 @@ live.on('state', state => {
 })
 ```
 
-Render the shared conversation from `client.state.messages`, which includes Luna turns and completed Live-native user/assistant pairs. Native pairs notify client state subscribers without duplicate client `message` events, so a renderer that only appends `message` events will miss them. Live's `onMessage`, `message`, and `message_delta` events remain available for captions; do not replay them through `client.sendMessage()`. Ending Live leaves chat active. See [session-end capture](/guides/widget-sdk/sessions#persisted-history) for completed pairs and transcript limits.
+Render the shared conversation from `client.state.messages`, which includes backend agent turns and completed Live-native user/assistant pairs. Native pairs notify client state subscribers without duplicate client `message` events, so a renderer that only appends `message` events will miss them. Live's `onMessage`, `message`, and `message_delta` events remain available for captions; do not replay them through `client.sendMessage()`. Ending Live leaves chat active. See [session-end capture](/guides/widget-sdk/sessions#persisted-history) for completed pairs and transcript limits.
 
 ## Keep captions separate from completed history
 

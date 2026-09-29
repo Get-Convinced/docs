@@ -4,7 +4,7 @@ description: 'Render approved conversation media with host-owned layout and beha
 icon: 'presentation-screen'
 ---
 
-Convinced can return structured slide and video content with a `gpt-6-luna` response. The SDK resolves approved deployment media and emits typed content; a headless integration decides how to display it.
+Convinced can return structured slide and video content with a backend agent response. The SDK resolves approved deployment media and emits typed content; a headless integration decides how to display it.
 
 ```ts
 client.on('content', ({ content }) => {
@@ -33,4 +33,4 @@ An experimental, integration-scoped page-only policy exists in local development
 - Apply a restrictive Content Security Policy.
 - Preserve visible loading, failure, and close states.
 
-Slides and media belong to the canonical `gpt-6-luna` turn. If Live is active, its audio can describe the result, but Live does not own a separate slide state.
+Slides and media belong to the canonical backend agent turn. If Live is active, its audio can describe the result, but Live does not own a separate slide state.

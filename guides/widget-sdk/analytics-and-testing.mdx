@@ -48,7 +48,7 @@ Verify:
 9. WebMCP works when supported and degrades safely when absent.
 10. Await `client.endSession()` and verify that its default transcript includes completed Live-native pairs. Do not expect every partial speech fragment or infer reload/reconnect recovery from session-end capture.
 11. Speak a grounded request that uses a slide and page tool. Confirm the visual appears inline, the target is visible before Live claims it opened, and the spoken answer matches the tool result.
-12. Interrupt speech with a brief backchannel or “stop talking” and confirm the underlying Luna task continues. Separately correct the task before its next browser action and confirm stale narration and later actions stop.
+12. Interrupt speech with a brief backchannel or “stop talking” and confirm the underlying backend agent task continues. Separately correct the task before its next browser action and confirm stale narration and later actions stop.
 13. End voice during a paused browser-tool turn, then send a typed request. Confirm the prior turn cannot resume after the new request and that the typed answer remains usable.
 
 Also run controlled silence and mute checks: keep the microphone open without speaking, interrupt naturally, then request mute and verify the acknowledgement and actual behavior. Separate late pre-mute transcript packets from new input where the available evidence permits; do not discard repeated words merely because they repeat. Confirm there are no false caller turns or speech interruptions before accepting voice.

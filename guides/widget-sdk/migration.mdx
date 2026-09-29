@@ -4,7 +4,7 @@ description: 'Upgrade an earlier integration to the current chat, Live voice, an
 icon: 'arrow-right-arrow-left'
 ---
 
-This guide covers older SDK integrations, including 0.1.0, the 0.1.1 WebMCP previews, and 0.1.2 through 0.1.6. The current SDK uses one Convinced `gpt-6-luna` conversation for grounded chat and tool work, with optional `gpt-live-1` speech through WebRTC. Luna can continue one request across knowledge and signed browser tools while Convinced holds the run state server-side. A short verified voice briefing can accompany the full written answer, and a clear correction or typed request can supersede unfinished delegated work.
+This guide covers older SDK integrations, including 0.1.0, the 0.1.1 WebMCP previews, and 0.1.2 through 0.1.6. The current SDK uses one Convinced backend agent conversation for grounded chat and tool work, with optional `gpt-live-1` speech through WebRTC. The backend agent can continue one request across knowledge and signed browser tools while Convinced holds the run state server-side. A short verified voice briefing can accompany the full written answer, and a clear correction or typed request can supersede unfinished delegated work.
 
 If you already use 0.1.2 through 0.1.6, keep the existing client, Live controller, and tool registration. Upgrade, rebuild, and commit the lockfile. The new delegation behavior requires the matching Convinced backend and hosted Live configuration; start a fresh session after rollout:
 
@@ -18,6 +18,12 @@ The current local work has no new published version. Reinstalling npm 0.1.7 will
 
 Existing identity, forms, slides and WebMCP APIs remain supported. Choosing page-only visuals is a host/deployment policy, not removal of those SDK capabilities. Experimental screenshot code requires both the unpublished SDK method and its matching backend. No additional released API migration is established for these pending changes.
 
+The pending backend default is GPT-6.1 Sol with low reasoning; model configuration and OpenAI keys stay on the server. Automatic public-page capture is also pending. Before adopting that build, identify your public main landmark and exclude custom chat panels and private areas. You can disable capture with the local `pageSnapshot.enabled` option. Existing tools, forms, identity and media stay supported. See [automatic page observations](/guides/widget-sdk/page-aware-guides#automatic-page-observations-in-development).
+
+The matching streaming pair preserves grounded explanation across tool pauses and appends later results. It uses `text_reset` for a replaced draft; render changes by message ID so resets cannot leave stale text or suppress a later answer. Published 0.1.7 clients omit the opt-in streaming protocol and retain final-only behavior.
+
+The pending backend also requires the existing signed session capability for SDK session-context writes. The SDK supplies it automatically. If your application proxies `client.updatePage()` or other context updates, forward `x-widget-session-capability`, `x-convinced-sdk-version` and the original website Origin. Sending only a session ID will be rejected for an SDK session. This does not change the legacy iframe context path.
+
 Voice rollout remains blocked pending resolution and real-browser verification of the [false-input issue](/guides/widget-sdk/voice#known-issue-false-input-during-silence). Preserve the working text path and the previous lockfile while evaluating local builds.
 
 ## API mapping
@@ -29,7 +35,7 @@ Voice rollout remains blocked pending resolution and real-browser verification o
 | `descriptor.agentId`, `signedUrl`, `conversationToken` | Removed | Delete provider identifiers and browser voice credentials. Convinced creates Live server-side. |
 | `client.getVoiceCredential()` | Removed | Delete private-provider credential endpoints and factories. |
 | `voice.start(dynamicVariables/overrides)` | `live.start({ context?, startMuted? })` | Pass only bounded factual context. Prompts, models, knowledge, and credentials remain server-owned. |
-| `voice.sendUserMessage(text)` | `client.sendMessage(text)` | All typed turns enter the canonical `gpt-6-luna` chat. Connected Live receives a short briefing when supplied, or a bounded complete-sentence fallback; the full result remains in the client. |
+| `voice.sendUserMessage(text)` | `client.sendMessage(text)` | All typed turns enter the canonical backend agent chat. Connected Live receives a short briefing when supplied, or a bounded complete-sentence fallback; the full result remains in the client. |
 | Separate provider conversation | Shared `client.state.messages` and optional Live captions | Render state updates, including completed native pairs. They do not emit duplicate client `message` events; do not replay captions as chat turns. |
 | `voice.conversationId` / provider IDs | `live.liveSessionId` | Treat it as transport metadata; the Convinced session remains canonical. |
 | `voice.on(...)`, `once()`, `off()` | `live.on(...)`, `live.subscribe(...)` | Retain the returned unsubscribe functions. Live has no `once()` or `off()`. |
@@ -45,11 +51,11 @@ Voice rollout remains blocked pending resolution and real-browser verification o
 
 No public client or tool-registration API migration is required for integrations already using 0.1.2 through 0.1.6. Pin 0.1.7 and deploy the matching Convinced backend and Live configuration before testing fresh sessions. Keep the existing client, Live controller, and registry. Remove any host logic that forces every voice transcript through `client.sendMessage()`.
 
-The current runtime gives Luna a compact catalog of all slide filenames while retaining rich metadata locally for rendering. It accepts multiple signed browser-tool batches in one turn and lets Live end while microphone permission is pending. Live handles greetings and conversational clarifications; grounded knowledge, page, slide, and tool work delegates to Luna. Completed Live-native user/assistant pairs join `client.state.messages` and the default session-end transcript. This does not promise every partial fragment or recovery after reloads or reconnections.
+The current runtime gives the backend agent a compact catalog of all slide filenames while retaining rich metadata locally for rendering. It accepts multiple signed browser-tool batches in one turn and lets Live end while microphone permission is pending. Live handles greetings and conversational clarifications; grounded knowledge, page, slide, and tool work delegates to the backend agent. Completed Live-native user/assistant pairs join `client.state.messages` and the default session-end transcript. This does not promise every partial fragment or recovery after reloads or reconnections.
 
-Live appends stay within a conservative 450-byte UTF-8 cap. Grounded speech can use a media-free excerpt that omits the middle of a long answer; the full Luna result stays in the client. Accepted page context is split into ordered appends, retaining the 8 KiB input limit. See [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
+Live appends stay within a conservative 450-byte UTF-8 cap. When no short voice briefing is supplied, speech uses a bounded complete sentence after removing media directives and Markdown links; the full answer stays in the client. Accepted page context is split into ordered appends, retaining the 8 KiB input limit. See [Live payload limits](/guides/widget-sdk/voice#live-payload-limits).
 
-Luna keeps its agent run on the server when it pauses for a browser tool. The browser still executes only the registered, authorized action and returns an observed result through the signed continuation. A request can use several knowledge and browser tools without a fresh Live delegation for every step. The SDK bounds continuation rounds; handle its `client_tool_round_limit` error if a host task exceeds the limit.
+The backend agent keeps its agent run on the server when it pauses for a browser tool. The browser still executes only the registered, authorized action and returns an observed result through the signed continuation. A request can use several knowledge and browser tools without a fresh Live delegation for every step. The SDK bounds continuation rounds; handle its `client_tool_round_limit` error if a host task exceeds the limit.
 
 Behavior changes to verify in an existing host UI: a typed request supersedes an unfinished delegated voice request; a clear spoken correction can do the same, while an ordinary backchannel or speech interruption should not cancel the underlying task. Live speaks the backend's short verified briefing when available, while the full answer and structured slide/video parts stay in chat. If no briefing is available, the SDK uses bounded complete sentences from the written answer for speech. Do not treat a browser tool request as proof that its visual effect appeared: report what the host observed and verify the final page or slide state.
 
@@ -91,7 +97,7 @@ startVoiceButton.addEventListener('click', () => {
   void live.start({ context: `Page: ${document.title}` }).catch(showVoiceError)
 })
 
-// Typed input always uses GPT-6 Luna, including while Live is connected.
+// Typed input always uses the backend agent, including while Live is connected.
 sendButton.addEventListener('click', () => {
   void client.sendMessage('Compare the plans').catch(showChatError)
 })
@@ -181,11 +187,11 @@ the backend verifies the signature and exact call binding.
 Send every typed turn through client.sendMessage(). Create optional speech with
 const live = client.createLiveController(). Start it only from a user gesture.
 Let gpt-live-1 answer greetings and conversational clarifications directly.
-Delegate grounded organization, page, slide, and tool work to gpt-6-luna. Completed
+Delegate grounded organization, page, slide, and tool work to the backend agent. Completed
 Live-native user/assistant pairs join client.state.messages and provide context
-for typed and delegated Luna requests. Do not manually send every transcript
+for typed and delegated backend agent requests. Do not manually send every transcript
 through client.sendMessage().
-Let Luna continue one request across knowledge and signed host tools. A short
+Let the backend agent continue one request across knowledge and signed host tools. A short
 verified voice briefing may accompany the full written result. A typed turn
 supersedes unfinished delegated voice work; a clear spoken correction may do
 the same. A backchannel or speech interruption alone must not cancel the task.

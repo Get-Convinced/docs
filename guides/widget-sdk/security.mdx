@@ -20,7 +20,7 @@ An `agentId` selects a deployment. It is not an ownership credential and cannot 
 Convinced's backend owns:
 
 - OpenAI API keys and Live session creation;
-- `gpt-6-luna` and `gpt-live-1` model configuration;
+- the backend agent and `gpt-live-1` model configuration;
 - system prompts and `firstMessage`;
 - organization knowledge and retrieval;
 - session capabilities and signed tool continuations;
@@ -32,9 +32,11 @@ Never put provider API keys, provider agent IDs, management tokens, Campaign API
 
 Use one `ClientToolRegistry`. Register a small exact allowlist, validate arguments structurally, keep timeouts short, and return bounded JSON. Read tools may use `consent: 'none'` only when their output contains no private data. Navigation and mutation tools should require session or per-call consent.
 
-The pause/execute/resume capability is signed and verified by the Convinced backend. The browser treats it as opaque. The SDK checks the returned call against the local registry and host policy, enforces the expiry hint, executes it once, and returns the result with the same capability. The backend then verifies the signature and the exact organization, session, turn, call IDs, names, arguments, expiry, and call count before resuming `gpt-6-luna`.
+The pause/execute/resume capability is signed and verified by the Convinced backend. The browser treats it as opaque. The SDK checks the returned call against the local registry and host policy, enforces the expiry hint, executes it once, and returns the result with the same capability. The backend then verifies the signature and the exact organization, session, turn, call IDs, names, arguments, expiry, and call count before resuming the backend agent.
 
 Treat page text, WebMCP manifests, tool descriptions, tool results, model output, and contextual updates as untrusted data. None of them can override the saved prompt or tool policy.
+
+The pending backend hardens SDK session-context writes with the existing signed session capability, active-session check and deployment Origin policy. A custom context proxy must preserve the SDK's capability/version headers and original website Origin. The SDK supplies the capability automatically; a session ID alone is insufficient. This change is not a claim about the currently deployed endpoint.
 
 ## Live voice
 
