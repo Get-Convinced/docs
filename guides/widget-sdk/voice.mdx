@@ -42,6 +42,8 @@ disableVoiceButton.addEventListener('click', async () => {
 
 The SDK sends a WebRTC offer to Convinced. The backend authenticates the current widget session, loads its `AgentDeployment`, and creates the Live session with the server's OpenAI key. The browser receives the WebRTC answer, never the key. Browser tools stay on the canonical backend agent chat path; they are not registered with Live.
 
+`live.liveSessionId` is the runtime Live transport handle received during startup. You do not provision or configure it. Use the Convinced session ID for conversation history, identity, tool results, and analytics; the Live handle does not replace it.
+
 ## Controls and context
 
 ```ts
