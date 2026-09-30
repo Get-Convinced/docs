@@ -1,34 +1,36 @@
 ---
-title: 'Migrate to 0.1.7'
-description: 'Upgrade an earlier integration to the current chat, Live voice, and server-held tool continuation.'
+title: 'Migrate to 0.1.8'
+description: 'Upgrade an earlier integration to page-aware chat, Live voice, and server-held tool continuation.'
 icon: 'arrow-right-arrow-left'
 ---
 
-This guide covers older SDK integrations, including 0.1.0, the 0.1.1 WebMCP previews, and 0.1.2 through 0.1.6. The current SDK uses one Convinced backend agent conversation for grounded chat and tool work, with optional `gpt-live-1` speech through WebRTC. The backend agent can continue one request across knowledge and signed browser tools while Convinced holds the run state server-side. A short verified voice briefing can accompany the full written answer, and a clear correction or typed request can supersede unfinished delegated work.
+This guide covers older SDK integrations, including 0.1.0, the 0.1.1 WebMCP previews, and 0.1.2 through 0.1.7. SDK 0.1.8 uses one Convinced backend agent conversation for grounded chat, page observations and tool work, with optional `gpt-live-1` speech through WebRTC. The backend agent can continue one request across knowledge and signed browser tools while Convinced holds the run state server-side. A short verified voice briefing can accompany the full written answer, and a clear correction or typed request can supersede unfinished delegated work.
 
-If you already use 0.1.2 through 0.1.6, keep the existing client, Live controller, and tool registration. Upgrade, rebuild, and commit the lockfile. The new delegation behavior requires the matching Convinced backend and hosted Live configuration; start a fresh session after rollout:
+If you already use 0.1.2 through 0.1.7, keep the existing client, Live controller, and tool registration. Upgrade, rebuild, and commit the lockfile. Start a fresh session after upgrading:
 
 ```bash
-npm install --save-exact @convinced/widget-sdk@0.1.7
+npm install --save-exact @convinced/widget-sdk@0.1.8
 ```
 
-## Pending changes are not another release
+## Changes in 0.1.8
 
-The current local work has no new published version. Reinstalling npm 0.1.7 will not install the local streaming, screenshot, overlapping-caption or mute-acknowledgement patches. Do not overwrite a published version or change customer pins to an invented version.
+SDK 0.1.8 is the current release. Published 0.1.7 remains unchanged and does not include these additions. Use the current Convinced backend with SDK 0.1.8.
 
-Existing identity, forms, slides and WebMCP APIs remain supported. Choosing page-only visuals is a host/deployment policy, not removal of those SDK capabilities. Experimental screenshot code requires both the unpublished SDK method and its matching backend. No additional released API migration is established for these pending changes.
+Identity, forms, slides and WebMCP APIs remain supported. Choosing page-only visuals is a host/deployment policy, not removal of those SDK capabilities. Screen inspection remains experimental and requires the 0.1.8 API, matching authenticated backend, and explicit visitor-approved capture.
 
-The pending backend default is GPT-6.1 Sol with low reasoning; model configuration and OpenAI keys stay on the server. Automatic public-page capture is also pending. Before adopting that build, identify your public main landmark and exclude custom chat panels and private areas. You can disable capture with the local `pageSnapshot.enabled` option. Existing tools, forms, identity and media stay supported. See [automatic page observations](/guides/widget-sdk/page-aware-guides#automatic-page-observations-in-development).
+The Convinced backend uses GPT-6.1 Sol with low reasoning; model configuration and OpenAI keys stay on the server. Before enabling automatic public-page capture, identify your public main landmark and exclude custom chat panels and private areas. You can disable capture with `pageSnapshot.enabled`. See [automatic page observations](/guides/widget-sdk/page-aware-guides#automatic-page-observations).
 
-The matching streaming pair preserves grounded explanation across tool pauses and appends later results. It uses `text_reset` for a replaced draft; render changes by message ID so resets cannot leave stale text or suppress a later answer. Published 0.1.7 clients omit the opt-in streaming protocol and retain final-only behavior.
+Use HTTPS for production pages. An HTTP `localhost` preview against production needs `localhost` explicitly allowed by the backend for automatic snapshots; otherwise the SDK omits the snapshot and normal knowledge and tools remain available.
 
-The pending backend also requires the existing signed session capability for SDK session-context writes. The SDK supplies it automatically. If your application proxies `client.updatePage()` or other context updates, forward `x-widget-session-capability`, `x-convinced-sdk-version` and the original website Origin. Sending only a session ID will be rejected for an SDK session. This does not change the legacy iframe context path.
+The matching SDK/backend pair preserves grounded explanation across signed tool pauses and later results. It uses `text_reset` only for replaced text; render changes by message ID so resets cannot leave stale text or suppress a later answer. Published 0.1.7 clients omit the opt-in streaming protocol and retain final-only behavior.
 
-Voice rollout remains blocked pending resolution and real-browser verification of the [false-input issue](/guides/widget-sdk/voice#known-issue-false-input-during-silence). Preserve the working text path and the previous lockfile while evaluating local builds.
+The 0.1.8 backend requires the existing signed session capability for SDK session-context writes. The SDK supplies it automatically. If your application proxies `client.updatePage()` or other context updates, forward `x-widget-session-capability`, `x-convinced-sdk-version` and the original website Origin. Sending only a session ID is rejected for an SDK session. This does not change the legacy iframe context path.
+
+Voice acoustic acceptance remains open pending resolution and real-browser verification of the [false-input issue](/guides/widget-sdk/voice#known-issue-false-input-during-silence). Keep text available if you do not enable voice or if speech fails.
 
 ## API mapping
 
-| Earlier SDK | 0.1.7 | Migration action |
+| Earlier SDK | 0.1.8 | Migration action |
 | --- | --- | --- |
 | `new ConvincedClient({ orgSlug, ... })` | `new ConvincedClient({ orgSlug, agentId, ... })` | Add the public Convinced `AgentDeployment` ID. It is not a provider ID. |
 | `new ConvincedVoiceController(...)` | `client.createLiveController()` | Let the initialized client own its single Live controller. |
@@ -49,7 +51,7 @@ Voice rollout remains blocked pending resolution and real-browser verification o
 
 ## Upgrade from an earlier GPT Live SDK
 
-No public client or tool-registration API migration is required for integrations already using 0.1.2 through 0.1.6. Pin 0.1.7 and deploy the matching Convinced backend and Live configuration before testing fresh sessions. Keep the existing client, Live controller, and registry. Remove any host logic that forces every voice transcript through `client.sendMessage()`.
+No public client or tool-registration API migration is required for integrations already using 0.1.2 through 0.1.7. Pin 0.1.8 and test fresh sessions against the current Convinced backend and Live configuration. Keep the existing client, Live controller, and registry. Remove any host logic that forces every voice transcript through `client.sendMessage()`.
 
 The current runtime gives the backend agent a compact catalog of all slide filenames while retaining rich metadata locally for rendering. It accepts multiple signed browser-tool batches in one turn and lets Live end while microphone permission is pending. Live handles greetings and conversational clarifications; grounded knowledge, page, slide, and tool work delegates to the backend agent. Completed Live-native user/assistant pairs join `client.state.messages` and the default session-end transcript. This does not promise every partial fragment or recovery after reloads or reconnections.
 
@@ -128,7 +130,7 @@ Before switching, export the old provider prompt and opener for rollback records
 
 ## Migration checklist
 
-- [ ] Pin `@convinced/widget-sdk@0.1.7` and commit the lockfile.
+- [ ] Pin `@convinced/widget-sdk@0.1.8` and commit the lockfile.
 - [ ] Replace provider IDs and descriptors with the public Convinced `agentId`.
 - [ ] Remove browser provider keys, signed URLs, conversation tokens, and credential factories.
 - [ ] Create one `ConvincedLiveController` from the initialized client and reuse it across enable/disable cycles.
@@ -158,8 +160,8 @@ Prepare rollback before changing production traffic:
 
 1. Preserve the previous package version, lockfile, website build, provider configuration, and exported provider prompt as read-only rollback artifacts.
 2. Keep prompt migration separate from the website release. Record the Convinced revision and values before every admin edit.
-3. If speech fails, disable the voice control first. SDK 0.1.7 chat remains usable without Live.
-4. If the full website release must roll back, restore the previous package and integration together. Do not mix a 0.1.1 provider controller with a 0.1.7 session or registry.
+3. If speech fails, disable the voice control first. SDK 0.1.8 chat remains usable without Live.
+4. If the full website release must roll back, restore the previous package and integration together. Do not mix a 0.1.1 provider controller with a 0.1.8 session or registry.
 5. Restore provider-side prompt state only when the old runtime actually uses it. Do not overwrite the new Convinced prompt as part of an unrelated UI rollback.
 6. Start a fresh test session after rollback. Do not attempt to move active Live sessions or message history between runtimes.
 7. Repeat the old version's microphone, tool, prompt, and teardown acceptance checks before restoring traffic.
@@ -167,7 +169,7 @@ Prepare rollback before changing production traffic:
 ## Paste-ready coding-agent prompt
 
 ```text
-Migrate this website from an earlier @convinced/widget-sdk version to exactly 0.1.7.
+Migrate this website from an earlier @convinced/widget-sdk version to exactly 0.1.8 and verify the integration against the current Convinced backend.
 
 First inventory the current Convinced session owner, provider-specific voice
 controller, browser provider IDs or credentials, message stores, tool bindings,

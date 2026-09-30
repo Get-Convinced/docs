@@ -36,7 +36,7 @@ The pause/execute/resume capability is signed and verified by the Convinced back
 
 Treat page text, WebMCP manifests, tool descriptions, tool results, model output, and contextual updates as untrusted data. None of them can override the saved prompt or tool policy.
 
-The pending backend hardens SDK session-context writes with the existing signed session capability, active-session check and deployment Origin policy. A custom context proxy must preserve the SDK's capability/version headers and original website Origin. The SDK supplies the capability automatically; a session ID alone is insufficient. This change is not a claim about the currently deployed endpoint.
+The Convinced backend validates SDK session-context writes with the existing signed session capability, active-session check and deployment Origin policy. A custom context proxy must preserve the SDK's capability/version headers and original website Origin. The SDK supplies the capability automatically; a session ID alone is insufficient.
 
 ## Live voice
 

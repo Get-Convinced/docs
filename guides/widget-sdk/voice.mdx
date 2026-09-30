@@ -4,7 +4,7 @@ description: 'Let Live handle conversation naturally and delegate grounded knowl
 icon: 'microphone-lines'
 ---
 
-SDK 0.1.7 offers optional full-duplex voice through OpenAI `gpt-live-1` and WebRTC. Live handles greetings and conversational clarifications directly. It delegates requests that need grounded organization knowledge, page context, slides, or tools to the backend agent in the existing Convinced session. The backend agent can continue through multiple knowledge and browser steps for one request.
+SDK 0.1.8 offers optional full-duplex voice through OpenAI `gpt-live-1` and WebRTC. Live handles greetings and conversational clarifications directly. It delegates requests that need grounded organization knowledge, page context, slides, or tools to the backend agent in the existing Convinced session. The backend agent can continue through multiple knowledge and browser steps for one request.
 
 <Warning>
   Read the [availability and validation status](/guides/widget-sdk/overview#availability-and-validation-status) before enabling voice for customers. Full-duplex protocol support is not a claim that your deployed audio flow has passed acceptance.
@@ -57,7 +57,7 @@ Context updates are untrusted observations. They do not replace the saved Convin
 
 ## Live payload limits
 
-SDK 0.1.7 keeps each commentary or thinking append within a conservative 450-byte UTF-8 cap, below GPT Live's 500-token per-append limit.
+SDK 0.1.8 keeps each commentary or thinking append within a conservative 450-byte UTF-8 cap, below GPT Live's 500-token per-append limit.
 
 For a grounded answer, the backend agent can return a short, verified voice briefing alongside its full written answer. The SDK sends that briefing to Live for natural speech. If no briefing arrives, the SDK uses a complete sentence from the written answer after removing media directives and Markdown links; it does not splice the beginning and end of a long answer together. Full text and structured slide or video content remain available through the client.
 
@@ -81,7 +81,7 @@ Completed Live-native user/assistant pairs are added to `client.state.messages` 
 
 By default, `client.endSession()` includes the completed pairs in its `/session/end` payload. This covers completed exchanges, not every partial transcript fragment. It does not promise restoration across page reloads or Live reconnections. See [Conversation sessions](/guides/widget-sdk/sessions#persisted-history).
 
-The behavior requires the matching Convinced Live configuration as well as SDK 0.1.7. Start a fresh Live session after the release. Test a greeting and clarification, a spoken request that uses a slide or page tool, a speech backchannel, and a clear mid-task correction on your deployed page.
+The behavior requires the matching Convinced Live configuration as well as SDK 0.1.8. Start a fresh Live session after upgrading. Test a greeting and clarification, a spoken request that uses a slide or page tool, a speech backchannel, and a clear mid-task correction on your deployed page.
 
 ## Render voice state
 
@@ -108,13 +108,13 @@ A local browser session produced repeated caller text while the visitor was sile
 
 If this occurs, end voice with `await live.end()` and continue through typed chat. Do not present a mute icon as proof that the full input path is working. Preserve the Convinced session identifier for diagnosis; do not publish transcripts or record microphone audio without the visitor's permission.
 
-Pending local fixes keep overlapping speakers' transcript buffers independent, ignore exact replayed event IDs while preserving intentional repeated words, and correlate mute acknowledgements with the latest request. These fixes are not in published 0.1.7 and do not prove the false-input issue is fixed.
+SDK 0.1.8 keeps overlapping speakers' transcript buffers independent, ignores exact replayed event IDs while preserving intentional repeated words, and correlates mute acknowledgements with the latest request. These fixes do not prove the false-input issue is fixed.
 
-## Incremental context and snapshots in development
+## Incremental context and page snapshots
 
-The local SDK/backend pair can forward bounded, verified page findings before the backend agent's final answer, allowing Live to explain new facts while work continues. Live owns the spoken wording; private reasoning and unverified action claims must not be streamed as facts. This is not general token-by-token speech of every backend delta.
+The SDK/backend pair can forward bounded, verified page findings before the backend agent's final answer, allowing Live to explain new facts while work continues. Live owns the spoken wording; private reasoning and unverified action claims must not be streamed as facts. This is not general token-by-token speech of every backend delta.
 
-A local screenshot method is described under [page-aware guides](/guides/widget-sdk/page-aware-guides#screen-inspection-experimental). A model can request inspection through a host tool, but it cannot grant browser capture permission. Structured page state is not pixel vision.
+A screenshot method remains experimental; see [page-aware guides](/guides/widget-sdk/page-aware-guides#screen-inspection-experimental). A model can request inspection through a host tool, but it cannot grant browser capture permission. Structured page state is not pixel vision.
 
 ## Official study links
 
@@ -125,8 +125,8 @@ A local screenshot method is described under [page-aware guides](/guides/widget-
 
 These links explain the underlying OpenAI transport and delegation model. Integrators do not call OpenAI directly; Convinced owns that backend integration.
 
-## Page evidence in development
+## Page evidence during speech
 
-The pending SDK can supply compact current-page observations to Live directly, so it can explain known page facts while a backend action runs. Facts outside that evidence or an action can still delegate to the shared backend agent. Coherent verified findings use `session.commentary.append` with the current delegation ID; quiet context uses `session.thinking.append`. An append acknowledgement confirms context injection, not completed playback. Keep native Live explanations and backend briefings from repeating the same explanation.
+SDK 0.1.8 can supply compact current-page observations to Live directly, so it can explain known page facts while a backend action runs. Facts outside that evidence or an action can still delegate to the shared backend agent. Coherent verified findings use `session.commentary.append` with the current delegation ID; quiet context uses `session.thinking.append`. An append acknowledgement confirms context injection, not completed playback. Keep native Live explanations and backend briefings from repeating the same explanation.
 
-This uses the Live protocol, not `response.create`. The backend default in the pending PR is GPT-6.1 Sol with low reasoning. No published SDK version or production model change is implied; see [availability](/guides/widget-sdk/overview#availability-and-validation-status).
+This uses the Live protocol, not `response.create`. The Convinced backend uses GPT-6.1 Sol with low reasoning. See [availability](/guides/widget-sdk/overview#availability-and-validation-status).

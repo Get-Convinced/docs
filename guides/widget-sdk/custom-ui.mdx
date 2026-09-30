@@ -4,7 +4,7 @@ description: 'Render the headless SDK in any framework while keeping conversatio
 icon: 'palette'
 ---
 
-The 0.1.7 SDK core is headless. A headless host renders every visible surface and decides how those surfaces behave on desktop, mobile, and embedded pages. If a functional default is enough, use the optional `mountConvincedWidget({ client, voice: live })` renderer instead.
+The 0.1.8 SDK core is headless. A headless host renders every visible surface and decides how those surfaces behave on desktop, mobile, and embedded pages. If a functional default is enough, use the optional `mountConvincedWidget({ client, voice: live })` renderer instead.
 
 ## Render from state
 
@@ -68,7 +68,7 @@ Render the shared conversation from `client.state.messages`, which includes back
 
 ## Keep captions separate from completed history
 
-Caller and assistant audio can overlap. Do not close one speaker's caption solely because a fragment from the other speaker arrives, and do not assume packet arrival gaps are completed utterances. Preserve source timing and genuine repeated words. The local SDK caption and mute-acknowledgement fixes are [unreleased](/guides/widget-sdk/overview#availability-and-validation-status).
+Caller and assistant audio can overlap. Do not close one speaker's caption solely because a fragment from the other speaker arrives, and do not assume packet arrival gaps are completed utterances. Preserve source timing and genuine repeated words. SDK 0.1.8 includes independent transcript buffers, replayed-event protection and correlated mute acknowledgements; these changes do not establish acoustic acceptance. See [availability](/guides/widget-sdk/overview#availability-and-validation-status).
 
 Show pending voice startup and backend work without falsely labeling every wait as listening. Leave typed input and an explicit End voice control available. A page-only renderer may omit slide/video surfaces, but its backend policy must match; see [Slides and media](/guides/widget-sdk/media#pages-whose-content-is-already-interactive).
 
