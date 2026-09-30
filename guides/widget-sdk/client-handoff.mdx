@@ -8,7 +8,7 @@ Use the [SDK overview](/guides/widget-sdk/overview) to choose a headless or mana
 
 ## Release status
 
-This handoff targets SDK **0.1.8** and its matching Convinced backend. Page observation, incremental streaming and transcript/mute fixes are available with this pair. Screen inspection remains experimental. The [availability table](/guides/widget-sdk/overview#availability-and-validation-status) summarizes the supported capabilities. Voice acoustic acceptance remains open; working chat and passing automated tests do not establish that silence or mute behavior is correct.
+This handoff targets SDK **0.1.9** and its matching Convinced backend. Page observation, incremental streaming and transcript/mute fixes remain available, and the latest caller is retained if Live acknowledges before delegating. Screen inspection remains experimental. The [availability table](/guides/widget-sdk/overview#availability-and-validation-status) summarizes the supported capabilities. Voice acoustic acceptance remains open; working chat and passing automated tests do not establish that silence or mute behavior is correct.
 
 ## Configuration to supply
 
@@ -24,7 +24,7 @@ The browser needs no provider key or provider agent ID. Reuse a Convinced deploy
 
 Identity capture, session persistence, forms, slides and WebMCP remain supported. A headless host must wire its form UI to the [identity APIs](/guides/widget-sdk/identity); forms do not appear automatically. A page can instead use [page-owned visual tools](/guides/widget-sdk/page-aware-guides) without removing SDK slides from other integrations.
 
-Automatic page snapshots require the matching 0.1.8 backend. Screen inspection remains experimental and requires a matching authenticated route plus a visitor-controlled tab-sharing action. Do not capture without an explicit browser gesture and approval.
+Automatic page snapshots require the matching backend introduced with SDK 0.1.8. Screen inspection remains experimental and requires a matching authenticated route plus a visitor-controlled tab-sharing action. Do not capture without an explicit browser gesture and approval.
 
 ## Acceptance and rollout
 

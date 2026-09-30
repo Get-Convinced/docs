@@ -1,13 +1,13 @@
 ---
 title: 'Build with a coding agent'
-description: 'Give a coding agent a precise 0.1.8 implementation brief.'
+description: 'Give a coding agent a precise 0.1.9 implementation brief.'
 icon: 'wand-magic-sparkles'
 ---
 
 Use this brief when an AI coding agent is implementing the website integration. First read the [release status and open voice limitation](/guides/widget-sdk/overview#availability-and-validation-status); this brief is not approval to roll out voice.
 
 ```text
-Target @convinced/widget-sdk@0.1.8 and the current Convinced backend. Keep text
+Target @convinced/widget-sdk@0.1.9 and the current Convinced backend. Keep text
 available; voice acoustic acceptance remains open
 by the documented false-input report. Do not mark voice passed from unit tests.
 
@@ -71,6 +71,10 @@ media, forms, long grounded answers, page context within the 8 KiB limit,
 and teardown.
 Verify completed native pairs in the default session-end
 transcript, without assuming every fragment or reload/reconnect recovery.
+For voice delegation, also test an acknowledgment before a delayed grounded
+request, a distinct new caller before that delegation, and a delegation with
+no usable caller text. Reconcile state snapshots so a withdrawn provisional
+native pair does not linger in the UI. Do not add a second transcript replay.
 ```
 
 Give the agent the website's actual `orgSlug`, Convinced `agentId`, route API, design system, tool allowlist, consent requirements, and acceptance URL. Do not give it provider credentials.

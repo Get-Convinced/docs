@@ -1,6 +1,6 @@
 ---
 title: 'SDK API map'
-description: 'Public classes and methods in @convinced/widget-sdk 0.1.8.'
+description: 'Public classes and methods in @convinced/widget-sdk 0.1.9.'
 icon: 'code'
 ---
 
@@ -55,6 +55,8 @@ const live = client.createLiveController()
 | Events | `on()`, `subscribe()` |
 
 `end()` closes the Live transport and leaves the client ready for chat. `client.endSession()` ends the canonical conversation.
+
+SDK 0.1.9 changes no public client, Live controller, or tool-registration method or option. Its delegation fix is internal; see [voice delegation](/guides/widget-sdk/voice#delegation-and-tools).
 
 `subscribe(listener)` immediately receives the current `ConvincedLiveState` and returns an unsubscribe function. `on(event, listener)` returns an unsubscribe function for a named event. `ConvincedLiveController` does not expose `once()` or `off()`.
 

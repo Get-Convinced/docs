@@ -4,24 +4,25 @@ description: 'Add one Convinced conversation to any website and render it with y
 icon: 'layer-group'
 ---
 
-`@convinced/widget-sdk` 0.1.8 has a headless core. It manages a Convinced conversation, optional speech I/O, host tools, and session lifecycle without requiring React. Build every visual surface in your application, or opt into the package's `mountConvincedWidget()` convenience renderer.
+`@convinced/widget-sdk` 0.1.9 has a headless core. It manages a Convinced conversation, optional speech I/O, host tools, and session lifecycle without requiring React. Build every visual surface in your application, or opt into the package's `mountConvincedWidget()` convenience renderer.
 
-Version 0.1.8 lets the Convinced backend agent carry a request through knowledge and browser tools while Live handles speech. The backend agent can supply a short spoken briefing alongside the full written answer. The SDK stops a superseded delegated turn before starting later browser actions. See [Optional Live voice](/guides/widget-sdk/voice).
+Version 0.1.9 lets the Convinced backend agent carry a request through knowledge and browser tools while Live handles speech. The backend agent can supply a short spoken briefing alongside the full written answer. The SDK stops a superseded delegated turn before starting later browser actions. See [Optional Live voice](/guides/widget-sdk/voice).
 
 The only agent identifier exposed in browser configuration is `agentId`, the public ID of a Convinced `AgentDeployment`. Do not put an OpenAI key, a model-provider ID, or any other provider credential in browser code.
 
 ## Availability and validation status
 
-SDK **0.1.8** is the current release. It works with the matching Convinced backend deployment. Published 0.1.7 remains unchanged and does not include the 0.1.8 additions below.
+SDK **0.1.9** is the current release. It works with the matching Convinced backend deployment. Version 0.1.8 introduced the page and streaming capabilities below; 0.1.9 retains them and improves voice delegation after a Live acknowledgment. Published 0.1.7 remains unchanged.
 
-| Capability | SDK 0.1.8 and matching backend | SDK 0.1.7 |
-| --- | --- | --- |
-| Headless chat, optional managed UI, identity/forms, slides and WebMCP | Preserved; host integration and backend configuration still required | 0.1.7 behavior remains available |
-| Live voice and short final voice briefings | Included, subject to real-browser acoustic acceptance | Supported |
-| Incremental verified findings during delegated work | Included with the matching backend | Final-only streaming; no `text_reset` support |
-| Automatic semantic page observations and section focus | Included with a matching backend; public main content, exclusion controls and bounded session-only visited-page context | Not available |
-| `client.describeScreen()` | Experimental; matching authenticated backend and visitor-approved tab capture required | Not available |
-| Independent overlapping transcript buffers, replayed-event protection, correlated mute acknowledgements | Included; automated checks do not establish acoustic acceptance | Not available |
+| Capability | Availability by SDK release |
+| --- | --- |
+| Headless chat, managed UI, identity/forms, slides and WebMCP | Preserved in 0.1.7–0.1.9 |
+| Live voice and short final briefings | 0.1.7–0.1.9 with a matching backend; acoustic acceptance remains open |
+| Caller retention after Live acknowledgment | 0.1.9 only; caption flush does not drop the latest request |
+| Incremental verified findings | 0.1.8–0.1.9 included; 0.1.7 final only, without `text_reset` |
+| Automatic page observations and section focus | 0.1.8–0.1.9 included with bounded public-page evidence; 0.1.7 absent |
+| `client.describeScreen()` | Experimental in 0.1.8–0.1.9; needs approved tab capture. Absent in 0.1.7. |
+| Independent transcript buffers, replay protection and mute acknowledgements | 0.1.8–0.1.9 included; 0.1.7 absent. No acoustic acceptance claim. |
 
 <Warning>
   Voice acoustic acceptance remains open because of an unresolved report of false caller transcriptions during silence, including while muted, with speech interruptions. Ending voice stopped the reported behavior. Later synthetic-silence testing reproduced phantom caller fragments before a prerecorded utterance played. Local transcript and mute-acknowledgement fixes do not establish that this issue is resolved. Keep text available; see [voice troubleshooting](/guides/widget-sdk/voice#known-issue-false-input-during-silence).
@@ -77,5 +78,5 @@ Use one `ClientToolRegistry` for chat and voice. The Convinced backend pauses a 
   <Card title="Quickstart" icon="bolt" href="/guides/widget-sdk/quickstart">Create a chat-only conversation, then opt in to voice.</Card>
   <Card title="Custom UI" icon="palette" href="/guides/widget-sdk/custom-ui">Render state and content in your framework.</Card>
   <Card title="Voice" icon="microphone-lines" href="/guides/widget-sdk/voice">Understand Live delegation and channel behavior.</Card>
-  <Card title="SDK API map" icon="code" href="/guides/widget-sdk/api-reference">Find the public 0.1.8 surface.</Card>
+  <Card title="SDK API map" icon="code" href="/guides/widget-sdk/api-reference">Find the public 0.1.9 surface.</Card>
 </CardGroup>
