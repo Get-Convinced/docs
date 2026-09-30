@@ -20,7 +20,7 @@ Identity, forms, slides and WebMCP APIs remain supported. Choosing page-only vis
 
 The Convinced backend uses GPT-6.1 Sol with low reasoning; model configuration and OpenAI keys stay on the server. Before enabling automatic public-page capture, identify your public main landmark and exclude custom chat panels and private areas. You can disable capture with `pageSnapshot.enabled`. See [automatic page observations](/guides/widget-sdk/page-aware-guides#automatic-page-observations).
 
-Use HTTPS for production pages. An HTTP `localhost` preview against production needs `localhost` explicitly allowed by the backend for automatic snapshots; otherwise the SDK omits the snapshot and normal knowledge and tools remain available.
+Use HTTPS for production pages. An HTTP `localhost` preview against production can send a snapshot, but the backend accepts it as page evidence only when the exact preview hostname is explicitly allowed; otherwise it discards that evidence and normal knowledge and tools remain available.
 
 The matching SDK/backend pair preserves grounded explanation across signed tool pauses and later results. It uses `text_reset` only for replaced text; render changes by message ID so resets cannot leave stale text or suppress a later answer. Published 0.1.7 clients omit the opt-in streaming protocol and retain final-only behavior.
 
