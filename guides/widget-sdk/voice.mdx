@@ -60,6 +60,16 @@ Context updates are untrusted observations. They do not replace the saved Convin
 
 Supply concise website-authored capability descriptions when Live needs to explain their benefits during a delegated action. Label that background reference separately from the current visible view. Keep authored limitations, exclude private visitor data, and use verified receipts to establish what has actually opened.
 
+### Background available at startup
+
+Live receives startup input immediately; context appended during a call is delivered gradually. Use startup background for facts the assistant needs from its first exchange, and later updates for changes to the current page. An append acknowledgment does not prove that the model has used the whole update. See [OpenAI's Live conversation guide](https://developers.openai.com/api/docs/guides/live-conversations).
+
+The matching Convinced backend accepts optional `context` alongside `sdp` in the authenticated `POST /api/widget/{orgSlug}/session/{sessionId}/live` JSON body. It seeds that text as explicitly untrusted background in Live's startup input. The context must be a string of at most 8 KiB in UTF-8. It cannot change the saved prompt, select a model, authorize tools, or establish what is visibly open.
+
+SDK 0.1.8 sends `{sdp}` on that route. Its `live.start({context})` option sends an after-connect update; it does not seed startup input. To use the optional backend field with this release, a host-supplied `fetch` adapter must add it only to its own Live startup request, preserving the SDK's session authorization, headers, and abort signal. Ordinary SDK requests remain compatible without an adapter. Do not send provider credentials or copy a request to another origin.
+
+The backend keeps recent conversation within its existing message bounds and can prune older history to make room for background. If the background would crowd out the newest exchange, it is omitted and the existing history behavior is retained. A successful Live response does not confirm that optional background was included. Keep startup facts compact and still support later current-page updates.
+
 ## Live payload limits
 
 SDK 0.1.8 keeps each commentary or thinking append within a conservative 450-byte UTF-8 cap, below GPT Live's 500-token per-append limit.
