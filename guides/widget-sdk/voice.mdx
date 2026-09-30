@@ -80,6 +80,8 @@ This keeps tool authorization, form handling, page actions, slides, and knowledg
 
 Live can explain relevant facts already in its page or reference context while a page action runs. A visitor's role or broad goal can be enough to show a useful overview: provide a grounded benefit before asking for more details. Claim navigation only after a successful host receipt confirms the destination; a tool request or a progress message does not confirm movement.
 
+Public page text and headings can include off-screen sections. They do not establish the current viewport, a completed navigation, or that a requested section is absent. A fresh verified action receipt supersedes earlier page observations; explain the content it confirms is now shown.
+
 The current hosted backend bounds each agent run, including a resumed run, to 15 seconds for a voice delegation and 30 seconds for a typed request. These budgets start at the agent runner after request preparation. Browser actions and preparation take additional time, and a multi-step request can contain several runs; these are not end-to-end response guarantees. If a run exceeds its budget, the backend finishes the turn with a recoverable answer and, for voice, a short spoken briefing.
 
 A completed page action remains completed if the follow-up answer times out. Keep its verified receipt visible and report the answer failure separately. Show failed or ambiguous action receipts promptly, even while an answer is pending. Do not automatically repeat a consequential action when its outcome is unknown. Let the visitor retry or refine the request, and retain typed chat as a fallback.
