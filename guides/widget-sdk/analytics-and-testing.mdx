@@ -50,6 +50,8 @@ Verify:
 11. Speak a grounded request that uses a slide and page tool. Confirm the visual appears inline, the target is visible before Live claims it opened, and the spoken answer matches the tool result.
 12. Interrupt speech with a brief backchannel or “stop talking” and confirm the underlying backend agent task continues. Separately correct the task before its next browser action and confirm stale narration and later actions stop.
 13. End voice during a paused browser-tool turn, then send a typed request. Confirm the prior turn cannot resume after the new request and that the typed answer remains usable.
+14. Speak a role or broad goal and request a visual guide. Measure the first useful spoken explanation after the utterance ends, verify the destination is visible, and confirm the assistant gives relevant value before asking another question. Count an acknowledgment separately.
+15. Test an ambiguous target and a stalled answer after a successful browser action. Keep the failure visible during pending work, preserve confirmed page movement, and verify spoken and typed recovery without automatically repeating the action. See [Responsiveness and recovery](/guides/widget-sdk/voice#responsiveness-and-recovery).
 
 Also run controlled silence and mute checks: keep the microphone open without speaking, interrupt naturally, then request mute and verify the acknowledgement and actual behavior. Separate late pre-mute transcript packets from new input where the available evidence permits; do not discard repeated words merely because they repeat. Confirm there are no false caller turns or speech interruptions before accepting voice.
 
