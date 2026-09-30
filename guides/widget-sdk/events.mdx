@@ -41,6 +41,8 @@ Live state covers connection, microphone mute, listening, speaking, and errors. 
 
 Live's `onMessage`, `message`, and `message_delta` events still provide captions, including fragments that may not form a completed pair. Do not replay captions as chat requests. Typed and delegated backend agent requests can use the completed pairs in shared history. By default, `client.endSession()` includes them in the session-end transcript; it does not capture every partial fragment or guarantee reload/reconnect recovery.
 
+In SDK 0.1.9, a provisional native pair can be removed from `client.state.messages` if the same caller request is delegated after Live's acknowledgment. Reconcile from `state` rather than assuming history only grows. An empty delegation produces a recoverable voice error and a request to repeat, not a completed empty user turn.
+
 ## Typed input during voice
 
 ```ts
