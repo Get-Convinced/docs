@@ -41,15 +41,15 @@ router.onChange(({ url, title }) => {
 removePricingTool()
 ```
 
-## Automatic page observations in development
+## Automatic page observations
 
-The pending SDK/backend pair captures a compact semantic snapshot from your public `main` or `[role="main"]` landmark. It includes headings, descriptions, cards, same-origin links and named section references. It recaptures before chat requests and updates connected Live voice after meaningful page changes and navigation. This is structured page evidence, not a screenshot.
+SDK 0.1.8 captures a compact semantic snapshot from your public `main` or `[role="main"]` landmark. It includes headings, descriptions, cards, same-origin links and named section references. It recaptures before chat requests and updates connected Live voice after meaningful page changes and navigation. This is structured page evidence, not a screenshot.
 
-This feature is **not in the published npm 0.1.7 package**. In the local API, `ConvincedClientOptions.pageSnapshot` accepts `enabled` and `excludeSelectors`. Set `enabled: false` to disable capture, or add selectors for your custom widget and private UI. Forms, input values, editors, dialogs, transcript roots and marked private or personalized content are excluded. Pages without a public main landmark supply no automatic snapshot. Mark additional private areas explicitly; DOM structure alone cannot establish whether application text is public.
+The 0.1.8 API adds `ConvincedClientOptions.pageSnapshot` with `enabled` and `excludeSelectors`. Set `enabled: false` to disable capture, or add selectors for your custom widget and private UI. Forms, input values, editors, dialogs, transcript roots and marked private or personalized content are excluded. Pages without a public main landmark supply no automatic snapshot. Mark additional private areas explicitly; DOM structure alone cannot establish whether application text is public. Published 0.1.7 is unchanged and does not include this feature.
 
 Accepted snapshots are bounded to 8 KiB and validated against the authenticated session's first-party origin. Current-page evidence is the first source for page questions. Previously visited pages can supply relevant passages through one bounded session lookup; this is not a site crawl or a shared website index. Missing or deeper facts can use the connected organization knowledge tools. Do not claim that unvisited pages were read.
 
-The model can choose a useful supported presentation without waiting for the visitor to say “show me.” It may answer directly when there is no useful visual. The local generic `host_focus_page_section` scrolls to and highlights an exact public section title only when a tool slot is available; it preserves your registered tools. It returns a verified receipt with bounded visible content only after confirming that section is in view. Otherwise, it reports the requested scroll without claiming visibility. A visible section does not prove a custom tab or workflow opened. Register a custom action when presenting a workflow needs application state changes.
+The model can choose a useful supported presentation without waiting for the visitor to say “show me.” It may answer directly when there is no useful visual. The generic `host_focus_page_section` scrolls to and highlights an exact public section title only when a tool slot is available; it preserves your registered tools. It returns a verified receipt with bounded visible content only after confirming that section is in view. Otherwise, it reports the requested scroll without claiming visibility. A visible section does not prove a custom tab or workflow opened. Register a custom action when presenting a workflow needs application state changes. These page-observation and focus features require the matching 0.1.8 backend.
 
 Existing slide, video, form and identity APIs remain available. Each website decides which presentations are appropriate. A page that already contains its demonstrations can prefer page actions through the same registry.
 
@@ -67,17 +67,17 @@ Give the agent a compact summary of the visible page and the capabilities actual
 
 For navigation, prefer one bounded tool that resolves a canonical destination, performs the action and verifies its final visible state. A successful scroll does not prove a tab, scope filter or overlay was selected. Include the actual visible role or solution facts in the receipt, not just a generic section title. Keep screen-inspection answers on the current screen rather than navigating elsewhere.
 
-In the pending SDK/backend pair, a verified presentation receipt can include `visible_summary` or bounded `visible_content` from the selected public section. The backend can pass those observed facts to Live promptly, using the same delegation ID. Failed, stale, unconfirmed or merely requested actions must not produce a spoken claim that the visitor is seeing the result.
+In the 0.1.8 SDK/backend pair, a verified presentation receipt can include `visible_summary` or bounded `visible_content` from the selected public section. The backend can pass those observed facts to Live promptly, using the same delegation ID. Failed, stale, unconfirmed or merely requested actions must not produce a spoken claim that the visitor is seeing the result.
 
 ## Screen inspection (experimental)
 
-The local development SDK exposes `client.describeScreen(imageDataUrl, { signal? })`, returning `{ observation }` through a matching authenticated Convinced backend. **This is not available in the published 0.1.7 package.** It accepts one JPEG or PNG frame up to 1 MiB; the local route validates the session and image and returns a bounded textual observation. The route does not persist the submitted image. Do not assume equivalent provider-retention guarantees from that application behavior.
+SDK 0.1.8 exposes `client.describeScreen(imageDataUrl, { signal? })`, returning `{ observation }` through the matching authenticated Convinced backend. It accepts one JPEG or PNG frame up to 1 MiB; the route validates the session and image and returns a bounded textual observation. The route does not persist the submitted image. Do not assume equivalent provider-retention guarantees from that application behavior. Published 0.1.7 does not include this API.
 
 The host owns capture. A model may request a snapshot through a registered tool. If no tab is shared, return a clear user-action-required result and show a share control. Calling `getDisplayMedia()` requires a visitor gesture and the browser's approval; a model tool call cannot bypass that picker. After approval, capture a frame only when requested, stop capture when the visitor stops sharing or the component unmounts, and discard stale results after cancellation.
 
 A page's structured labels, controls and state remain useful without capture. Explicitly distinguish that information from a screenshot observation. Screen inspection has no reason to collect the visitor's name, industry or other qualification details.
 
-See [availability](/guides/widget-sdk/overview#availability-and-validation-status) and [security](/guides/widget-sdk/security).
+Capture still requires an explicit visitor gesture and browser approval. A model request cannot grant permission. See [availability](/guides/widget-sdk/overview#availability-and-validation-status) and [security](/guides/widget-sdk/security).
 
 ## One guide across inputs
 

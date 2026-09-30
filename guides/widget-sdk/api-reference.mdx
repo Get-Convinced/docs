@@ -1,6 +1,6 @@
 ---
 title: 'SDK API map'
-description: 'Public classes and methods in @convinced/widget-sdk 0.1.7.'
+description: 'Public classes and methods in @convinced/widget-sdk 0.1.8.'
 icon: 'code'
 ---
 
@@ -32,9 +32,11 @@ const client = new ConvincedClient({
 
 `sendMessage()` is always the typed-input API. When Live is connected, a short verified briefing is sent to Live for speech; the full result stays in the client. Submitting typed input during an unfinished delegated voice turn stops that turn before later browser actions. See [Optional Live voice](/guides/widget-sdk/voice).
 
-## Unreleased API additions
+## Page observation and screen inspection
 
-`client.describeScreen(imageDataUrl, { signal? })` exists only in the local development build and requires its matching backend. It returns `{ observation }` for one approved frame; it does not open a browser capture picker. Do not copy it into a project using the npm 0.1.7 package. See [screen inspection](/guides/widget-sdk/page-aware-guides#screen-inspection-experimental) and [availability](/guides/widget-sdk/overview#availability-and-validation-status).
+SDK 0.1.8 adds `ConvincedClientOptions.pageSnapshot?: { enabled?: boolean; excludeSelectors?: string[] }`, `capturePageSnapshot()`, `PageSnapshot`, `PageSnapshotOptions`, `pageSnapshotLiveContext()` and `createPageFocusTool()`. Automatic capture uses the public main landmark and requires the matching backend.
+
+`client.describeScreen(imageDataUrl, { signal? })` returns `{ observation }` for one approved frame. It does not open a browser capture picker; the host must obtain visitor approval and capture the frame after a user gesture. The backend validates the session and image and returns a bounded textual observation. This remains an experimental path. These APIs are absent from published 0.1.7. See [page-aware guides](/guides/widget-sdk/page-aware-guides#automatic-page-observations) and [availability](/guides/widget-sdk/overview#availability-and-validation-status).
 
 ## `ConvincedLiveController`
 
@@ -104,7 +106,3 @@ Use `getPrompt()` and `updatePrompt()` only from an authenticated same-origin Co
 ## Content helpers
 
 `parseAssistantContent()`, `stripAssistantDirectives()`, `toSafeVideoEmbedUrl()`, and `isSafeHttpUrl()` help custom renderers process typed content. `MessageContentPart` is `text | slide | video`; forms remain host UI driven by application state or tools. Presentation decisions remain with the host UI.
-
-## Pending page-observation API
-
-The local development build adds `ConvincedClientOptions.pageSnapshot?: { enabled?: boolean; excludeSelectors?: string[] }` plus `capturePageSnapshot()`, `PageSnapshot`, `PageSnapshotOptions`, `pageSnapshotLiveContext()` and `createPageFocusTool()`. These exports are not in the published 0.1.7 package. Automatic capture uses a public main landmark and requires the matching backend; see [page-aware guides](/guides/widget-sdk/page-aware-guides#automatic-page-observations-in-development).
