@@ -8,7 +8,7 @@ Use the [SDK overview](/guides/widget-sdk/overview) to choose a headless or mana
 
 ## Release status
 
-This handoff targets SDK **0.1.8** and its matching Convinced backend. Page observation, incremental streaming and transcript/mute fixes are available with this pair. Screen inspection remains experimental. The [availability table](/guides/widget-sdk/overview#availability-and-validation-status) summarizes the supported capabilities. Voice acoustic acceptance remains open; working chat and passing automated tests do not establish that silence or mute behavior is correct.
+This documentation branch targets the **0.1.9 release candidate** and its matching Convinced backend; **0.1.8 remains published**. Confirm npm publication and backend deployment before asking a customer to install 0.1.9. It preserves page observation, incremental streaming, forms, media, and transcript/mute fixes, retains the caller through acknowledgments, and forwards completed voice findings before stream drain. Stream stalls have a configurable idle limit. Screen inspection remains experimental. The [availability table](/guides/widget-sdk/overview#availability-and-validation-status) summarizes supported capabilities. Voice acoustic acceptance remains open; working chat and automated tests do not establish that silence or mute behavior is correct.
 
 ## Configuration to supply
 
@@ -17,6 +17,7 @@ This handoff targets SDK **0.1.8** and its matching Convinced backend. Page obse
 - The chosen renderer and implemented page, form and media tools.
 - Who can administer `systemPrompt` and `firstMessage`, through authenticated Convinced administration.
 - Verified browser behavior, known limitations and rollback steps.
+- Acceptance evidence for compound questions and follow-up depth: each requested point is answered, existing context is reused, and the agent adds detail instead of repeating an overview.
 
 The browser needs no provider key or provider agent ID. Reuse a Convinced deployment ID only when the new page should share its prompt and configuration; otherwise provision a separate deployment. Register capabilities that actually exist on each page rather than copying another page's tool names without handlers.
 
@@ -24,7 +25,7 @@ The browser needs no provider key or provider agent ID. Reuse a Convinced deploy
 
 Identity capture, session persistence, forms, slides and WebMCP remain supported. A headless host must wire its form UI to the [identity APIs](/guides/widget-sdk/identity); forms do not appear automatically. A page can instead use [page-owned visual tools](/guides/widget-sdk/page-aware-guides) without removing SDK slides from other integrations.
 
-Automatic page snapshots require the matching 0.1.8 backend. Screen inspection remains experimental and requires a matching authenticated route plus a visitor-controlled tab-sharing action. Do not capture without an explicit browser gesture and approval.
+Automatic page snapshots require the matching backend introduced with SDK 0.1.8. Screen inspection remains experimental and requires a matching authenticated route plus a visitor-controlled tab-sharing action. Do not capture without an explicit browser gesture and approval.
 
 ## Acceptance and rollout
 

@@ -1,6 +1,6 @@
 ---
 title: 'SDK API map'
-description: 'Public classes and methods in @convinced/widget-sdk 0.1.8.'
+description: 'Public classes and methods in @convinced/widget-sdk 0.1.9.'
 icon: 'code'
 ---
 
@@ -19,6 +19,8 @@ const client = new ConvincedClient({
 
 `agentId` is a public Convinced `AgentDeployment` ID. It is optional when the organization has one default live widget deployment. Pass the optional `tools` registry and `authorizeToolCall` callback when the host exposes browser actions; see the [quickstart](/guides/widget-sdk/quickstart).
 
+In the 0.1.9 candidate, `chatStreamIdleTimeoutMs?: number` bounds the pause between response-body chunks. Its default is **35,000 milliseconds**; supplied values must be positive and finite. It is an idle limit, not an end-to-end response target. Handle a stalled-stream error with a visible retry or typed fallback. Signed tool continuation expiry also covers response-body consumption.
+
 | Work | API |
 | --- | --- |
 | Start | `initialize()`, `state` |
@@ -31,6 +33,8 @@ const client = new ConvincedClient({
 | Events | `on()`, `once()`, `off()` |
 
 `sendMessage()` is always the typed-input API. When Live is connected, a short verified briefing is sent to Live for speech; the full result stays in the client. Submitting typed input during an unfinished delegated voice turn stops that turn before later browser actions. See [Optional Live voice](/guides/widget-sdk/voice).
+
+Custom voice `onProgress` handlers can receive `LiveDelegationProgress.kind` values `commentary`, `thinking`, and, in 0.1.9, `instruction`. Handle the added variant if your code switches exhaustively on `kind`. Delivery instructions are control data for the SDK's voice bridge, not assistant captions or factual page observations. Standard `client.createLiveController()` wiring handles them automatically.
 
 ## Page observation and screen inspection
 
@@ -55,6 +59,8 @@ const live = client.createLiveController()
 | Events | `on()`, `subscribe()` |
 
 `end()` closes the Live transport and leaves the client ready for chat. `client.endSession()` ends the canonical conversation.
+
+SDK 0.1.9 retains the existing client, Live controller, and tool-registration methods. It adds the optional stream-idle setting above. Initialization reuses the selected session configuration; an explicit `client.getConfig()` still requests fresh configuration. See [voice delegation](/guides/widget-sdk/voice#delegation-and-tools).
 
 `subscribe(listener)` immediately receives the current `ConvincedLiveState` and returns an unsubscribe function. `on(event, listener)` returns an unsubscribe function for a named event. `ConvincedLiveController` does not expose `once()` or `off()`.
 

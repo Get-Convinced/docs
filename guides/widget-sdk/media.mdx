@@ -21,7 +21,7 @@ In a headless integration, the host decides whether media appears inline, beside
 
 A host can choose to show its own workflow panels and simulators through registry/WebMCP tools instead of inline slides. Preserve slide support for integrations that use it.
 
-`client.initialize({ loadMedia: false })` skips optional catalog loading. It is not a universal backend switch that prevents slide selection: the deployment's prompt/tool policy and host rendering must also agree on page-only visuals. There is no public `disableSlides` option in 0.1.8. Return a receipt confirming the destination is visible before the assistant claims it opened.
+`client.initialize({ loadMedia: false })` skips optional catalog loading. It is not a universal backend switch that prevents slide selection: the deployment's prompt/tool policy and host rendering must also agree on page-only visuals. There is no public `disableSlides` option in 0.1.9. Return a receipt confirming the destination is visible before the assistant claims it opened.
 
 Page-only behavior remains an integration-scoped deployment policy; it is not automatically applied to every website. See [availability](/guides/widget-sdk/overview#availability-and-validation-status).
 

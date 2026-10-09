@@ -4,7 +4,7 @@ description: 'Let Live handle conversation naturally and delegate grounded knowl
 icon: 'microphone-lines'
 ---
 
-SDK 0.1.8 offers optional full-duplex voice through OpenAI `gpt-live-1` and WebRTC. Live handles greetings, conversational clarifications, and explanations supported by its current page or reference context directly. It delegates missing facts and requests that need slides or tools to the backend agent in the existing Convinced session. The backend agent can continue through multiple knowledge and browser steps for one request.
+SDK 0.1.9 offers optional full-duplex voice through OpenAI `gpt-live-1` and WebRTC. Live handles greetings, conversational clarifications, and explanations supported by its current page or reference context directly. It delegates missing facts and requests that need slides or tools to the backend agent in the existing Convinced session. The backend agent can continue through multiple knowledge and browser steps for one request.
 
 <Warning>
   Read the [availability and validation status](/guides/widget-sdk/overview#availability-and-validation-status) before enabling voice for customers. Full-duplex protocol support is not a claim that your deployed audio flow has passed acceptance.
@@ -66,15 +66,17 @@ Live receives startup input immediately; context appended during a call is deliv
 
 The matching Convinced backend accepts optional `context` alongside `sdp` in the authenticated `POST /api/widget/{orgSlug}/session/{sessionId}/live` JSON body. It seeds that text as explicitly untrusted background in Live's startup input. The context must be a string of at most 8 KiB in UTF-8. It cannot change the saved prompt, select a model, authorize tools, or establish what is visibly open.
 
-SDK 0.1.8 sends `{sdp}` on that route. Its `live.start({context})` option sends an after-connect update; it does not seed startup input. To use the optional backend field with this release, a host-supplied `fetch` adapter must add it only to its own Live startup request, preserving the SDK's session authorization, headers, and abort signal. Ordinary SDK requests remain compatible without an adapter. Do not send provider credentials or copy a request to another origin.
+SDK 0.1.9 still sends `{sdp}` on that route. Its `live.start({context})` option sends an after-connect update; it does not seed startup input. To use the optional backend field, a host-supplied `fetch` adapter must add it only to its own Live startup request, preserving the SDK's session authorization, headers, and abort signal. Ordinary SDK requests remain compatible without an adapter. Do not send provider credentials or copy a request to another origin.
 
 The backend keeps recent conversation within its existing message bounds and can prune older history to make room for background. If the background would crowd out the newest exchange, it is omitted and the existing history behavior is retained. A successful Live response does not confirm that optional background was included. Keep startup facts compact and still support later current-page updates.
 
 ## Live payload limits
 
-SDK 0.1.8 keeps each commentary or thinking append within a conservative 450-byte UTF-8 cap, below GPT Live's 500-token per-append limit.
+SDK 0.1.9 keeps each commentary or thinking append within a conservative 450-byte UTF-8 cap, below GPT Live's 500-token per-append limit.
 
 For a grounded answer, the backend agent can return a short, verified voice briefing alongside its full written answer. The SDK sends that briefing to Live for natural speech. If no briefing arrives, the SDK uses a complete sentence from the written answer after removing media directives and Markdown links; it does not splice the beginning and end of a long answer together. Full text and structured slide or video content remain available through the client.
+
+The matching backend treats roughly 40 words as a brevity target, within the existing 450-byte cap. A complete answer is not discarded merely for exceeding the word target. Compound questions should receive a brief answer to each part, with deeper written detail when needed. A committed leading briefing is included in the written conversation too, so a point answered in speech is not missing from the saved transcript.
 
 Page/context updates keep the existing 8 KiB input limit. `live.sendContextualUpdate()` splits accepted context into ordered thinking appends of at most 450 UTF-8 bytes each, including any context-ID prefix in the first append. Inputs above 8 KiB are rejected.
 
@@ -84,6 +86,8 @@ Keep page context concise and factual. After upgrading, verify a long grounded a
 
 Live delegates missing facts, slides, and tools. A greeting, conversational clarification, or explanation supported by supplied evidence can stay in Live. If the backend agent requests a browser tool, Convinced pauses the agent run and keeps its state on the server. The SDK runs the local registry checks and handler, then returns an opaque signed continuation with the result. Convinced verifies the call, accepts the continuation once, and resumes the backend agent with the browser observation. Live receives a short briefing of the result for speech; the full answer remains in the client.
 
+In SDK 0.1.9, a short Live acknowledgment or caption flush does not consume the latest caller request before a later delegation. When no distinct caller has spoken in between, the SDK uses that request once for the backend turn and removes the provisional native caller/assistant pair from shared history. A newer caller supersedes that retained request; an older delegation cannot steal the newer question. If no caller text is available after a bounded wait, the SDK reports a recoverable error and asks the visitor to repeat instead of leaving an empty request pending. Render `client.state.messages` as a current snapshot so a withdrawn provisional pair does not remain on screen. These changes do not alter public methods or authorize a tool without the normal backend checks.
+
 Interrupting speech is separate from canceling a task. Live should handle a backchannel or “stop talking” without starting a new backend request. A clear correction to the work should delegate the revised request; the SDK stops the superseded delegated turn before later browser tools run. Typed input submitted during delegated work also takes precedence. A browser action that already completed cannot be undone by cancellation, so the next answer must use the actual page state.
 
 This keeps tool authorization, form handling, page actions, slides, and knowledge consistent across input modes.
@@ -92,9 +96,17 @@ This keeps tool authorization, form handling, page actions, slides, and knowledg
 
 Live can explain relevant facts already in its page or reference context while a page action runs. A visitor's role or broad goal can be enough to show a supported category or scope overview; explain a grounded benefit before asking for more details. Use the last verified overview for a continuation instead of presenting it again. Claim navigation only after a successful host receipt confirms the destination; a tool request or a progress message does not confirm movement.
 
+Follow-ups should build on earlier answers. Reuse a current view when explaining it; open a deeper view when it adds useful detail. Return the presented panel's content and controls in tool observations so the agent can move beyond its catalog summary. Keep hidden panels and visitor form values out of those observations. A supported capability and confirmation that it fits a particular customer's deployment are separate answers; a remaining uncertainty should not defer the whole request.
+
+In the 0.1.9 candidate, the SDK forwards a completed backend finding or voice briefing as soon as its event arrives. It does not wait for the rest of the written answer or repeat that briefing at stream completion. The matching backend may supply a bounded delivery instruction, such as giving one grounded fact while page work continues; it cannot change host tool authorization. Already-covered delegations dispatch immediately, while incomplete speech still settles before dispatch.
+
+Keep stable authored background in startup context and send only changes to the current view during the call. Automatic SDK page orientation is deduplicated and capped at 900 UTF-8 bytes. Explicit context updates keep the 8 KiB limit described above. Full semantic page evidence remains available to the backend; compact voice orientation does not remove knowledge or tools.
+
+Show the request's current activity and the confirmed page result independently. A useful opening can arrive before navigation; it must not claim that an unseen result has appeared. `chatStreamIdleTimeoutMs` bounds a stalled stream, not model latency. These mechanisms do not establish a three-second speech guarantee; measure actual useful spoken content on your deployed page.
+
 Public page text and headings can include off-screen sections. They do not establish the current viewport, a completed navigation, or that a requested section is absent. A fresh verified action receipt supersedes earlier page observations; explain the content it confirms is now shown.
 
-The current hosted backend bounds each agent run, including a resumed run, to 15 seconds for a voice delegation and 30 seconds for a typed request. These budgets start at the agent runner after request preparation. Browser actions and preparation take additional time, and a multi-step request can contain several runs; these are not end-to-end response guarantees. If a run exceeds its budget, the backend finishes the turn with a recoverable answer and, for voice, a short spoken briefing.
+The matching hosted backend uses a shared 30-second budget for each agent run, including a resumed run, in both voice and text. Committed speech can arrive while written detail continues. The budget starts at the agent runner after request preparation. Browser actions and preparation take additional time, and a multi-step request can contain several runs; this is not an end-to-end response guarantee. If a run exceeds its budget, the backend finishes the turn with a recoverable answer and, for voice, a short spoken briefing.
 
 A completed page action remains completed if the follow-up answer times out. Keep its verified receipt visible and report the answer failure separately. Show failed or ambiguous action receipts promptly, even while an answer is pending. Do not automatically repeat a consequential action when its outcome is unknown. Let the visitor retry or refine the request, and retain typed chat as a fallback.
 
@@ -108,7 +120,7 @@ Completed Live-native user/assistant pairs are added to `client.state.messages` 
 
 By default, `client.endSession()` includes the completed pairs in its `/session/end` payload. This covers completed exchanges, not every partial transcript fragment. It does not promise restoration across page reloads or Live reconnections. See [Conversation sessions](/guides/widget-sdk/sessions#persisted-history).
 
-The behavior requires the matching Convinced Live configuration as well as SDK 0.1.8. Start a fresh Live session after upgrading. Test a greeting and clarification, a spoken request that uses a slide or page tool, a speech backchannel, and a clear mid-task correction on your deployed page.
+The behavior requires the matching Convinced Live configuration as well as SDK 0.1.9. Start a fresh Live session after upgrading. Test a greeting and clarification, a spoken request that uses a slide or page tool, a speech backchannel, and a clear mid-task correction on your deployed page. Also test a brief Live acknowledgment before delegation and a delegation with no usable caller text; the latter should recover by asking for repetition without running a page action.
 
 ## Render voice state
 

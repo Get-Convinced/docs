@@ -51,7 +51,7 @@ Accepted snapshots are bounded to 8 KiB and validated against the authenticated 
 
 Serve production pages over HTTPS. An HTTP `localhost` preview against production can still send a snapshot, but the backend accepts it as page evidence only when the exact preview hostname is explicitly allowed. Otherwise, the backend discards that evidence and chat continues with normal organization knowledge and tools.
 
-The model can choose a useful supported presentation without waiting for the visitor to say “show me.” It may answer directly when there is no useful visual. The generic `host_focus_page_section` scrolls to and highlights an exact public section title only when a tool slot is available; it preserves your registered tools. It returns a verified receipt with bounded visible content only after confirming that section is in view. Otherwise, it reports the requested scroll without claiming visibility. A visible section does not prove a custom tab or workflow opened. Register a custom action when presenting a workflow needs application state changes. These page-observation and focus features require the matching 0.1.8 backend.
+The model can choose a useful supported presentation without waiting for the visitor to say “show me.” It may answer directly when there is no useful visual. The generic `host_focus_page_section` scrolls to and highlights an exact public section title only when a tool slot is available; it preserves your registered tools. It returns a verified receipt with bounded visible content only after confirming that section is in view. Otherwise, it reports the requested scroll without claiming visibility. A visible section does not prove a custom tab or workflow opened. Register a custom action when presenting a workflow needs application state changes. These page-observation and focus features require a matching backend that supports SDK 0.1.8 or 0.1.9.
 
 Existing slide, video, form and identity APIs remain available. Each website decides which presentations are appropriate. A page that already contains its demonstrations can prefer page actions through the same registry.
 
@@ -71,7 +71,7 @@ For navigation, prefer one bounded tool that resolves a canonical destination, p
 
 For “go on” or a similar continuation, use the last verified overview and its observed facts. Do not navigate to the same destination again unless the visitor asks for a new presentation. Test a role-only request followed by a continuation: confirm the overview is visibly selected before the first discovery question, and that the continuation does not repeat the page action. Also test an unknown role or unavailable overview for an honest fallback.
 
-In the 0.1.8 SDK/backend pair, a verified presentation receipt can include `visible_summary` or bounded `visible_content` from the selected public section. The backend can pass those observed facts to Live promptly, using the same delegation ID. Failed, stale, unconfirmed or merely requested actions must not produce a spoken claim that the visitor is seeing the result.
+In the 0.1.8 and 0.1.9 SDK/backend pairs, a verified presentation receipt can include `visible_summary` or bounded `visible_content` from the selected public section. The backend can pass those observed facts to Live promptly, using the same delegation ID. Failed, stale, unconfirmed or merely requested actions must not produce a spoken claim that the visitor is seeing the result.
 
 ## Screen inspection (experimental)
 

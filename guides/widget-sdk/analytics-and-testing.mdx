@@ -52,6 +52,7 @@ Verify:
 13. End voice during a paused browser-tool turn, then send a typed request. Confirm the prior turn cannot resume after the new request and that the typed answer remains usable.
 14. Speak a role or broad goal and request a visual guide. Measure the first useful spoken explanation after the utterance ends, verify the destination is visible, and confirm the assistant gives relevant value before asking another question. Count an acknowledgment separately.
 15. Test an ambiguous target and a stalled answer after a successful browser action. Keep the failure visible during pending work, preserve confirmed page movement, and verify spoken and typed recovery without automatically repeating the action. See [Responsiveness and recovery](/guides/widget-sdk/voice#responsiveness-and-recovery).
+16. For the 0.1.9 candidate, measure the first useful backend finding, actual useful speech, verified page action, and complete answer separately. Verify that a completed briefing arrives before a deliberately delayed stream ends and is spoken once. Test stream-idle recovery and signed continuation expiry during body consumption.
 
 Also run controlled silence and mute checks: keep the microphone open without speaking, interrupt naturally, then request mute and verify the acknowledgement and actual behavior. Separate late pre-mute transcript packets from new input where the available evidence permits; do not discard repeated words merely because they repeat. Confirm there are no false caller turns or speech interruptions before accepting voice.
 
