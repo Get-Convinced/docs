@@ -19,6 +19,8 @@ const client = new ConvincedClient({
 
 `agentId` is a public Convinced `AgentDeployment` ID. It is optional when the organization has one default live widget deployment. Pass the optional `tools` registry and `authorizeToolCall` callback when the host exposes browser actions; see the [quickstart](/guides/widget-sdk/quickstart).
 
+In the 0.1.9 candidate, `chatStreamIdleTimeoutMs?: number` bounds the pause between response-body chunks. Its default is **35,000 milliseconds**; supplied values must be positive and finite. It is an idle limit, not an end-to-end response target. Handle a stalled-stream error with a visible retry or typed fallback. Signed tool continuation expiry also covers response-body consumption.
+
 | Work | API |
 | --- | --- |
 | Start | `initialize()`, `state` |
@@ -56,7 +58,7 @@ const live = client.createLiveController()
 
 `end()` closes the Live transport and leaves the client ready for chat. `client.endSession()` ends the canonical conversation.
 
-SDK 0.1.9 changes no public client, Live controller, or tool-registration method or option. Its delegation fix is internal; see [voice delegation](/guides/widget-sdk/voice#delegation-and-tools).
+SDK 0.1.9 retains the existing client, Live controller, and tool-registration methods. It adds the optional stream-idle setting above. Initialization reuses the selected session configuration; an explicit `client.getConfig()` still requests fresh configuration. See [voice delegation](/guides/widget-sdk/voice#delegation-and-tools).
 
 `subscribe(listener)` immediately receives the current `ConvincedLiveState` and returns an unsubscribe function. `on(event, listener)` returns an unsubscribe function for a named event. `ConvincedLiveController` does not expose `once()` or `off()`.
 

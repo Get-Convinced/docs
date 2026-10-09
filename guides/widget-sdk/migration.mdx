@@ -6,7 +6,7 @@ icon: 'arrow-right-arrow-left'
 
 This guide covers older SDK integrations, including 0.1.0, the 0.1.1 WebMCP previews, and 0.1.2 through 0.1.8. SDK 0.1.9 retains one Convinced backend agent conversation for grounded chat, page observations and tool work, with optional `gpt-live-1` speech through WebRTC. The backend agent can continue one request across knowledge and signed browser tools while Convinced holds the run state server-side. A short verified voice briefing can accompany the full written answer, and a clear correction or typed request can supersede unfinished delegated work.
 
-If you already use 0.1.2 through 0.1.8, keep the existing client, Live controller, and tool registration. Upgrade, rebuild, and commit the lockfile. Start a fresh session after upgrading:
+Version 0.1.9 is a release candidate on this documentation branch; 0.1.8 remains published. After 0.1.9 publication, keep the existing client, Live controller, and tool registration, rebuild, and commit the lockfile. Use a locally built package for candidate testing. Start a fresh session after upgrading:
 
 ```bash
 npm install --save-exact @convinced/widget-sdk@0.1.9
@@ -14,7 +14,9 @@ npm install --save-exact @convinced/widget-sdk@0.1.9
 
 ## Changes in 0.1.9
 
-SDK 0.1.9 has no new public client methods, configuration fields, or tool-registration contract. It retains the 0.1.8 page, streaming, media, form, identity, and WebMCP capabilities. Use a matching backend that accepts SDK 0.1.9; do not mix the new package with a backend that rejects its version header.
+SDK 0.1.9 retains existing client methods and tool-registration contracts and adds optional `chatStreamIdleTimeoutMs`, defaulting to 35 seconds. It keeps the 0.1.8 page, streaming, media, form, identity, and WebMCP capabilities. Use a matching backend that accepts SDK 0.1.9; do not mix the new package with a backend that rejects its version header.
+
+Completed backend voice findings and briefings are forwarded on arrival rather than after the full stream drains. Covered delegations start immediately; incomplete captions retain a bounded settling window. Automatic page orientation is compact and deduplicated, while explicit context updates retain their existing limit. Initialization reuses the configuration selected during session creation; explicit `getConfig()` remains available. No existing API call needs changing. Measure useful speech and completed page actions separately, and handle stalled-stream errors in your UI.
 
 Voice delegation now retains the most recent caller request through a short Live acknowledgment or caption flush. If Live later delegates without a distinct new caller, the SDK submits that request once and removes any provisional native caller/assistant pair from shared history. A new caller supersedes the retained request, and an older delegation cannot consume the newer question. A delegation with no usable caller text reports a recoverable error and asks the visitor to repeat instead of leaving an empty turn pending. Render `client.state.messages` from each state snapshot so a withdrawn provisional pair disappears. The [voice guide](/guides/widget-sdk/voice#delegation-and-tools) explains the channel boundary.
 

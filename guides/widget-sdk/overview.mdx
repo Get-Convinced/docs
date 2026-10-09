@@ -12,13 +12,14 @@ The only agent identifier exposed in browser configuration is `agentId`, the pub
 
 ## Availability and validation status
 
-SDK **0.1.9** is the current release. It works with the matching Convinced backend deployment. Version 0.1.8 introduced the page and streaming capabilities below; 0.1.9 retains them and improves voice delegation after a Live acknowledgment. Published 0.1.7 remains unchanged.
+SDK **0.1.8** is the published release. This documentation branch describes the **0.1.9 release candidate** for paired local testing; do not treat its source changes as npm publication. Version 0.1.9 retains the 0.1.8 capabilities, improves caller retention, and forwards completed voice findings before stream drain. Use a matching Convinced backend. Published 0.1.7 remains unchanged.
 
 | Capability | Availability by SDK release |
 | --- | --- |
 | Headless chat, managed UI, identity/forms, slides and WebMCP | Preserved in 0.1.7–0.1.9 |
 | Live voice and short final briefings | 0.1.7–0.1.9 with a matching backend; acoustic acceptance remains open |
 | Caller retention after Live acknowledgment | 0.1.9 only; caption flush does not drop the latest request |
+| Early voice delivery and bounded stream stalls | 0.1.9 candidate with a matching backend; no latency or acoustic guarantee |
 | Incremental verified findings | 0.1.8–0.1.9 included; 0.1.7 final only, without `text_reset` |
 | Automatic page observations and section focus | 0.1.8–0.1.9 included with bounded public-page evidence; 0.1.7 absent |
 | `client.describeScreen()` | Experimental in 0.1.8–0.1.9; needs approved tab capture. Absent in 0.1.7. |
