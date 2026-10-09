@@ -76,6 +76,8 @@ SDK 0.1.9 keeps each commentary or thinking append within a conservative 450-byt
 
 For a grounded answer, the backend agent can return a short, verified voice briefing alongside its full written answer. The SDK sends that briefing to Live for natural speech. If no briefing arrives, the SDK uses a complete sentence from the written answer after removing media directives and Markdown links; it does not splice the beginning and end of a long answer together. Full text and structured slide or video content remain available through the client.
 
+The matching backend treats roughly 40 words as a brevity target, within the existing 450-byte cap. A complete answer is not discarded merely for exceeding the word target. Compound questions should receive a brief answer to each part, with deeper written detail when needed. A committed leading briefing is included in the written conversation too, so a point answered in speech is not missing from the saved transcript.
+
 Page/context updates keep the existing 8 KiB input limit. `live.sendContextualUpdate()` splits accepted context into ordered thinking appends of at most 450 UTF-8 bytes each, including any context-ID prefix in the first append. Inputs above 8 KiB are rejected.
 
 Keep page context concise and factual. After upgrading, verify a long grounded answer and a long page update on your deployed page. Continue handling Live connection and provider errors through the normal error events.
@@ -93,6 +95,8 @@ This keeps tool authorization, form handling, page actions, slides, and knowledg
 ## Responsiveness and recovery
 
 Live can explain relevant facts already in its page or reference context while a page action runs. A visitor's role or broad goal can be enough to show a useful overview: provide a grounded benefit before asking for more details. Claim navigation only after a successful host receipt confirms the destination; a tool request or a progress message does not confirm movement.
+
+Follow-ups should build on earlier answers. Reuse a current view when explaining it; open a deeper view when it adds useful detail. Return the presented panel's content and controls in tool observations so the agent can move beyond its catalog summary. Keep hidden panels and visitor form values out of those observations. A supported capability and confirmation that it fits a particular customer's deployment are separate answers; a remaining uncertainty should not defer the whole request.
 
 In the 0.1.9 candidate, the SDK forwards a completed backend finding or voice briefing as soon as its event arrives. It does not wait for the rest of the written answer or repeat that briefing at stream completion. The matching backend may supply a bounded delivery instruction, such as giving one grounded fact while page work continues; it cannot change host tool authorization. Already-covered delegations dispatch immediately, while incomplete speech still settles before dispatch.
 

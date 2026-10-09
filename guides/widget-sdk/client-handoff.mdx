@@ -17,6 +17,7 @@ This documentation branch targets the **0.1.9 release candidate** and its matchi
 - The chosen renderer and implemented page, form and media tools.
 - Who can administer `systemPrompt` and `firstMessage`, through authenticated Convinced administration.
 - Verified browser behavior, known limitations and rollback steps.
+- Acceptance evidence for compound questions and follow-up depth: each requested point is answered, existing context is reused, and the agent adds detail instead of repeating an overview.
 
 The browser needs no provider key or provider agent ID. Reuse a Convinced deployment ID only when the new page should share its prompt and configuration; otherwise provision a separate deployment. Register capabilities that actually exist on each page rather than copying another page's tool names without handlers.
 
