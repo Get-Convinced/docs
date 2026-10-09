@@ -34,6 +34,8 @@ In the 0.1.9 candidate, `chatStreamIdleTimeoutMs?: number` bounds the pause betw
 
 `sendMessage()` is always the typed-input API. When Live is connected, a short verified briefing is sent to Live for speech; the full result stays in the client. Submitting typed input during an unfinished delegated voice turn stops that turn before later browser actions. See [Optional Live voice](/guides/widget-sdk/voice).
 
+Custom voice `onProgress` handlers can receive `LiveDelegationProgress.kind` values `commentary`, `thinking`, and, in 0.1.9, `instruction`. Handle the added variant if your code switches exhaustively on `kind`. Delivery instructions are control data for the SDK's voice bridge, not assistant captions or factual page observations. Standard `client.createLiveController()` wiring handles them automatically.
+
 ## Page observation and screen inspection
 
 SDK 0.1.8 adds `ConvincedClientOptions.pageSnapshot?: { enabled?: boolean; excludeSelectors?: string[] }`, `capturePageSnapshot()`, `PageSnapshot`, `PageSnapshotOptions`, `pageSnapshotLiveContext()` and `createPageFocusTool()`. Automatic capture uses the public main landmark and requires the matching backend.
